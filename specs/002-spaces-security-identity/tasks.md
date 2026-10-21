@@ -92,7 +92,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 - [X] T036 [P] Contract suite tests of the suite itself in `packages/testkit/tests/identityProviderContract.test.ts`: it fails for a deliberately broken provider (impure `verifyBinding`, accepts an expired invite, accepts a binding for the wrong user)
 - [X] T037 Copy the contract types to `packages/spaces/src/identity/provider.ts` from [contracts/identity-provider.ts](./contracts/identity-provider.ts) and implement `identityProviderContract()` in `packages/testkit/src/spaces/identityProviderContract.ts` (user creation, pure and sync `verifyBinding`, link round trip, invite expiry and use limit, revoke)
 - [X] T038 [P] Implement `stubIdentityProvider` (binding kind `stub-token/1`, no handshake network use) in `packages/testkit/src/spaces/stubIdentityProvider.ts`
-- [ ] T039 [P] Implement testkit helpers: adversarial packet-stream generator (forged signature, non-member, Viewer write, revoked author, backdated clock, tampered header, replay), plaintext marker scanner, and fake keystore in `packages/testkit/src/spaces/adversarial.ts`, `packages/testkit/src/spaces/plaintextScan.ts` and `packages/testkit/src/spaces/fakeKeystore.ts`
+- [X] T039 [P] Implement testkit helpers: adversarial packet-stream generator (forged signature, non-member, Viewer write, revoked author, backdated clock, tampered header, replay), plaintext marker scanner, and fake keystore in `packages/testkit/src/spaces/adversarial.ts`, `packages/testkit/src/spaces/plaintextScan.ts` and `packages/testkit/src/spaces/fakeKeystore.ts`
 
 **Checkpoint**: amendments pass with 001 unchanged; codec, fold and validators pass their tests.
 
@@ -130,15 +130,15 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 2
 
-- [ ] T048 [P] [US2] Adversarial property test in `packages/spaces/tests/adversarial/adversarial.test.ts` using T039: ≥ 10,000 randomized streams across 3 peers; no invalid packet is applied or relayed, and valid ones converge (SC-001)
-- [ ] T049 [P] [US2] Integration test in `packages/spaces/tests/integration/reject-and-relay.test.ts`: a rejected packet is not forwarded, is counted by `rejectedCount()`, and emits `packet:rejected` with reason `bad-signature`, `not-member`, `role`, `revoked`, `beyond-cutoff` or `immutable-control`
-- [ ] T050 [P] [US2] Integration test in `packages/spaces/tests/integration/retroactive-rebuild.test.ts`: a packet applied before a removal with an earlier clock arrives is invalidated by `rebuildSpace`, `space:rebuilt` is emitted, and all peers reach the same `stateHash`
+- [X] T048 [P] [US2] Adversarial property test in `packages/spaces/tests/adversarial/adversarial.test.ts` using T039: ≥ 10,000 randomized streams across 3 peers; no invalid packet is applied or relayed, and valid ones converge (SC-001)
+- [X] T049 [P] [US2] Integration test in `packages/spaces/tests/integration/reject-and-relay.test.ts`: a rejected packet is not forwarded, is counted by `rejectedCount()`, and emits `packet:rejected` with reason `bad-signature`, `not-member`, `role`, `revoked`, `beyond-cutoff` or `immutable-control`
+- [X] T050 [P] [US2] Integration test in `packages/spaces/tests/integration/retroactive-rebuild.test.ts`: a packet applied before a removal with an earlier clock arrives is invalidated by `rebuildSpace`, `space:rebuilt` is emitted, and all peers reach the same `stateHash`
 
 ### Implementation for User Story 2
 
-- [ ] T051 [US2] Implement rejection reporting and `rejectedCount()` in `packages/spaces/src/service/rejections.ts`
-- [ ] T052 [US2] Trigger `rebuildSpace` when a newly applied control event changes authority at a clock earlier than already-applied packets from an affected device or role, in `packages/spaces/src/service/rebuild.ts` (depends on T016, T034)
-- [ ] T053 [US2] Apply `maxParkedPerAuthor` to packets deferred for unknown device keys and run `revalidate()` when a `$sys.device` arrives, in `packages/spaces/src/service/revalidate.ts`
+- [X] T051 [US2] Implement rejection reporting and `rejectedCount()` in `packages/spaces/src/service/rejections.ts`
+- [X] T052 [US2] Trigger `rebuildSpace` when a newly applied control event changes authority at a clock earlier than already-applied packets from an affected device or role, in `packages/spaces/src/service/rebuild.ts` (depends on T016, T034)
+- [X] T053 [US2] Apply `maxParkedPerAuthor` to packets deferred for unknown device keys and run `revalidate()` when a `$sys.device` arrives, in `packages/spaces/src/service/revalidate.ts`
 
 **Checkpoint**: US1 and US2 pass together; all P1 stories done.
 

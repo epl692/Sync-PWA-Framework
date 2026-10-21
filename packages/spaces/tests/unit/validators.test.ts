@@ -239,3 +239,14 @@ describe('codec and format', () => {
     expect(await s.run(future, { decode: false })).toEqual({ verdict: 'defer', reason: 'unknown-format' });
   });
 });
+
+describe('replay of the genesis packet (rebuild)', () => {
+  it('accepts the Space’s own genesis packet when the authority already folded it', async () => {
+    const s = await setup();
+    const g = await s.world.control(s.A, SYS.genesis, { owner: { user: s.A.id, device: s.A.id, ...pub(s.A), binding: s.binding }, nonce: b64urlEncode(s.world.nonce) }, 1);
+    // basicWorld folded a different genesis event for this Space; the same packet ID is what the authority knows
+    s.auth.load([]);
+    s.auth.add(g.event);
+    expect(await s.run(g)).toEqual({ verdict: 'accept' });
+  });
+});

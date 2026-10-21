@@ -345,7 +345,7 @@ export class Authority {
     const f = ev.fields;
     if (st.genesis) return 'duplicate-genesis';
     if (!f?.owner || f.owner.device !== ev.author) return 'bad-genesis';
-    st.genesis = { user: f.owner.user, device: f.owner.device, clock: ev.clock, name: f.name };
+    st.genesis = { user: f.owner.user, device: f.owner.device, clock: ev.clock, event: ev.id, name: f.name };
     st.users.set(f.owner.user, { id: f.owner.user, displayName: f.owner.displayName, history: [{ clock: ev.clock, role: 'owner', event: ev.id }], devices: [f.owner.device] });
     st.devices.set(f.owner.device, {
       id: f.owner.device,

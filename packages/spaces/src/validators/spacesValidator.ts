@@ -91,7 +91,7 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
     let pub: Uint8Array | undefined;
     const dev = auth.device(env.author);
     if (dev) pub = b64urlDecode(dev.signPub);
-    else if (body?.type === SYS.genesis && !auth.hasGenesis()) {
+    else if (body?.type === SYS.genesis && (!auth.hasGenesis() || auth.genesis()!.event === env.id)) {
       const owner = (body.fields as Partial<ControlFields[typeof SYS.genesis]>).owner;
       if (owner && typeof owner.signPub === 'string') pub = b64urlDecode(owner.signPub);
     }
@@ -111,7 +111,8 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
     if (!header) return env.body[0] !== undefined && env.body[0] !== 1 ? defer('unknown-format') : reject('malformed', 'no header');
     const auth = await deps.authorities.ensure(env.space);
     const local = phase === 'send' || ctx.source === 'local';
-    const genesisBootstrap = body?.type === SYS.genesis && !auth.hasGenesis();
+    // the genesis packet creates the Space's first Owner, so it cannot be judged by a role it has not yet granted
+    const genesisBootstrap = body?.type === SYS.genesis && (!auth.hasGenesis() || auth.genesis()!.event === env.id);
 
     // 1. signature (our own packets are signed a moment ago by us)
     if (!local) {

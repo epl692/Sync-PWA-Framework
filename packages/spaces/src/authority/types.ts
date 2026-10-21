@@ -133,7 +133,7 @@ export interface InertRec {
 }
 
 export interface AuthState {
-  genesis?: { user: string; device: string; clock: string; name?: string };
+  genesis?: { user: string; device: string; clock: string; event: string; name?: string };
   users: Map<string, UserRec>;
   devices: Map<string, DeviceRec>;
   invites: Map<string, InviteRec>;

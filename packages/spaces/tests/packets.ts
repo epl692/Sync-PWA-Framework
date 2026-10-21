@@ -51,12 +51,14 @@ export class World {
   }
 
   readonly shareOf = new Map<string, string>();
+  readonly raw = new Map<string, Uint8Array>();
 
   async addKey(scope: string, epoch = 0): Promise<string> {
     const raw = randomBytes(32);
     const keyId = hex(await keyIdOf(raw));
     const { importAesKey } = await import('../src/crypto/suite');
     this.keys.set(scope, { epoch, keyId, key: await importAesKey(raw) });
+    this.raw.set(scope, raw);
     void generateAesKey;
     return keyId;
   }
