@@ -2,8 +2,21 @@
 import { describe, expect, it } from 'vitest';
 import { b64urlEncode } from '@sync/core';
 import { FakeChannelNet, FakeHost } from '@sync/testkit';
-import { deviceIdFromSignPub, generateAgreeKeyPair, generateSignKeyPair, utf8, type DevicePublic } from '@sync/spaces';
-import { CHAIN_KIND, GENESIS_KIND, extendChain, issueGenesis, chainBinding, verifyDeviceBinding } from '../../src/binding';
+import {
+  deviceIdFromSignPub,
+  generateAgreeKeyPair,
+  generateSignKeyPair,
+  utf8,
+  type DevicePublic,
+} from '@sync/spaces';
+import {
+  CHAIN_KIND,
+  GENESIS_KIND,
+  extendChain,
+  issueGenesis,
+  chainBinding,
+  verifyDeviceBinding,
+} from '../../src/binding';
 import { decodeArtifact, encodeArtifact, proofOf, sasOf, type ArtifactData } from '../../src/invite';
 import { openSealed, sealTo } from '../../src/seal';
 import { qrMatrix, qrToSvg, canScanQr } from '../../src/qr';
@@ -12,7 +25,18 @@ import { WORDS } from '../../src/words';
 async function artifact(over: Partial<ArtifactData> = {}): Promise<ArtifactData> {
   const sign = await generateSignKeyPair();
   const agree = await generateAgreeKeyPair();
-  return { v: 1, i: 'INVITE1234567890', s: 'SPACEAAAAAAAAAAAAAAAAAAAAA', k: b64urlEncode(new Uint8Array(24).fill(7)), r: 'editor', e: 1_800_000_000_000, d: await deviceIdFromSignPub(sign.publicRaw), sp: b64urlEncode(sign.publicRaw), ap: b64urlEncode(agree.publicRaw), ...over };
+  return {
+    v: 1,
+    i: 'INVITE1234567890',
+    s: 'SPACEAAAAAAAAAAAAAAAAAAAAA',
+    k: b64urlEncode(new Uint8Array(24).fill(7)),
+    r: 'editor',
+    e: 1_800_000_000_000,
+    d: await deviceIdFromSignPub(sign.publicRaw),
+    sp: b64urlEncode(sign.publicRaw),
+    ap: b64urlEncode(agree.publicRaw),
+    ...over,
+  };
 }
 
 describe('invite artifact', () => {
@@ -37,7 +61,16 @@ describe('invite artifact', () => {
 
   it('refuses damaged input, a wrong version, a bad role, and an inviter ID that does not hash its key', async () => {
     const a = await artifact();
-    for (const bad of ['', 'nonsense', '#/join/', '#/join/!!!', encodeArtifact({ ...a, v: 2 as never }, 'x').url, encodeArtifact({ ...a, r: 'god' as never }, 'x').url, encodeArtifact({ ...a, d: 'SOMEONEELSE' }, 'x').url, encodeArtifact({ ...a, sp: 'AAAA' }, 'x').url]) {
+    for (const bad of [
+      '',
+      'nonsense',
+      '#/join/',
+      '#/join/!!!',
+      encodeArtifact({ ...a, v: 2 as never }, 'x').url,
+      encodeArtifact({ ...a, r: 'god' as never }, 'x').url,
+      encodeArtifact({ ...a, d: 'SOMEONEELSE' }, 'x').url,
+      encodeArtifact({ ...a, sp: 'AAAA' }, 'x').url,
+    ]) {
       expect(await decodeArtifact(bad), bad).toBeUndefined();
     }
   });
@@ -112,7 +145,16 @@ describe('device bindings', () => {
     expect(await verifyDeviceBinding(user, pub(b!), chainBinding(toC))).toBe(false);
     expect(await verifyDeviceBinding(b!.device.deviceId, pub(c!), chainBinding(toC))).toBe(false);
     const stranger = (await devices(1))[0]!;
-    expect(await verifyDeviceBinding(user, pub(c!), chainBinding({ ...toC, root: { signPub: b64urlEncode(stranger.device.signPub), agreePub: toC.root.agreePub } }))).toBe(false);
+    expect(
+      await verifyDeviceBinding(
+        user,
+        pub(c!),
+        chainBinding({
+          ...toC,
+          root: { signPub: b64urlEncode(stranger.device.signPub), agreePub: toC.root.agreePub },
+        }),
+      ),
+    ).toBe(false);
   });
 
   it('a forged or truncated link, or a link skipping a device, does not verify', async () => {
@@ -120,17 +162,29 @@ describe('device bindings', () => {
     const user = a!.device.deviceId;
     const toB = await extendChain(user, a!.device, undefined, pub(b!));
     const toC = await extendChain(user, b!.device, toB, pub(c!));
-    const forged = { ...toC, links: toC.links.map((l, i) => (i === 1 ? { ...l, sig: toC.links[0]!.sig } : l)) };
+    const forged = {
+      ...toC,
+      links: toC.links.map((l, i) => (i === 1 ? { ...l, sig: toC.links[0]!.sig } : l)),
+    };
     expect(await verifyDeviceBinding(user, pub(c!), chainBinding(forged))).toBe(false);
-    expect(await verifyDeviceBinding(user, pub(c!), chainBinding({ ...toC, links: toC.links.slice(1) }))).toBe(false);
+    expect(
+      await verifyDeviceBinding(user, pub(c!), chainBinding({ ...toC, links: toC.links.slice(1) })),
+    ).toBe(false);
     expect(await verifyDeviceBinding(user, pub(c!), chainBinding({ ...toC, links: [] }))).toBe(false);
   });
 
   it('is a total function: garbage evidence is false and never throws', async () => {
     const [a] = await devices(1);
-    for (const proof of [new Uint8Array(), utf8.encode('{'), utf8.encode('{"root":1,"links":[{}]}'), crypto.getRandomValues(new Uint8Array(200))]) {
+    for (const proof of [
+      new Uint8Array(),
+      utf8.encode('{'),
+      utf8.encode('{"root":1,"links":[{}]}'),
+      crypto.getRandomValues(new Uint8Array(200)),
+    ]) {
       expect(await verifyDeviceBinding(a!.device.deviceId, pub(a!), { kind: CHAIN_KIND, proof })).toBe(false);
-      expect(await verifyDeviceBinding(a!.device.deviceId, pub(a!), { kind: GENESIS_KIND, proof })).toBe(false);
+      expect(await verifyDeviceBinding(a!.device.deviceId, pub(a!), { kind: GENESIS_KIND, proof })).toBe(
+        false,
+      );
     }
     expect(await verifyDeviceBinding('u', pub(a!), { kind: 'weird/9', proof: new Uint8Array() })).toBe(false);
   });

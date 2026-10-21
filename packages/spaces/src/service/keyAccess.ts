@@ -9,6 +9,8 @@ import type { Keystore } from '../keystore/keystore';
 export interface KeyAccessDeps {
   keystore: Keystore;
   hub: AuthorityHub;
+  /** While this device is rotating a scope, ordinary writes in it wait for the new key (so they are not readable by whoever was just removed). */
+  rotationGate?: (scope: string) => Promise<void> | undefined;
   /** The key used this many times: time to rotate (research R-04). */
   onKeyWornOut?: (scope: string) => void;
 }
@@ -25,7 +27,8 @@ export function createKeyAccess(d: KeyAccessDeps): KeyAccess {
       return d.hub.authority(space).shareOfObj(body.obj)?.id ?? space;
     },
 
-    async writeKey(scope) {
+    async writeKey(scope, body) {
+      if (!body?.type.startsWith(SYS_PREFIX)) await d.rotationGate?.(scope);
       const held = await d.keystore.epochs(scope);
       if (!held.length) return undefined;
       const space = scope; // epochs are looked up on the Space authority; a share scope is found below

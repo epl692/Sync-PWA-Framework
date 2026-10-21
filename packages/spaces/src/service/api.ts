@@ -1,7 +1,14 @@
 /** App-facing API of @sync/spaces (see specs/002-spaces-security-identity/contracts/spaces-api.ts). */
 
 import type { SyncCore, SyncableObject, JSONValue } from '@sync/core';
-import type { IdentityProvider, InviteArtifact, InviteSpec, JoinRequestView, Role, UserSession } from '../identity/provider';
+import type {
+  IdentityProvider,
+  InviteArtifact,
+  InviteSpec,
+  JoinRequestView,
+  Role,
+  UserSession,
+} from '../identity/provider';
 import type { KeyDb } from '../keystore/keydb';
 import type { SecurityEvent } from './events';
 
@@ -37,8 +44,15 @@ export interface SpacesOptions {
   keyDb?: KeyDb | string;
   /** Decide a join request that needs approval. Default: refuse (the `join:request` event is still emitted). */
   approveJoin?: (req: JoinRequestView) => boolean | Promise<boolean>;
-  /** Decide whether a new device may be linked to this user. Default: allow (the user started the link on this device). */
-  approveLink?: (device: import('../identity/provider').DevicePublic, sas: string) => boolean | Promise<boolean>;
+  /**
+   * Decide whether a new device may be linked to this user. DEFAULT: refuse. A link hands the new device every key the
+   * user holds, and the link code travels over QR or text, so the app must show `sas` (the words the new device also shows)
+   * and ask the user.
+   */
+  approveLink?: (
+    device: import('../identity/provider').DevicePublic,
+    sas: string,
+  ) => boolean | Promise<boolean>;
   /** How long a second Owner device waits before rotating for a removal someone else is handling. Default 2000. */
   rotationGraceMs?: number;
   /** Injected clock for tests. */
@@ -61,15 +75,27 @@ export interface Spaces {
   invite(space: string, spec: Omit<InviteSpec, 'space'>): Promise<InviteArtifact>;
   revokeInvite(space: string, inviteId: string): Promise<void>;
   /** Accept an invite link or scanned QR text. `onSas` shows the joiner the short code the Owner will also see. */
-  accept(artifact: string, opts?: { timeoutMs?: number; onSas?: (sas: string) => void }): Promise<{ space: string; role: Role }>;
+  accept(
+    artifact: string,
+    opts?: { timeoutMs?: number; onSas?: (sas: string) => void },
+  ): Promise<{ space: string; role: Role }>;
 
   linkDevice(): Promise<{ code: string; done: Promise<{ device: string }> }>;
-  joinAsDevice(code: string): Promise<UserSession>;
+  /** On the new device: consume the code shown by `linkDevice()`. `onSas` shows the words the other device will ask its user to confirm. */
+  joinAsDevice(
+    code: string,
+    opts?: { timeoutMs?: number; onSas?: (sas: string) => void },
+  ): Promise<UserSession>;
   revokeDevice(device: string): Promise<void>;
 
   share(obj: string, members: Array<{ user: string; role: Role }>): Promise<ShareInfo>;
   /** Create an object that is private to a share from its very first packet. */
-  createInShare(space: string, type: string, fields: Record<string, JSONValue>, members: Array<{ user: string; role: Role }>): Promise<{ object: SyncableObject; share: ShareInfo }>;
+  createInShare(
+    space: string,
+    type: string,
+    fields: Record<string, JSONValue>,
+    members: Array<{ user: string; role: Role }>,
+  ): Promise<{ object: SyncableObject; share: ShareInfo }>;
   shareOf(obj: string): Promise<ShareInfo | undefined>;
   setShareRole(shareId: string, user: string, role: Role | 'none'): Promise<void>;
 

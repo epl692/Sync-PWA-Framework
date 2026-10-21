@@ -24,7 +24,14 @@ export interface AuthorityView {
 
 export function toControlEvent(env: DataPacketEnvelope, body: PacketBody): ControlEvent | undefined {
   if (!body.type.startsWith(SYS_PREFIX) || !isSysType(body.type) || body.op !== 'create') return undefined;
-  return { id: env.id, type: body.type, clock: env.clock, author: env.author, seq: env.seq, fields: body.fields as never };
+  return {
+    id: env.id,
+    type: body.type,
+    clock: env.clock,
+    author: env.author,
+    seq: env.seq,
+    fields: body.fields as never,
+  };
 }
 
 export class AuthorityHub implements AuthorityView {
@@ -84,12 +91,18 @@ export class AuthorityHub implements AuthorityView {
 
   private async load(space: string): Promise<Authority> {
     this.pending.set(space, []);
-    const [items, stats] = await Promise.all([this.core.scanApplied(space, { typePrefix: SYS_PREFIX }), this.core.authorStats(space)]);
+    const [items, stats] = await Promise.all([
+      this.core.scanApplied(space, { typePrefix: SYS_PREFIX }),
+      this.core.authorStats(space),
+    ]);
     // keep the larger of what was learned live and what the log says (a stale higher value only causes an extra check)
     for (const [author, st] of Object.entries(stats)) {
       const k = `${space}\u0000${author}`;
       const cur = this.maxApplied.get(k);
-      this.maxApplied.set(k, { clock: cur && cur.clock > st.clock ? cur.clock : st.clock, seq: Math.max(cur?.seq ?? 0, st.seq) });
+      this.maxApplied.set(k, {
+        clock: cur && cur.clock > st.clock ? cur.clock : st.clock,
+        seq: Math.max(cur?.seq ?? 0, st.seq),
+      });
     }
     const a = this.authority(space);
     a.load(items.map((i) => toControlEvent(i.env, i.body)).filter((e): e is ControlEvent => !!e));
@@ -99,7 +112,8 @@ export class AuthorityHub implements AuthorityView {
     this.loaded.add(space);
     // Events that arrived while the state was being (re)read were never judged against it, whether or not the scan
     // already contained them: report them as retroactive so the service re-checks the packets they may affect.
-    for (const ev of during) this.onControl({ space, event: ev, retroactive: true, newInert: [], local: false });
+    for (const ev of during)
+      this.onControl({ space, event: ev, retroactive: true, newInert: [], local: false });
     return a;
   }
 
@@ -128,7 +142,10 @@ export class AuthorityHub implements AuthorityView {
     if (!ev) {
       const k = `${env.space}\u0000${env.author}`;
       const cur = this.maxApplied.get(k);
-      this.maxApplied.set(k, { clock: cur && cur.clock > env.clock ? cur.clock : env.clock, seq: Math.max(cur?.seq ?? 0, env.seq) });
+      this.maxApplied.set(k, {
+        clock: cur && cur.clock > env.clock ? cur.clock : env.clock,
+        seq: Math.max(cur?.seq ?? 0, env.seq),
+      });
       if (!body.type.startsWith(SYS_PREFIX)) this.onData(env.space, env);
       return;
     }
@@ -142,6 +159,13 @@ export class AuthorityHub implements AuthorityView {
       return;
     }
     const r = this.authority(env.space).add(ev);
-    if (r.added) this.onControl({ space: env.space, event: ev, retroactive: r.retroactive, newInert: r.newInert, local });
+    if (r.added)
+      this.onControl({
+        space: env.space,
+        event: ev,
+        retroactive: r.retroactive,
+        newInert: r.newInert,
+        local,
+      });
   }
 }

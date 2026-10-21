@@ -6,7 +6,9 @@ import { createInviteProvider } from '../../src';
 
 const provider = () => createInviteProvider({ baseUrl: 'https://app.test/', joinTimeoutMs: 8000 });
 
-async function setup(opts: { approve?: (r: JoinRequestView) => boolean | Promise<boolean>; names?: string[] } = {}) {
+async function setup(
+  opts: { approve?: (r: JoinRequestView) => boolean | Promise<boolean>; names?: string[] } = {},
+) {
   const requests: JoinRequestView[] = [];
   const g = await createSecureGroup(opts.names ?? ['owner', 'joiner'], {
     provider,
@@ -19,8 +21,18 @@ async function setup(opts: { approve?: (r: JoinRequestView) => boolean | Promise
   return { g, owner, joiner: g.node('joiner'), space, requests };
 }
 
-const invite = (g: SecureGroup, owner: ReturnType<SecureGroup['node']>, space: string, over: Record<string, unknown> = {}) =>
-  owner.spaces.invite(space, { role: 'editor', expiresAt: g.clock.now() + 3_600_000, maxUses: 1, ...over } as never);
+const invite = (
+  g: SecureGroup,
+  owner: ReturnType<SecureGroup['node']>,
+  space: string,
+  over: Record<string, unknown> = {},
+) =>
+  owner.spaces.invite(space, {
+    role: 'editor',
+    expiresAt: g.clock.now() + 3_600_000,
+    maxUses: 1,
+    ...over,
+  } as never);
 
 const outcome = async (p: Promise<unknown>): Promise<string> => {
   try {
@@ -52,7 +64,11 @@ describe('invites', () => {
     const art = await invite(g, owner, space.id);
     const joinerSas: string[] = [];
     const accepting = joiner.spaces.accept(art.url, { onSas: (s) => joinerSas.push(s) });
-    await waitFor(() => requests.length === 1 && joinerSas.length === 1, 8000, 'approval request and the joiner’s code');
+    await waitFor(
+      () => requests.length === 1 && joinerSas.length === 1,
+      8000,
+      'approval request and the joiner’s code',
+    );
     expect(joinerSas[0]).toBe(requests[0]!.sas);
     expect(joinerSas[0]).toMatch(/^[a-z]+(-[a-z]+){4}$/);
     release(true);
@@ -109,7 +125,11 @@ describe('invites', () => {
     await waitFor(async () => (await joiner.core.get(note.id)) !== undefined, 10_000, 'joiner reads history');
     expect((await joiner.core.get(note.id))!.fields.text).toBe('written before the invite');
     const mine = await joiner.core.create(space.id, 'note', { text: 'from the joiner' });
-    await waitFor(async () => (await owner.core.get(mine.id)) !== undefined, 10_000, 'owner reads the joiner write');
+    await waitFor(
+      async () => (await owner.core.get(mine.id)) !== undefined,
+      10_000,
+      'owner reads the joiner write',
+    );
     await g.close();
   });
 
@@ -125,7 +145,13 @@ describe('invites', () => {
     const newNote = await owner.core.create(space.id, 'note', { text: 'epoch one' });
     const b = await invite(g, owner, space.id, { approval: 'auto' });
     await joiner.spaces.accept(b.url);
-    await waitFor(async () => (await joiner.core.get(newNote.id)) !== undefined && (await joiner.core.get(oldNote.id)) !== undefined, 10_000, 'joiner reads both');
+    await waitFor(
+      async () =>
+        (await joiner.core.get(newNote.id)) !== undefined &&
+        (await joiner.core.get(oldNote.id)) !== undefined,
+      10_000,
+      'joiner reads both',
+    );
     expect((await joiner.core.get(oldNote.id))!.fields.text).toBe('epoch zero');
     expect((await joiner.core.get(newNote.id))!.fields.text).toBe('epoch one');
     await g.close();
@@ -145,9 +171,15 @@ describe('invites', () => {
 
   it('refuse a role invite from a non-Owner and a bad spec', async () => {
     const { g, owner, joiner, space } = await setup();
-    await expect(joiner.spaces.invite(space.id, { role: 'viewer', expiresAt: g.clock.now() + 1000, maxUses: 1 })).rejects.toThrow();
-    await expect(owner.spaces.invite(space.id, { role: 'viewer', expiresAt: g.clock.now() + 1000, maxUses: 0 })).rejects.toThrow(/maxUses/);
-    await expect(owner.spaces.invite(space.id, { role: 'viewer', expiresAt: g.clock.now() - 1, maxUses: 1 })).rejects.toThrow(/future/);
+    await expect(
+      joiner.spaces.invite(space.id, { role: 'viewer', expiresAt: g.clock.now() + 1000, maxUses: 1 }),
+    ).rejects.toThrow();
+    await expect(
+      owner.spaces.invite(space.id, { role: 'viewer', expiresAt: g.clock.now() + 1000, maxUses: 0 }),
+    ).rejects.toThrow(/maxUses/);
+    await expect(
+      owner.spaces.invite(space.id, { role: 'viewer', expiresAt: g.clock.now() - 1, maxUses: 1 }),
+    ).rejects.toThrow(/future/);
     await g.close();
   });
 });

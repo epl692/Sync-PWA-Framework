@@ -18,7 +18,8 @@ function broken(tweak: Tweak) {
   };
 }
 
-const failures = async (make: () => IdentityProvider) => (await runIdentityProviderChecks(make)).failed.map((f) => f.name);
+const failures = async (make: () => IdentityProvider) =>
+  (await runIdentityProviderChecks(make)).failed.map((f) => f.name);
 
 describe('the contract suite catches broken providers', () => {
   it('passes a correct provider', async () => {
@@ -28,8 +29,19 @@ describe('the contract suite catches broken providers', () => {
   });
 
   it('flags a verifyBinding that reads the clock or randomness (impure)', async () => {
-    const f = await failures(broken((p, s) => ({ ...p, verifyBinding: async (...a) => (s.host.now(), s.host.random(1), createStubIdentityProvider().verifyBinding(...a)) })));
-    expect(f).toContain('verifyBinding is deterministic and free of side effects (no clock, randomness or channel)');
+    const f = await failures(
+      broken((p, s) => ({
+        ...p,
+        verifyBinding: async (...a) => (
+          s.host.now(),
+          s.host.random(1),
+          createStubIdentityProvider().verifyBinding(...a)
+        ),
+      })),
+    );
+    expect(f).toContain(
+      'verifyBinding is deterministic and free of side effects (no clock, randomness or channel)',
+    );
   });
 
   it('flags a verifyBinding that accepts any binding', async () => {
@@ -38,13 +50,31 @@ describe('the contract suite catches broken providers', () => {
   });
 
   it('flags a verifyBinding that throws on garbage', async () => {
-    const f = await failures(broken((p) => ({ ...p, verifyBinding: async (u, d, b, k) => (b.proof.length > 100 ? Promise.reject(new Error('boom')) : p.verifyBinding(u, d, b, k)) })));
+    const f = await failures(
+      broken((p) => ({
+        ...p,
+        verifyBinding: async (u, d, b, k) =>
+          b.proof.length > 100 ? Promise.reject(new Error('boom')) : p.verifyBinding(u, d, b, k),
+      })),
+    );
     expect(f).toContain('verifyBinding never throws on garbage input');
   });
 
   it('flags an invite that skips validation of its spec', async () => {
-    const f = await failures(broken((p, s) => ({ ...p, createInvite: async (sess, spec) => p.createInvite(sess, { ...spec, maxUses: Math.max(1, spec.maxUses), expiresAt: Math.max(spec.expiresAt, s.host.now() + 1000) }) })));
-    expect(f).toContain('createInvite validates its spec: uses >= 1, expiry in the future and within 30 days');
+    const f = await failures(
+      broken((p, s) => ({
+        ...p,
+        createInvite: async (sess, spec) =>
+          p.createInvite(sess, {
+            ...spec,
+            maxUses: Math.max(1, spec.maxUses),
+            expiresAt: Math.max(spec.expiresAt, s.host.now() + 1000),
+          }),
+      })),
+    );
+    expect(f).toContain(
+      'createInvite validates its spec: uses >= 1, expiry in the future and within 30 days',
+    );
   });
 
   it('flags an accepting side that ignores a declined approval', async () => {
@@ -78,7 +108,12 @@ describe('the contract suite catches broken providers', () => {
   });
 
   it('flags a provider whose linked device ends up with another user', async () => {
-    const f = await failures(broken((p) => ({ ...p, completeLink: async (code) => ({ ...(await p.completeLink(code)), user: 'someone-else' }) })));
+    const f = await failures(
+      broken((p) => ({
+        ...p,
+        completeLink: async (code) => ({ ...(await p.completeLink(code)), user: 'someone-else' }),
+      })),
+    );
     expect(f).toContain('linking a device binds it to the same user and delivers the keys');
   });
 });

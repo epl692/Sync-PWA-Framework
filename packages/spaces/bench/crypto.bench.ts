@@ -1,6 +1,13 @@
 // Micro-benchmarks for suite-1 (npm run bench -w @sync/spaces). The end-to-end numbers are in tests/perf/perf.test.ts.
 import { bench, describe } from 'vitest';
-import { aesOpen, aesSeal, generateAesKey, generateSignKeyPair, signBytes, verifySignature } from '../src/crypto/suite';
+import {
+  aesOpen,
+  aesSeal,
+  generateAesKey,
+  generateSignKeyPair,
+  signBytes,
+  verifySignature,
+} from '../src/crypto/suite';
 
 const msg = new Uint8Array(400).fill(7);
 const nonce = new Uint8Array(12);

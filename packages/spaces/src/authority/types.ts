@@ -43,16 +43,45 @@ export interface DeviceKeysWire {
 }
 
 export type ControlFields = {
-  [SYS.genesis]: { owner: { user: string; device: string; binding: Binding; displayName?: string } & DeviceKeysWire; nonce: string; name?: string };
-  [SYS.member]: { action: 'add' | 'role' | 'remove'; user: string; role?: Role; inviteId?: string; cutoff?: Record<string, number>; displayName?: string };
+  [SYS.genesis]: {
+    owner: { user: string; device: string; binding: Binding; displayName?: string } & DeviceKeysWire;
+    nonce: string;
+    name?: string;
+  };
+  [SYS.member]: {
+    action: 'add' | 'role' | 'remove';
+    user: string;
+    role?: Role;
+    inviteId?: string;
+    cutoff?: Record<string, number>;
+    displayName?: string;
+  };
   [SYS.device]: { user: string; device: string; binding: Binding; name?: string } & DeviceKeysWire;
   [SYS.deviceRevoke]: { device: string; cutoff: number };
-  [SYS.invite]: { inviteId: string; role: Role; expiresAt: number; maxUses: number; secretHash: string; approval: 'required' | 'auto' };
+  [SYS.invite]: {
+    inviteId: string;
+    role: Role;
+    expiresAt: number;
+    maxUses: number;
+    secretHash: string;
+    approval: 'required' | 'auto';
+  };
   [SYS.inviteRevoke]: { inviteId: string };
   [SYS.epoch]: { scope: string; epoch: number; keyId: string; prevKeyId?: string; covers?: string[] };
-  [SYS.keygrant]: { to: string; scope: string; eph: string; items: Array<{ epoch: number; keyId: string; nonce: string; wrapped: string }> };
+  [SYS.keygrant]: {
+    to: string;
+    scope: string;
+    eph: string;
+    items: Array<{ epoch: number; keyId: string; nonce: string; wrapped: string }>;
+  };
   [SYS.share]: { shareId: string; obj: string; members: Array<{ user: string; role: Role }> };
-  [SYS.shareMember]: { shareId: string; action: 'add' | 'role' | 'remove'; user: string; role?: Role; cutoff?: Record<string, number> };
+  [SYS.shareMember]: {
+    shareId: string;
+    action: 'add' | 'role' | 'remove';
+    user: string;
+    role?: Role;
+    cutoff?: Record<string, number>;
+  };
 };
 
 /** An applied control packet, as the fold sees it. */

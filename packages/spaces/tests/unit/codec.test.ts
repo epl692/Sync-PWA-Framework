@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { base32, buildEnvelope, decodeEnvelope, encodeEnvelope, type PacketBody } from '@sync/core';
 import { generateAesKey } from '../../src/crypto/suite';
 import { concat } from '../../src/crypto/bytes';
-import { HEADER_BYTES, NoWriteKeyError, SpaceCodec, buildHeader, parseHeader, type KeyAccess } from '../../src/codec/spaceCodec';
+import {
+  HEADER_BYTES,
+  NoWriteKeyError,
+  SpaceCodec,
+  buildHeader,
+  parseHeader,
+  type KeyAccess,
+} from '../../src/codec/spaceCodec';
 
 const SPACE = base32(new Uint8Array(16).fill(3));
 const SHARE = base32(new Uint8Array(16).fill(4));
@@ -29,11 +36,24 @@ async function harness() {
   return { keys, add, writeKeys, access, codec: new SpaceCodec(access) };
 }
 
-const body = (extra: Partial<PacketBody> = {}): PacketBody => ({ obj: 'o1', op: 'create', type: 'item', schemaVersion: 1, fields: { title: 'secret-title' }, ...extra });
+const body = (extra: Partial<PacketBody> = {}): PacketBody => ({
+  obj: 'o1',
+  op: 'create',
+  type: 'item',
+  schemaVersion: 1,
+  fields: { title: 'secret-title' },
+  ...extra,
+});
 const ctx = (over: Partial<{ id: string; seq: number; clock: string }> = {}) => ({
   space: SPACE,
   author: 'AUTHOR',
-  envelope: { v: 1, id: over.id ?? 'AUTHOR:1', seq: over.seq ?? 1, clock: over.clock ?? '000000000001-0000-AUTHOR', codec: 'aes-gcm-space/1' },
+  envelope: {
+    v: 1,
+    id: over.id ?? 'AUTHOR:1',
+    seq: over.seq ?? 1,
+    clock: over.clock ?? '000000000001-0000-AUTHOR',
+    codec: 'aes-gcm-space/1',
+  },
 });
 
 describe('aes-gcm-space/1', () => {
@@ -73,11 +93,21 @@ describe('aes-gcm-space/1', () => {
     const k = await h.add(SPACE, 0, 'aaaaaaaaaaaaaaaa');
     h.writeKeys.set(SPACE, k.keyId);
     const bytes = await h.codec.encode(body(), ctx());
-    for (const bad of [ctx({ id: 'AUTHOR:2' }), ctx({ seq: 2 }), ctx({ clock: '000000000002-0000-AUTHOR' })]) {
+    for (const bad of [
+      ctx({ id: 'AUTHOR:2' }),
+      ctx({ seq: 2 }),
+      ctx({ clock: '000000000002-0000-AUTHOR' }),
+    ]) {
       expect(await h.codec.decode(bytes, bad)).toEqual({ ok: false, reason: 'malformed' });
     }
-    expect(await h.codec.decode(bytes, { ...ctx(), author: 'MALLORY' })).toEqual({ ok: false, reason: 'malformed' });
-    expect(await h.codec.decode(bytes, { ...ctx(), space: base32(new Uint8Array(16).fill(9)) })).toEqual({ ok: false, reason: 'malformed' });
+    expect(await h.codec.decode(bytes, { ...ctx(), author: 'MALLORY' })).toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+    expect(await h.codec.decode(bytes, { ...ctx(), space: base32(new Uint8Array(16).fill(9)) })).toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
   });
 
   it('rejects a tampered header or ciphertext as malformed', async () => {
@@ -100,8 +130,14 @@ describe('aes-gcm-space/1', () => {
     const bytes = await h.codec.encode(body(), ctx());
     h.keys.clear();
     expect(await h.codec.decode(bytes, ctx())).toEqual({ ok: false, reason: 'missing-key' });
-    expect(await h.codec.decode(concat(new Uint8Array([9]), bytes.slice(1)), ctx())).toEqual({ ok: false, reason: 'unknown-codec' });
-    expect(await h.codec.decode(new Uint8Array([1, 2, 3]), ctx())).toEqual({ ok: false, reason: 'malformed' });
+    expect(await h.codec.decode(concat(new Uint8Array([9]), bytes.slice(1)), ctx())).toEqual({
+      ok: false,
+      reason: 'unknown-codec',
+    });
+    expect(await h.codec.decode(new Uint8Array([1, 2, 3]), ctx())).toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
     expect(await h.codec.decode(bytes.slice(0, 40), ctx())).toEqual({ ok: false, reason: 'malformed' });
   });
 
@@ -134,8 +170,24 @@ describe('aes-gcm-space/1', () => {
     h.writeKeys.set(SPACE, k.keyId);
     const c = ctx();
     const bytes = await h.codec.encode(body(), c);
-    const env = buildEnvelope({ author: 'AUTHOR', seq: 1, space: SPACE, clock: c.envelope.clock, codec: 'aes-gcm-space/1', body: bytes, sig: null });
+    const env = buildEnvelope({
+      author: 'AUTHOR',
+      seq: 1,
+      space: SPACE,
+      clock: c.envelope.clock,
+      codec: 'aes-gcm-space/1',
+      body: bytes,
+      sig: null,
+    });
     const back = decodeEnvelope(encodeEnvelope(env)).env;
-    expect((await h.codec.decode(back.body, { space: back.space, author: back.author, envelope: { v: back.v, id: back.id, seq: back.seq, clock: back.clock, codec: back.codec } })).ok).toBe(true);
+    expect(
+      (
+        await h.codec.decode(back.body, {
+          space: back.space,
+          author: back.author,
+          envelope: { v: back.v, id: back.id, seq: back.seq, clock: back.clock, codec: back.codec },
+        })
+      ).ok,
+    ).toBe(true);
   });
 });

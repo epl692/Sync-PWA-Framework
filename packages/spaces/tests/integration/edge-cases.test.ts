@@ -7,9 +7,16 @@ describe('edge cases', () => {
   it('an invite expires even if nobody revoked it, and a revoked one cannot be revived', async () => {
     const f = await buildFamily({ extra: ['late'] });
     f.g.link('owner', 'late');
-    const art = await f.owner.spaces.invite(f.space.id, { role: 'viewer', expiresAt: f.g.clock.now() + 1000, maxUses: 1, approval: 'auto' });
+    const art = await f.owner.spaces.invite(f.space.id, {
+      role: 'viewer',
+      expiresAt: f.g.clock.now() + 1000,
+      maxUses: 1,
+      approval: 'auto',
+    });
     f.g.clock.advance(5000);
-    await expect(f.g.node('late').spaces.accept(art.url, { timeoutMs: 5000 })).rejects.toMatchObject({ reason: 'expired' });
+    await expect(f.g.node('late').spaces.accept(art.url, { timeoutMs: 5000 })).rejects.toMatchObject({
+      reason: 'expired',
+    });
     await f.g.close();
   });
 

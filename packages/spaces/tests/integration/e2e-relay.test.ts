@@ -25,7 +25,16 @@ describe('relay sees no plaintext (SC-002)', () => {
     await waitFor(async () => net.hub.stats.packets >= 4, 5000, 'packets reach the relay');
     expect(scanForPlaintext(net.everything(), MARKERS)).toEqual([]);
     // sanity: the scanner does see markers when they are there
-    expect(scanForPlaintext([new TextEncoder().encode(JSON.stringify({ x: b64urlEncode(new TextEncoder().encode('MRK-value-9f2')) }))], MARKERS)).toEqual(['MRK-value-9f2']);
+    expect(
+      scanForPlaintext(
+        [
+          new TextEncoder().encode(
+            JSON.stringify({ x: b64urlEncode(new TextEncoder().encode('MRK-value-9f2')) }),
+          ),
+        ],
+        MARKERS,
+      ),
+    ).toEqual(['MRK-value-9f2']);
     void b;
   });
 
@@ -34,12 +43,21 @@ describe('relay sees no plaintext (SC-002)', () => {
     const { a, b } = await pair(net);
     const space = await a.spaces.create('MRK-name-9f2');
     const obj = await a.core.create(space.id, 'MRK-type-9f2', { 'MRK-field-9f2': 'MRK-value-9f2' });
-    const art = await a.spaces.invite(space.id, { role: 'editor', expiresAt: a.clock.now() + 3_600_000, maxUses: 1, approval: 'auto' });
+    const art = await a.spaces.invite(space.id, {
+      role: 'editor',
+      expiresAt: a.clock.now() + 3_600_000,
+      maxUses: 1,
+      approval: 'auto',
+    });
     expect(await b.spaces.accept(art.url)).toEqual({ space: space.id, role: 'editor' });
     await waitFor(async () => (await b.core.get(obj.id)) !== undefined, 8000, 'joiner reads the object');
     expect((await b.core.get(obj.id))!.fields['MRK-field-9f2']).toBe('MRK-value-9f2');
     await b.core.create(space.id, 'MRK-type-9f2', { 'MRK-field-9f2': 'MRK-author-9f2' });
-    await waitFor(async () => (await a.core.query({ type: 'MRK-type-9f2' }).once()).length === 2, 8000, 'owner reads the joiner write');
+    await waitFor(
+      async () => (await a.core.query({ type: 'MRK-type-9f2' }).once()).length === 2,
+      8000,
+      'owner reads the joiner write',
+    );
     expect(scanForPlaintext(net.everything(), MARKERS)).toEqual([]);
     expect(net.seen.some((m) => new TextDecoder().decode(m).includes('"t":"chan"'))).toBe(true); // the handshake went through the relay
   });
@@ -49,7 +67,8 @@ describe('relay sees no plaintext (SC-002)', () => {
     const clock = createFakeClock();
     const a = await createSecureNode({ name: 'a', clock, coreConfig: { retentionWindowMs: 30 * DAY } });
     const space = await a.spaces.create();
-    for (let i = 0; i < 5; i++) await a.core.create(space.id, 'MRK-type-9f2', { 'MRK-field-9f2': `MRK-value-9f2 ${i}` });
+    for (let i = 0; i < 5; i++)
+      await a.core.create(space.id, 'MRK-type-9f2', { 'MRK-field-9f2': `MRK-value-9f2 ${i}` });
     clock.advance(40 * DAY);
     expect((await a.core.compact()).packetsRemoved).toBeGreaterThan(0);
     const snap = await a.core.exportSnapshot(space.id);
@@ -68,7 +87,11 @@ describe('relay sees no plaintext (SC-002)', () => {
     const session = await c.spaces.joinAsDevice(code);
     await done;
     expect(session.user).toBe(a.spaces.session()!.user);
-    await waitFor(async () => (await c.core.query({ type: 'MRK-type-9f2' }).once()).length === 5, 10_000, 'bootstrap from snapshot');
+    await waitFor(
+      async () => (await c.core.query({ type: 'MRK-type-9f2' }).once()).length === 5,
+      10_000,
+      'bootstrap from snapshot',
+    );
     expect(scanForPlaintext(wire, MARKERS)).toEqual([]);
     expect(wire.some((w) => new TextDecoder().decode(w).includes('"sealed"'))).toBe(true);
   });

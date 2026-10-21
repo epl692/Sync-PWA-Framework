@@ -18,19 +18,19 @@ offset  size  field
 - **AAD** = canonical JSON of `{v, id, author, seq, space, clock, codec}` (UTF-8), followed by bytes 0..28 of the body (header up to `keyId`).
 - The header (bytes 0..28) is readable by relays. It is covered by the signature (the whole envelope is) and by the AAD.
 
-## Grant body (`codec = grant/1`)
+## Key grant (a `$sys.keygrant` control object)
 
-Cleartext canonical JSON, because the recipient has no key yet:
+A grant is an ordinary create-only control object, **encrypted like every other packet** with the scope's current write key (which, during a rotation, is still the previous epoch; see research R-09). Its fields:
 
 ```json
-{ "to": "<deviceId>", "scope": "<scopeId>", "epoch": 4, "keyId": "<hex8>",
-  "eph": "<base64url X25519 ephemeral public key>", "nonce": "<base64url 12 B>",
-  "wrapped": "<base64url AES-GCM(epochKey)>" }
+{ "to": "<deviceId>", "scope": "<scopeId>", "eph": "<base64url X25519 ephemeral public key>",
+  "items": [ { "epoch": 4, "keyId": "<hex8>", "nonce": "<base64url 12 B>", "wrapped": "<base64url AES-GCM(epochKey)>" } ] }
 ```
 
-- Wrap key = `HKDF-SHA-256(ECDH(eph, recipientAgreePub), salt = 0x00*32, info = "sync-grant/1" || scopeId || epoch(4 B) || recipientDeviceId)`.
-- AAD for the wrap = `to || scope || epoch || keyId`.
-- A join grant carries several epochs in one object: `wrapped` repeats per epoch as `items: [{epoch, keyId, nonce, wrapped}]`.
+- Wrap key per item = `HKDF-SHA-256(ECDH(eph, recipientAgreePub), salt = 0x00*32, info = "sync-grant/1" || scopeId(16 B) || epoch(4 B BE) || recipientDeviceId)`.
+- AAD per item = `recipientDeviceId || scopeId(16 B) || epoch(4 B BE) || keyId(8 B)`.
+- A recipient accepts an item only if `SHA-256(unwrapped key)[0..8]` equals `keyId`.
+- A join or link grant (delivered over the identity channel, not the log) carries one item per epoch the device is entitled to, which is every epoch of the scope.
 
 ## Signature
 
@@ -57,7 +57,7 @@ Required by the constitution for changes touching signing and encryption.
 | Codec header `fmt` greater than supported | Park (`undecodable-codec`), store, relay, retry after upgrade |
 | Unknown signature algorithm marker in a future `sig` encoding | The 001 `sig` field is bytes. `ed25519/1` signatures are exactly 64 bytes. Another length means a future suite: treat as unknown, **defer** (do not reject, do not apply) and relay |
 | Unknown `$sys.*` type | Not applied to the authority fold; kept and relayed. Authority state is unchanged by what an older peer cannot understand |
-| Older peer without the spaces package (plaintext test codec) | Out of scope for release builds: the plaintext codec is not exported from the release entry point (001 plan) |
+| Older peer without the spaces package (plaintext test codec) | Out of scope for release builds: the plaintext codec is not exported from the release entry point (001 plan), and `assertSecureCore()` fails a core that has any other codec |
 | Changing header layout, AAD, wrap derivation or canonical signing input | MAJOR: new `fmt` / codec ID (`aes-gcm-space/2`), a migration note here, and both codecs registered during a transition |
 
 Rationale: a peer that cannot verify something must keep and forward it but never apply it. An unverifiable packet can never take effect, and nothing is lost for the day the peer upgrades.

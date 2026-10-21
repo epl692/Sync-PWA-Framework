@@ -1,5 +1,13 @@
 /** Builds packets a hostile or modified client could produce, using a real node's own device and keys. */
-import { buildEnvelope, decodeEnvelope, encodeEnvelope, formatClock, newId, type DataPacketEnvelope, type PacketBody } from '@sync/core';
+import {
+  buildEnvelope,
+  decodeEnvelope,
+  encodeEnvelope,
+  formatClock,
+  newId,
+  type DataPacketEnvelope,
+  type PacketBody,
+} from '@sync/core';
 import type { SecureNode } from '@sync/testkit';
 import { Keystore, SPACE_CODEC_ID } from '../src';
 import { SpaceCodec, type KeyAccess } from '../src/codec/spaceCodec';
@@ -55,12 +63,28 @@ export class Forger {
     return { obj, op, type, schemaVersion: 1, fields: fields as never };
   }
 
-  async packet(space: string, body: PacketBody, o: ForgeOpts = {}): Promise<{ env: DataPacketEnvelope; raw: Uint8Array }> {
+  async packet(
+    space: string,
+    body: PacketBody,
+    o: ForgeOpts = {},
+  ): Promise<{ env: DataPacketEnvelope; raw: Uint8Array }> {
     const dev = this.ks.requireDevice();
     const seq = o.seq ?? (await this.nextSeq(space));
     const clock = formatClock(o.wall ?? this.node.clock.now() + 1000 + seq, 0, dev.deviceId);
-    const bytes = await this.codec.encode(body, { space, author: dev.deviceId, envelope: { v: 1, id: `${dev.deviceId}:${seq}`, seq, clock, codec: SPACE_CODEC_ID } });
-    let env = buildEnvelope({ author: dev.deviceId, seq, space, clock, codec: SPACE_CODEC_ID, body: bytes, sig: null });
+    const bytes = await this.codec.encode(body, {
+      space,
+      author: dev.deviceId,
+      envelope: { v: 1, id: `${dev.deviceId}:${seq}`, seq, clock, codec: SPACE_CODEC_ID },
+    });
+    let env = buildEnvelope({
+      author: dev.deviceId,
+      seq,
+      space,
+      clock,
+      codec: SPACE_CODEC_ID,
+      body: bytes,
+      sig: null,
+    });
     if (o.sign !== false) {
       const priv = (o.signWith ? o.signWith.ks.requireDevice() : dev).signPriv;
       env = { ...env, sig: await signBytes(priv, signingInput(encodeEnvelope(env))) };

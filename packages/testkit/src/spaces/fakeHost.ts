@@ -81,7 +81,15 @@ interface InviteRec {
 
 export interface FakeHostCalls {
   approve: JoinRequestView[];
-  registerInvite: Array<{ space: string; inviteId: string; role: Role; expiresAt: number; maxUses: number; secretHash: Uint8Array; approval: 'required' | 'auto' }>;
+  registerInvite: Array<{
+    space: string;
+    inviteId: string;
+    role: Role;
+    expiresAt: number;
+    maxUses: number;
+    secretHash: Uint8Array;
+    approval: 'required' | 'auto';
+  }>;
   revokeInviteRecord: Array<{ space: string; inviteId: string }>;
   admit: JoinerRequest[];
   completeJoin: JoinGrantData[];
@@ -90,7 +98,15 @@ export interface FakeHostCalls {
 }
 
 export class FakeHost {
-  readonly calls: FakeHostCalls = { approve: [], registerInvite: [], revokeInviteRecord: [], admit: [], completeJoin: [], linkNewDevice: [], completeLink: [] };
+  readonly calls: FakeHostCalls = {
+    approve: [],
+    registerInvite: [],
+    revokeInviteRecord: [],
+    admit: [],
+    completeJoin: [],
+    linkNewDevice: [],
+    completeLink: [],
+  };
   /** How often the provider touched the clock, randomness, or the channel (used to prove verifyBinding is pure). */
   readonly touched = { now: 0, random: 0, channel: 0 };
   readonly invites = new Map<string, InviteRec>();
@@ -106,59 +122,70 @@ export class FakeHost {
     readonly device: LocalDevice,
     channel: ChannelLike,
   ) {
-    const self = this;
     this.host = {
       channel: {
-        send: (...a) => (self.touched.channel++, channel.send(...a)),
-        broadcast: (...a) => (self.touched.channel++, channel.broadcast(...a)),
+        send: (...a) => (this.touched.channel++, channel.send(...a)),
+        broadcast: (...a) => (this.touched.channel++, channel.broadcast(...a)),
         onMessage: (h) => channel.onMessage(h),
         setRoutes: (s) => channel.setRoutes(s),
       },
       device: () => device,
-      now: () => (self.touched.now++, self.clockMs),
-      random: (n) => (self.touched.random++, crypto.getRandomValues(new Uint8Array(n))),
+      now: () => (this.touched.now++, this.clockMs),
+      random: (n) => (this.touched.random++, crypto.getRandomValues(new Uint8Array(n))),
       secrets: {
-        get: async (id) => self.secretStore.get(id),
-        put: async (id, v) => void self.secretStore.set(id, v),
+        get: async (id) => this.secretStore.get(id),
+        put: async (id, v) => void this.secretStore.set(id, v),
       },
       store: {
-        get: async (k) => self.kv.get(k),
-        put: async (k, v) => void self.kv.set(k, v),
+        get: async (k) => this.kv.get(k),
+        put: async (k, v) => void this.kv.set(k, v),
       },
-      approve: async (req) => (self.calls.approve.push(req), self.approveWith(req)),
+      approve: async (req) => (this.calls.approve.push(req), this.approveWith(req)),
       approveLink: async () => true,
       registerInvite: async (spec) => {
-        self.calls.registerInvite.push(spec);
-        self.invites.set(spec.inviteId, { ...spec, revoked: false, uses: 0 });
+        this.calls.registerInvite.push(spec);
+        this.invites.set(spec.inviteId, { ...spec, revoked: false, uses: 0 });
       },
       revokeInviteRecord: async (space, inviteId) => {
-        self.calls.revokeInviteRecord.push({ space, inviteId });
-        const r = self.invites.get(inviteId);
+        this.calls.revokeInviteRecord.push({ space, inviteId });
+        const r = this.invites.get(inviteId);
         if (r) r.revoked = true;
       },
       inviteStatus: async (_space, inviteId): Promise<InviteStatus> => {
-        const r = self.invites.get(inviteId);
+        const r = this.invites.get(inviteId);
         if (!r) return { ok: false, reason: 'unknown' };
         if (r.revoked) return { ok: false, reason: 'revoked' };
-        if (self.clockMs >= r.expiresAt) return { ok: false, reason: 'expired' };
+        if (this.clockMs >= r.expiresAt) return { ok: false, reason: 'expired' };
         if (r.uses >= r.maxUses) return { ok: false, reason: 'used-up' };
-        return { ok: true, space: r.space, role: r.role, approval: r.approval, expiresAt: r.expiresAt, secretHash: r.secretHash, usesLeft: r.maxUses - r.uses };
+        return {
+          ok: true,
+          space: r.space,
+          role: r.role,
+          approval: r.approval,
+          expiresAt: r.expiresAt,
+          secretHash: r.secretHash,
+          usesLeft: r.maxUses - r.uses,
+        };
       },
       admit: async (space, inviteId, joiner) => {
-        self.calls.admit.push(joiner);
-        const r = self.invites.get(inviteId)!;
+        this.calls.admit.push(joiner);
+        const r = this.invites.get(inviteId)!;
         r.uses++;
         return { space, role: r.role, grants: [] };
       },
-      completeJoin: async (data) => void self.calls.completeJoin.push(data),
-      currentSession: () => self.session,
+      completeJoin: async (data) => void this.calls.completeJoin.push(data),
+      currentSession: () => this.session,
       linkNewDevice: async (d, binding) => {
-        self.calls.linkNewDevice.push({ device: d, binding });
-        return { user: self.session!.user, displayName: self.session!.displayName, spaces: [] };
+        this.calls.linkNewDevice.push({ device: d, binding });
+        return { user: this.session!.user, displayName: this.session!.displayName, spaces: [] };
       },
       completeLink: async (data) => {
-        self.calls.completeLink.push(data);
-        self.session = { user: data.user, displayName: data.displayName, device: { deviceId: device.deviceId, signPub: device.signPub, agreePub: device.agreePub } };
+        this.calls.completeLink.push(data);
+        this.session = {
+          user: data.user,
+          displayName: data.displayName,
+          device: { deviceId: device.deviceId, signPub: device.signPub, agreePub: device.agreePub },
+        };
       },
     };
   }
@@ -179,7 +206,12 @@ export class FakeHost {
   }
 
   get publicDevice(): DevicePublic {
-    return { deviceId: this.device.deviceId, signPub: this.device.signPub, agreePub: this.device.agreePub, name: this.device.name };
+    return {
+      deviceId: this.device.deviceId,
+      signPub: this.device.signPub,
+      agreePub: this.device.agreePub,
+      name: this.device.name,
+    };
   }
 
   resetTouched(): void {

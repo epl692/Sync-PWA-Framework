@@ -14,7 +14,10 @@ export function qrMatrix(text: string, ecc: QrEcc = 'M'): boolean[][] {
 }
 
 /** A self-contained SVG string for the code (with the standard 4-module quiet zone). */
-export function qrToSvg(text: string, opts: { cellSize?: number; margin?: number; ecc?: QrEcc; dark?: string; light?: string } = {}): string {
+export function qrToSvg(
+  text: string,
+  opts: { cellSize?: number; margin?: number; ecc?: QrEcc; dark?: string; light?: string } = {},
+): string {
   const m = qrMatrix(text, opts.ecc ?? 'M');
   const cell = opts.cellSize ?? 4;
   const margin = opts.margin ?? 4;
@@ -33,7 +36,8 @@ interface BarcodeDetectorLike {
 }
 
 function detector(): BarcodeDetectorLike | undefined {
-  const Ctor = (globalThis as { BarcodeDetector?: new (o: { formats: string[] }) => BarcodeDetectorLike }).BarcodeDetector;
+  const Ctor = (globalThis as { BarcodeDetector?: new (o: { formats: string[] }) => BarcodeDetectorLike })
+    .BarcodeDetector;
   try {
     return Ctor ? new Ctor({ formats: ['qr_code'] }) : undefined;
   } catch {

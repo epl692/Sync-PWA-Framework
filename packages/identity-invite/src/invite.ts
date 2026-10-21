@@ -40,11 +40,25 @@ export async function decodeArtifact(text: string): Promise<ArtifactData | undef
   } catch {
     return undefined;
   }
-  if (a?.v !== 1 || typeof a.i !== 'string' || typeof a.s !== 'string' || typeof a.k !== 'string' || typeof a.d !== 'string') return undefined;
-  if (!['owner', 'editor', 'viewer'].includes(a.r) || !Number.isFinite(a.e) || typeof a.sp !== 'string' || typeof a.ap !== 'string') return undefined;
+  if (
+    a?.v !== 1 ||
+    typeof a.i !== 'string' ||
+    typeof a.s !== 'string' ||
+    typeof a.k !== 'string' ||
+    typeof a.d !== 'string'
+  )
+    return undefined;
+  if (
+    !['owner', 'editor', 'viewer'].includes(a.r) ||
+    !Number.isFinite(a.e) ||
+    typeof a.sp !== 'string' ||
+    typeof a.ap !== 'string'
+  )
+    return undefined;
   try {
     const sp = b64urlDecode(a.sp);
-    if (sp.byteLength !== 32 || b64urlDecode(a.ap).byteLength !== 32 || b64urlDecode(a.k).byteLength < 16) return undefined;
+    if (sp.byteLength !== 32 || b64urlDecode(a.ap).byteLength !== 32 || b64urlDecode(a.k).byteLength < 16)
+      return undefined;
     if ((await deviceIdFromSignPub(sp)) !== a.d) return undefined; // the inviter's ID must hash its key
   } catch {
     return undefined;
@@ -55,8 +69,14 @@ export async function decodeArtifact(text: string): Promise<ArtifactData | undef
 export const secretHash = (secret: Uint8Array) => sha256(secret);
 
 /** HMAC-SHA-256(secret, joinerSignPub || nonce): proves the joiner holds the invite secret without sending it. */
-export async function proofOf(secret: Uint8Array, joinerSignPub: Uint8Array, nonce: Uint8Array): Promise<Uint8Array> {
-  const key = await crypto.subtle.importKey('raw', bs(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+export async function proofOf(
+  secret: Uint8Array,
+  joinerSignPub: Uint8Array,
+  nonce: Uint8Array,
+): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey('raw', bs(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+  ]);
   return new Uint8Array(await crypto.subtle.sign('HMAC', key, bs(concat(joinerSignPub, nonce))));
 }
 

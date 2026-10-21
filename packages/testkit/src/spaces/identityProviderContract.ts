@@ -43,12 +43,22 @@ async function world(make: ProviderFactory) {
   const owner = await node('owner', net, make);
   const joiner = await node('joiner', net, make);
   const space = newInviteSpace();
-  const spec = (over: Partial<InviteSpec> = {}): InviteSpec => ({ space, role: 'editor', expiresAt: owner.host.clockMs + DAY, maxUses: 1, approval: 'required', ...over });
+  const spec = (over: Partial<InviteSpec> = {}): InviteSpec => ({
+    space,
+    role: 'editor',
+    expiresAt: owner.host.clockMs + DAY,
+    maxUses: 1,
+    approval: 'required',
+    ...over,
+  });
   return { net, owner, joiner, space, spec };
 }
 
 const publicOf = (n: Node): DevicePublic => n.session.device;
-const flip = (b: DeviceBinding): DeviceBinding => ({ kind: b.kind, proof: b.proof.map((x, i) => (i === b.proof.length - 1 ? x ^ 1 : x)) });
+const flip = (b: DeviceBinding): DeviceBinding => ({
+  kind: b.kind,
+  proof: b.proof.map((x, i) => (i === b.proof.length - 1 ? x ^ 1 : x)),
+});
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const denial = async (p: Promise<unknown>): Promise<string> => {
   try {
@@ -82,9 +92,13 @@ export const identityProviderChecks: Check[] = [
       expect(await owner.provider.verifyBinding(owner.session.user, publicOf(owner), own, [])).toBe(true);
       expect(owner.provider.bindingKinds).toContain(own.kind);
       const linked = await owner.provider.issueBinding(owner.session, publicOf(joiner));
-      expect(await owner.provider.verifyBinding(owner.session.user, publicOf(joiner), linked, [publicOf(owner)])).toBe(true);
+      expect(
+        await owner.provider.verifyBinding(owner.session.user, publicOf(joiner), linked, [publicOf(owner)]),
+      ).toBe(true);
       // a different provider instance (another device) reaches the same verdict: verification needs no private state
-      expect(await joiner.provider.verifyBinding(owner.session.user, publicOf(joiner), linked, [publicOf(owner)])).toBe(true);
+      expect(
+        await joiner.provider.verifyBinding(owner.session.user, publicOf(joiner), linked, [publicOf(owner)]),
+      ).toBe(true);
     },
   },
   {
@@ -94,7 +108,9 @@ export const identityProviderChecks: Check[] = [
       const b = await owner.provider.issueBinding(owner.session, publicOf(owner));
       expect(await owner.provider.verifyBinding('someone-else', publicOf(owner), b, [])).toBe(false);
       expect(await owner.provider.verifyBinding(owner.session.user, publicOf(joiner), b, [])).toBe(false);
-      expect(await owner.provider.verifyBinding(owner.session.user, publicOf(owner), flip(b), [])).toBe(false);
+      expect(await owner.provider.verifyBinding(owner.session.user, publicOf(owner), flip(b), [])).toBe(
+        false,
+      );
     },
   },
   {
@@ -105,7 +121,8 @@ export const identityProviderChecks: Check[] = [
       const b = await owner.provider.issueBinding(owner.session, d);
       owner.host.resetTouched();
       const results: boolean[] = [];
-      for (let i = 0; i < 5; i++) results.push(await owner.provider.verifyBinding(owner.session.user, d, i % 2 ? flip(b) : b, []));
+      for (let i = 0; i < 5; i++)
+        results.push(await owner.provider.verifyBinding(owner.session.user, d, i % 2 ? flip(b) : b, []));
       expect(results).toEqual([true, false, true, false, true]);
       expect(owner.host.touched).toEqual({ now: 0, random: 0, channel: 0 });
     },
@@ -121,7 +138,8 @@ export const identityProviderChecks: Check[] = [
         { kind: owner.provider.bindingKinds[0]!, proof: new Uint8Array() },
         { kind: owner.provider.bindingKinds[0]!, proof: crypto.getRandomValues(new Uint8Array(300)) },
       ];
-      for (const b of junk) expect(await owner.provider.verifyBinding(owner.session.user, d, b, [d])).toBe(false);
+      for (const b of junk)
+        expect(await owner.provider.verifyBinding(owner.session.user, d, b, [d])).toBe(false);
     },
   },
   {
@@ -129,7 +147,12 @@ export const identityProviderChecks: Check[] = [
     async run(make) {
       const { owner, spec } = await world(make);
       const now = owner.host.clockMs;
-      for (const bad of [spec({ maxUses: 0 }), spec({ expiresAt: now }), spec({ expiresAt: now - 1000 }), spec({ expiresAt: now + 31 * DAY })]) {
+      for (const bad of [
+        spec({ maxUses: 0 }),
+        spec({ expiresAt: now }),
+        spec({ expiresAt: now - 1000 }),
+        spec({ expiresAt: now + 31 * DAY }),
+      ]) {
         await expect(owner.provider.createInvite(owner.session, bad)).rejects.toThrow();
       }
       expect(owner.host.calls.registerInvite).toHaveLength(0);
@@ -145,14 +168,24 @@ export const identityProviderChecks: Check[] = [
       expect(art.expiresAt).toBe(owner.host.clockMs + DAY);
       expect(owner.host.calls.registerInvite).toHaveLength(1);
       const r = owner.host.calls.registerInvite[0]!;
-      expect(r).toMatchObject({ space, inviteId: art.inviteId, role: 'editor', maxUses: 3, approval: 'required' });
+      expect(r).toMatchObject({
+        space,
+        inviteId: art.inviteId,
+        role: 'editor',
+        maxUses: 3,
+        approval: 'required',
+      });
       expect(r.secretHash).toHaveLength(32);
       // the secret stays on the creating device; what the Space log gets is its SHA-256
       const stored = owner.host.secretStore.get(art.inviteId);
       expect(stored).toBeDefined();
-      expect(new Uint8Array(await crypto.subtle.digest('SHA-256', stored!.secret as BufferSource))).toEqual(r.secretHash);
+      expect(new Uint8Array(await crypto.subtle.digest('SHA-256', stored!.secret as BufferSource))).toEqual(
+        r.secretHash,
+      );
       expect(JSON.stringify(Array.from(r.secretHash))).not.toBe(JSON.stringify(Array.from(stored!.secret)));
-      expect(JSON.stringify({ ...r, secretHash: undefined })).not.toContain(JSON.stringify(Array.from(stored!.secret)));
+      expect(JSON.stringify({ ...r, secretHash: undefined })).not.toContain(
+        JSON.stringify(Array.from(stored!.secret)),
+      );
     },
   },
   {
@@ -205,7 +238,11 @@ export const identityProviderChecks: Check[] = [
       expect(await denial(joiner.provider.acceptInvite(joiner.session, expired.url))).toBe('expired');
       owner.host.clockMs -= 2 * DAY;
       const revoked = await owner.provider.createInvite(owner.session, spec());
-      await owner.provider.revokeInvite(owner.session, revoked.inviteId ? spec().space : '', revoked.inviteId);
+      await owner.provider.revokeInvite(
+        owner.session,
+        revoked.inviteId ? spec().space : '',
+        revoked.inviteId,
+      );
       expect(owner.host.calls.revokeInviteRecord).toHaveLength(1);
       expect(await denial(joiner.provider.acceptInvite(joiner.session, revoked.url))).toBe('revoked');
       const lost = await owner.provider.createInvite(owner.session, spec());
@@ -247,7 +284,9 @@ export const identityProviderChecks: Check[] = [
       const { owner, joiner, spec, net } = await world(make);
       const art = await owner.provider.createInvite(owner.session, spec());
       net.filter = () => null; // the network eats everything
-      expect(await denial(joiner.provider.acceptInvite(joiner.session, art.url, { timeoutMs: 100 }))).toBe('timeout');
+      expect(await denial(joiner.provider.acceptInvite(joiner.session, art.url, { timeoutMs: 100 }))).toBe(
+        'timeout',
+      );
     },
   },
   {
@@ -262,7 +301,9 @@ export const identityProviderChecks: Check[] = [
       expect(owner.host.calls.linkNewDevice).toHaveLength(1);
       const { device, binding } = owner.host.calls.linkNewDevice[0]!;
       expect(device.deviceId).toBe(joiner.host.device.deviceId);
-      expect(await owner.provider.verifyBinding(owner.session.user, device, binding, [publicOf(owner)])).toBe(true);
+      expect(await owner.provider.verifyBinding(owner.session.user, device, binding, [publicOf(owner)])).toBe(
+        true,
+      );
       expect(joiner.host.calls.completeLink).toHaveLength(1);
       expect(joiner.host.calls.completeLink[0]!.user).toBe(owner.session.user);
     },
@@ -280,7 +321,9 @@ export const identityProviderChecks: Check[] = [
 ];
 
 /** Run every check against a provider factory and report which ones failed. Used to test the suite itself. */
-export async function runIdentityProviderChecks(make: ProviderFactory): Promise<{ passed: string[]; failed: Array<{ name: string; error: string }> }> {
+export async function runIdentityProviderChecks(
+  make: ProviderFactory,
+): Promise<{ passed: string[]; failed: Array<{ name: string; error: string }> }> {
   const passed: string[] = [];
   const failed: Array<{ name: string; error: string }> = [];
   for (const c of identityProviderChecks) {

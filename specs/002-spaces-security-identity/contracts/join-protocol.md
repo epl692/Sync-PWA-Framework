@@ -13,11 +13,11 @@ URL fragment `#/join/<b64 canonical JSON>` (also rendered as QR):
   "route": { "relay": "wss://relay.example/ws", "webrtc": null } }
 ```
 
-`secret` exists only in the artifact and on the inviting device; the Space log holds `SHA-256(secret)`.
+`secret` exists only in the artifact and on the inviting device (wrapped at rest); the Space log holds `SHA-256(secret)`. As built the artifact is compact JSON `{v, i: inviteId, s: space, k: secret, r: role, e: expiresAt, d: inviter device, sp: inviter signing key, ap: inviter agreement key}` after `#/join/`; the joiner checks that `d` is the hash of `sp`.
 
 ## Messages
 
-All are sealed to the receiver: `sealed = ECIES(receiverAgreePub, payload)` using X25519 + HKDF (`info = "sync-join/1"`) + AES-GCM. `kind` is inside the sealed payload.
+All are sealed to the receiver: `0x01 || ephemeralPublic(32) || nonce(12) || AES-256-GCM(payload)` with X25519 + HKDF (`info = "sync-join/1" || context`), where `context` is `join-request`, `join-reply`, `link-offer` or `link-reply` (also the AAD, so a reply cannot be replayed as a request). `kind` is inside the sealed payload. Replies are sealed to the joiner's device agreement key from the request.
 
 | `kind` | From → To | Payload |
 |---|---|---|
@@ -52,3 +52,12 @@ All are sealed to the receiver: `sealed = ECIES(receiverAgreePub, payload)` usin
 | Bad `proof` | `join-deny: bad-proof`, no write |
 | Handshake interrupted | Nothing is written until step 4; step 4 writes are individually idempotent; the joiner retries with the same artifact |
 | Joiner already a member | `join-grant` is re-sent (idempotent; no second `member.add`) |
+
+## As built
+
+- Only the device that created an invite holds its secret and answers requests for it; other devices stay silent.
+- A request's nonce is checked and remembered with no `await` between, so two copies racing cannot both pass. A replayed or altered request gets no answer.
+- Short authentication string: five words from a 256-word list, from `SHA-256("sync-sas/1" || joinerSignPub || inviterSignPub)`; the Owner sees it in the approval request, the joiner in `onSas` (sent in `join-pending`).
+- Link: the existing device shows `sync-link:<base64url {v, n: nonce, user, d, sp, ap}>`. The new device sends a sealed `link-offer`; the existing device asks its user (`approveLink`, default refuse, with the same five words), registers the device in every Space of the user, and replies with a `link-accept` carrying every key and the device's binding chain, or a `link-deny` at once. The code is single use and valid for 10 minutes.
+- Bindings: `genesis/1` (first device: its own signature over its keys, user = device ID) and `chain/1` (signatures from the first device down to this one, verifiable from the evidence alone).
+- Joins are admitted one at a time inside the Owner device, so two joiners racing for a single-use invite cannot both pass the use check.

@@ -38,7 +38,8 @@ export type DeviceCheck =
   | { ok: true; user: string; role: Role }
   | { ok: false; reason: 'unknown-device' | 'not-member' | 'revoked' | 'beyond-cutoff' };
 
-const cmp = (a: ControlEvent, b: ControlEvent) => (a.clock < b.clock ? -1 : a.clock > b.clock ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const cmp = (a: ControlEvent, b: ControlEvent) =>
+  a.clock < b.clock ? -1 : a.clock > b.clock ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 const wallOf = (clock: string) => parseClock(clock)?.wall ?? 0;
 const lastSpan = (h: RoleSpan[]): Role | null => (h.length ? h[h.length - 1]!.role : null);
 
@@ -61,7 +62,10 @@ export class Authority {
     readonly space: string,
     opts: AuthorityOptions = {},
   ) {
-    this.o = { maxInviteDays: opts.maxInviteDays ?? LIMITS.maxInviteDays, maxDevicesPerUser: opts.maxDevicesPerUser ?? LIMITS.maxDevicesPerUser };
+    this.o = {
+      maxInviteDays: opts.maxInviteDays ?? LIMITS.maxInviteDays,
+      maxDevicesPerUser: opts.maxDevicesPerUser ?? LIMITS.maxDevicesPerUser,
+    };
   }
 
   get state(): AuthState {
@@ -76,7 +80,9 @@ export class Authority {
 
   /** Replace everything with this set of events. */
   load(events: ControlEvent[]): void {
-    this.events = [...new Map(events.filter((e) => e.type !== SYS.keygrant).map((e) => [e.id, e])).values()].sort(cmp);
+    this.events = [
+      ...new Map(events.filter((e) => e.type !== SYS.keygrant).map((e) => [e.id, e])).values(),
+    ].sort(cmp);
     this.refold();
   }
 
@@ -85,7 +91,8 @@ export class Authority {
    * the latest folded event refolds from scratch (and is reported as retroactive).
    */
   add(ev: ControlEvent): { added: boolean; retroactive: boolean; newInert: InertRec[] } {
-    if (ev.type === SYS.keygrant || this.st.seen.has(ev.id)) return { added: false, retroactive: false, newInert: [] };
+    if (ev.type === SYS.keygrant || this.st.seen.has(ev.id))
+      return { added: false, retroactive: false, newInert: [] };
     const before = new Set(this.st.inert.map((i) => i.event));
     const retroactive = this.st.lastClock !== '' && ev.clock < this.st.lastClock;
     if (retroactive) {
@@ -161,7 +168,9 @@ export class Authority {
   }
 
   activeDevices(user: string): DeviceRec[] {
-    return (this.st.users.get(user)?.devices ?? []).map((id) => this.st.devices.get(id)!).filter((d) => !d.revoked);
+    return (this.st.users.get(user)?.devices ?? [])
+      .map((id) => this.st.devices.get(id)!)
+      .filter((d) => !d.revoked);
   }
 
   /** Devices of current members that are not revoked: the recipients of a rotation. */
@@ -175,7 +184,13 @@ export class Authority {
     const out = [];
     for (const u of this.st.users.values()) {
       const role = lastSpan(u.history);
-      if (role) out.push({ user: u.id, role, displayName: u.displayName, devices: u.devices.map((id) => this.st.devices.get(id)!) });
+      if (role)
+        out.push({
+          user: u.id,
+          role,
+          displayName: u.displayName,
+          devices: u.devices.map((id) => this.st.devices.get(id)!),
+        });
     }
     return out.sort((a, b) => (a.user < b.user ? -1 : 1));
   }
@@ -252,7 +267,8 @@ export class Authority {
     const st = this.st;
     const out = new Map<string, string>();
     const spans = (list: RoleSpan[]) => {
-      for (let i = 1; i < list.length; i++) if (list[i]!.role === null && list[i - 1]!.role !== null) out.set(list[i]!.event, list[i]!.clock);
+      for (let i = 1; i < list.length; i++)
+        if (list[i]!.role === null && list[i - 1]!.role !== null) out.set(list[i]!.event, list[i]!.clock);
     };
     const revoked = (users: Iterable<string>) => {
       for (const u of users) {
@@ -265,14 +281,17 @@ export class Authority {
     if (scope === this.space) {
       for (const u of st.users.values()) spans(u.history);
       revoked(st.users.keys());
-      for (const i of st.inert) if (i.type === SYS.member && i.reason === 'invite-used-up') out.set(i.event, i.clock);
+      for (const i of st.inert)
+        if (i.type === SYS.member && i.reason === 'invite-used-up') out.set(i.event, i.clock);
     } else {
       const share = st.shares.get(scope);
       if (!share) return [];
       for (const list of share.members.values()) spans(list);
       revoked(share.members.keys());
     }
-    return [...out.entries()].map(([id, clock]) => ({ id, clock })).sort((a, b) => (a.clock < b.clock ? -1 : 1));
+    return [...out.entries()]
+      .map(([id, clock]) => ({ id, clock }))
+      .sort((a, b) => (a.clock < b.clock ? -1 : 1));
   }
 
   /** Shrinking events the scope's current epoch does not account for. An epoch without `covers` accounts for everything before it. */
@@ -294,7 +313,9 @@ export class Authority {
       devices: sortMap(st.devices),
       invites: sortMap(st.invites),
       epochs: sortMap(st.epochs),
-      shares: [...st.shares.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, s]) => [k, { ...s, members: sortMap(s.members) }]),
+      shares: [...st.shares.entries()]
+        .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+        .map(([k, s]) => [k, { ...s, members: sortMap(s.members) }]),
       inert: [...st.inert].sort((a, b) => (a.event < b.event ? -1 : 1)),
     } as never);
   }
@@ -350,7 +371,12 @@ export class Authority {
     if (st.genesis) return 'duplicate-genesis';
     if (!f?.owner || f.owner.device !== ev.author) return 'bad-genesis';
     st.genesis = { user: f.owner.user, device: f.owner.device, clock: ev.clock, event: ev.id, name: f.name };
-    st.users.set(f.owner.user, { id: f.owner.user, displayName: f.owner.displayName, history: [{ clock: ev.clock, role: 'owner', event: ev.id }], devices: [f.owner.device] });
+    st.users.set(f.owner.user, {
+      id: f.owner.user,
+      displayName: f.owner.displayName,
+      history: [{ clock: ev.clock, role: 'owner', event: ev.id }],
+      devices: [f.owner.device],
+    });
     st.devices.set(f.owner.device, {
       id: f.owner.device,
       user: f.owner.user,
@@ -368,7 +394,11 @@ export class Authority {
     return u;
   }
 
-  private applyDevice(ev: ControlEvent<typeof SYS.device>, authorUser: string, isOwner: boolean): string | undefined {
+  private applyDevice(
+    ev: ControlEvent<typeof SYS.device>,
+    authorUser: string,
+    isOwner: boolean,
+  ): string | undefined {
     const f = ev.fields;
     if (!f || typeof f.user !== 'string' || typeof f.device !== 'string' || !f.binding) return 'malformed';
     if (this.st.devices.has(f.device)) return 'duplicate-device';
@@ -376,11 +406,23 @@ export class Authority {
     const u = this.ensureUser(f.user);
     if (this.activeDevices(f.user).length >= this.o.maxDevicesPerUser) return 'too-many-devices';
     u.devices.push(f.device);
-    this.st.devices.set(f.device, { id: f.device, user: f.user, signPub: f.signPub, agreePub: f.agreePub, name: f.name, binding: f.binding, since: ev.clock });
+    this.st.devices.set(f.device, {
+      id: f.device,
+      user: f.user,
+      signPub: f.signPub,
+      agreePub: f.agreePub,
+      name: f.name,
+      binding: f.binding,
+      since: ev.clock,
+    });
     return undefined;
   }
 
-  private applyDeviceRevoke(ev: ControlEvent<typeof SYS.deviceRevoke>, authorUser: string, isOwner: boolean): string | undefined {
+  private applyDeviceRevoke(
+    ev: ControlEvent<typeof SYS.deviceRevoke>,
+    authorUser: string,
+    isOwner: boolean,
+  ): string | undefined {
     const f = ev.fields;
     const target = this.st.devices.get(f?.device);
     if (!target) return 'unknown-device';
@@ -391,7 +433,11 @@ export class Authority {
     return undefined;
   }
 
-  private applyMember(ev: ControlEvent<typeof SYS.member>, authorUser: string, isOwner: boolean): string | undefined {
+  private applyMember(
+    ev: ControlEvent<typeof SYS.member>,
+    authorUser: string,
+    isOwner: boolean,
+  ): string | undefined {
     const st = this.st;
     const f = ev.fields;
     if (!f || typeof f.user !== 'string') return 'malformed';
@@ -434,7 +480,8 @@ export class Authority {
       u.history.push(span(null));
       for (const id of u.devices) {
         const d = st.devices.get(id)!;
-        if (!d.revoked) d.revoked = { clock: ev.clock, cutoff: Math.max(0, f.cutoff?.[id] ?? 0), event: ev.id };
+        if (!d.revoked)
+          d.revoked = { clock: ev.clock, cutoff: Math.max(0, f.cutoff?.[id] ?? 0), event: ev.id };
       }
       for (const s of st.shares.values()) {
         const spans = s.members.get(f.user);
@@ -445,10 +492,22 @@ export class Authority {
     return 'malformed';
   }
 
-  private applyInvite(ev: ControlEvent<typeof SYS.invite>, authorUser: string, isOwner: boolean): string | undefined {
+  private applyInvite(
+    ev: ControlEvent<typeof SYS.invite>,
+    authorUser: string,
+    isOwner: boolean,
+  ): string | undefined {
     const f = ev.fields;
     if (!isOwner) return 'owner-required';
-    if (!f || typeof f.inviteId !== 'string' || !isRole(f.role) || !Number.isInteger(f.maxUses) || f.maxUses < 1 || typeof f.secretHash !== 'string') return 'malformed';
+    if (
+      !f ||
+      typeof f.inviteId !== 'string' ||
+      !isRole(f.role) ||
+      !Number.isInteger(f.maxUses) ||
+      f.maxUses < 1 ||
+      typeof f.secretHash !== 'string'
+    )
+      return 'malformed';
     if (f.approval !== 'required' && f.approval !== 'auto') return 'malformed';
     if (this.st.invites.has(f.inviteId)) return 'duplicate-invite';
     const now = wallOf(ev.clock);
@@ -468,9 +527,20 @@ export class Authority {
     return undefined;
   }
 
-  private applyEpoch(ev: ControlEvent<typeof SYS.epoch>, authorUser: string, isOwner: boolean): string | undefined {
+  private applyEpoch(
+    ev: ControlEvent<typeof SYS.epoch>,
+    authorUser: string,
+    isOwner: boolean,
+  ): string | undefined {
     const f = ev.fields;
-    if (!f || typeof f.scope !== 'string' || !Number.isInteger(f.epoch) || f.epoch < 0 || !HEX16.test(f.keyId)) return 'malformed';
+    if (
+      !f ||
+      typeof f.scope !== 'string' ||
+      !Number.isInteger(f.epoch) ||
+      f.epoch < 0 ||
+      !HEX16.test(f.keyId)
+    )
+      return 'malformed';
     if (f.scope === this.space) {
       if (!isOwner) return 'owner-required';
     } else {
@@ -480,16 +550,30 @@ export class Authority {
     }
     const list = this.st.epochs.get(f.scope) ?? [];
     if (list.some((e) => e.keyId === f.keyId)) return 'duplicate-key';
-    list.push({ scope: f.scope, epoch: f.epoch, keyId: f.keyId, prevKeyId: f.prevKeyId, covers: f.covers, clock: ev.clock, event: ev.id, author: ev.author });
+    list.push({
+      scope: f.scope,
+      epoch: f.epoch,
+      keyId: f.keyId,
+      prevKeyId: f.prevKeyId,
+      covers: f.covers,
+      clock: ev.clock,
+      event: ev.id,
+      author: ev.author,
+    });
     this.st.epochs.set(f.scope, list);
     return undefined;
   }
 
-  private applyShare(ev: ControlEvent<typeof SYS.share>, authorUser: string, authorRole: Role): string | undefined {
+  private applyShare(
+    ev: ControlEvent<typeof SYS.share>,
+    authorUser: string,
+    authorRole: Role,
+  ): string | undefined {
     const st = this.st;
     const f = ev.fields;
     if (authorRole === 'viewer') return 'viewer-cannot-share';
-    if (!f || typeof f.shareId !== 'string' || typeof f.obj !== 'string' || !Array.isArray(f.members)) return 'malformed';
+    if (!f || typeof f.shareId !== 'string' || typeof f.obj !== 'string' || !Array.isArray(f.members))
+      return 'malformed';
     if (st.shares.has(f.shareId) || f.shareId === this.space) return 'duplicate-share';
     if (st.shareByObj.has(f.obj)) return 'object-already-shared';
     const seen = new Set<string>();

@@ -17,12 +17,19 @@ describe('a photographed invite', () => {
     g.link('owner', 'stranger');
     const owner = g.node('owner');
     const space = await owner.spaces.create();
-    const art = await owner.spaces.invite(space.id, { role: 'viewer', expiresAt: g.clock.now() + 3_600_000, maxUses: 5, approval: 'required' });
+    const art = await owner.spaces.invite(space.id, {
+      role: 'viewer',
+      expiresAt: g.clock.now() + 3_600_000,
+      maxUses: 5,
+      approval: 'required',
+    });
 
     const friendSas: string[] = [];
     const strangerSas: string[] = [];
     await g.node('friend').spaces.accept(art.url, { onSas: (s) => friendSas.push(s) });
-    await expect(g.node('stranger').spaces.accept(art.url, { onSas: (s) => strangerSas.push(s) })).rejects.toMatchObject({ reason: 'declined' });
+    await expect(
+      g.node('stranger').spaces.accept(art.url, { onSas: (s) => strangerSas.push(s) }),
+    ).rejects.toMatchObject({ reason: 'declined' });
 
     expect(requests.map((r) => r.sas)).toEqual([friendSas[0], strangerSas[0]]); // each side sees the code the Owner is shown
     expect(friendSas[0]).not.toBe(strangerSas[0]); // so the Owner, who expects one person, can tell the copy apart

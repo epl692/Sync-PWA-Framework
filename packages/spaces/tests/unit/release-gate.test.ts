@@ -10,14 +10,22 @@ const root = join(__dirname, '..', '..', '..', '..');
 
 describe('release gate', () => {
   it('a core opened with openSecureCore passes the assertion', async () => {
-    const { core, spaces } = await openSecureCore({ keyDb: memoryKeyDb(), provider: createStubIdentityProvider(), core: { storage: createMemoryStorage(), autoCompact: false } });
+    const { core, spaces } = await openSecureCore({
+      keyDb: memoryKeyDb(),
+      provider: createStubIdentityProvider(),
+      core: { storage: createMemoryStorage(), autoCompact: false },
+    });
     expect(() => assertSecureCore(core)).not.toThrow();
     await spaces.close();
     await core.close();
   });
 
   it('a core with the plaintext codec, or with no codec, fails the assertion', async () => {
-    const plain = await createSyncCore({ storage: createMemoryStorage(), codecs: [new PlaintextCodec()], autoCompact: false });
+    const plain = await createSyncCore({
+      storage: createMemoryStorage(),
+      codecs: [new PlaintextCodec()],
+      autoCompact: false,
+    });
     expect(() => assertSecureCore(plain)).toThrow(/insecure core/);
     const none = await createSyncCore({ storage: createMemoryStorage(), autoCompact: false });
     expect(() => assertSecureCore(none)).toThrow(/insecure core/);
@@ -35,7 +43,10 @@ describe('release gate', () => {
         platform: 'browser',
         target: 'es2022',
         logLevel: 'silent',
-        alias: { '@sync/core': join(root, 'packages/core/src/index.ts'), '@sync/spaces': join(root, 'packages/spaces/src/index.ts') },
+        alias: {
+          '@sync/core': join(root, 'packages/core/src/index.ts'),
+          '@sync/spaces': join(root, 'packages/spaces/src/index.ts'),
+        },
       });
       const text = out.outputFiles.map((f) => f.text).join('\n');
       expect(text, pkg).not.toContain('test-plaintext');

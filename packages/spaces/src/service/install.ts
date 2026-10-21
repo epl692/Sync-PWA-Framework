@@ -49,7 +49,8 @@ async function openKeyDb(k: SpacesOptions['keyDb']): Promise<KeyDb> {
 export async function installSpaces(opts: InstallOptions & { keystore: Keystore }): Promise<Spaces> {
   const support = await detectSupport();
   if (!support.ok) return unsupported(support.reason);
-  if (opts.core.deviceId !== opts.keystore.device()?.deviceId) throw new Error('the core must use the keystore device ID (use openSecureCore)');
+  if (opts.core.deviceId !== opts.keystore.device()?.deviceId)
+    throw new Error('the core must use the keystore device ID (use openSecureCore)');
   const svc = new SpacesService({ ...opts });
   await svc.start();
   return svc;
@@ -87,6 +88,8 @@ export { memoryKeyDb };
 export function assertSecureCore(core: SyncCore): void {
   const { default: d, ids } = core.codecs();
   if (d !== 'aes-gcm-space/1' || ids.some((i) => i !== 'aes-gcm-space/1')) {
-    throw new Error(`insecure core: payload codecs are ${JSON.stringify(ids)} with default ${String(d)}; release builds must use only aes-gcm-space/1`);
+    throw new Error(
+      `insecure core: payload codecs are ${JSON.stringify(ids)} with default ${String(d)}; release builds must use only aes-gcm-space/1`,
+    );
   }
 }

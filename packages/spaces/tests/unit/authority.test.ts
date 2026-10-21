@@ -2,7 +2,24 @@
 import { describe, expect, it } from 'vitest';
 import { Authority } from '../../src/authority/authority';
 import { SYS } from '../../src/authority/types';
-import { DAY, SPACE, WALL, addMember, clockAt, basicSpace, binding, device, epoch, ev, genesis, invite, key, removeMember, resetSeqs, setRole } from '../helpers';
+import {
+  DAY,
+  SPACE,
+  WALL,
+  addMember,
+  clockAt,
+  basicSpace,
+  binding,
+  device,
+  epoch,
+  ev,
+  genesis,
+  invite,
+  key,
+  removeMember,
+  resetSeqs,
+  setRole,
+} from '../helpers';
 
 const inertReasons = (a: Authority) => a.state.inert.map((i) => `${i.type.slice(5)}:${i.reason}`);
 
@@ -23,7 +40,11 @@ describe('genesis', () => {
     a.add(genesis('A', 2));
     a.add(genesis('X', 3));
     a.add(ev(SYS.genesis, 'Y', 4, { owner: { user: 'Z', device: 'Z', ...key('Z'), binding }, nonce: 'n' })); // author != owner.device
-    expect(inertReasons(a)).toEqual(['device:no-genesis', 'genesis:duplicate-genesis', 'genesis:duplicate-genesis']);
+    expect(inertReasons(a)).toEqual([
+      'device:no-genesis',
+      'genesis:duplicate-genesis',
+      'genesis:duplicate-genesis',
+    ]);
     expect(a.members().map((m) => m.user)).toEqual(['A']);
   });
 });
@@ -37,7 +58,11 @@ describe('membership and roles', () => {
     expect(auth.currentRole('E')).toBeNull();
     expect(auth.currentRole('B')).toBe('editor');
     expect(auth.currentRole('C')).toBe('viewer');
-    expect(inertReasons(auth)).toEqual(['member:owner-required', 'member:owner-required', 'member:owner-required']);
+    expect(inertReasons(auth)).toEqual([
+      'member:owner-required',
+      'member:owner-required',
+      'member:owner-required',
+    ]);
   });
 
   it('keeps at least one Owner: demoting or removing the last Owner is inert (FR-003)', () => {
@@ -68,7 +93,12 @@ describe('membership and roles', () => {
     auth.add(setRole('A', 11, 'B', 'editor'));
     auth.add(setRole('A', 12, 'ZZ', 'editor'));
     auth.add(removeMember('A', 13, 'ZZ'));
-    expect(inertReasons(auth)).toEqual(['member:already-member', 'member:no-change', 'member:not-a-member', 'member:not-a-member']);
+    expect(inertReasons(auth)).toEqual([
+      'member:already-member',
+      'member:no-change',
+      'member:not-a-member',
+      'member:not-a-member',
+    ]);
   });
 
   it('a removed member can be added again; the old devices stay revoked', () => {
@@ -210,7 +240,11 @@ describe('devices (FR-015)', () => {
     auth.add(ev(SYS.deviceRevoke, 'C', 12, { device: 'C2', cutoff: 3 })); // own user
     auth.add(ev(SYS.deviceRevoke, 'A', 13, { device: 'C2', cutoff: 0 })); // already revoked
     auth.add(ev(SYS.deviceRevoke, 'A', 14, { device: 'NOPE', cutoff: 0 }));
-    expect(inertReasons(auth)).toEqual(['device-revoke:not-allowed', 'device-revoke:already-revoked', 'device-revoke:unknown-device']);
+    expect(inertReasons(auth)).toEqual([
+      'device-revoke:not-allowed',
+      'device-revoke:already-revoked',
+      'device-revoke:unknown-device',
+    ]);
     expect(auth.device('C2')!.revoked!.cutoff).toBe(3);
     expect(auth.activeDevices('C').map((d) => d.id)).toEqual(['C']);
   });
@@ -250,12 +284,22 @@ describe('epochs (FR-008, FR-010)', () => {
 
 describe('override shares (FR-011)', () => {
   const SHARE = 'SHAREAAAAAAAAAAAAAAAAAAAA';
-  const share = (author: string, t: number, members: Array<{ user: string; role: 'owner' | 'editor' | 'viewer' }>, obj = 'obj1', shareId = SHARE) =>
-    ev(SYS.share, author, t, { shareId, obj, members });
+  const share = (
+    author: string,
+    t: number,
+    members: Array<{ user: string; role: 'owner' | 'editor' | 'viewer' }>,
+    obj = 'obj1',
+    shareId = SHARE,
+  ) => ev(SYS.share, author, t, { shareId, obj, members });
 
   it('creates a share with its own members; the creator must own it', () => {
     const { auth } = basicSpace();
-    auth.add(share('B', 10, [{ user: 'B', role: 'owner' }, { user: 'D', role: 'editor' }]));
+    auth.add(
+      share('B', 10, [
+        { user: 'B', role: 'owner' },
+        { user: 'D', role: 'editor' },
+      ]),
+    );
     expect(auth.shareRoleAt(SHARE, 'B', 'z')).toBe('owner');
     expect(auth.shareRoleAt(SHARE, 'D', 'z')).toBe('editor');
     expect(auth.shareRoleAt(SHARE, 'A', 'z')).toBeNull(); // the Space Owner is not in the share (FR-011a)
@@ -265,8 +309,18 @@ describe('override shares (FR-011)', () => {
   it('refuses viewers creating, non-members, role cap, duplicates, and a creator that is not the share owner', () => {
     const { auth } = basicSpace();
     auth.add(share('C', 10, [{ user: 'C', role: 'owner' }])); // viewer creates
-    auth.add(share('B', 11, [{ user: 'B', role: 'owner' }, { user: 'ZZ', role: 'viewer' }])); // not a Space member
-    auth.add(share('B', 12, [{ user: 'B', role: 'owner' }, { user: 'C', role: 'editor' }])); // Space viewer capped
+    auth.add(
+      share('B', 11, [
+        { user: 'B', role: 'owner' },
+        { user: 'ZZ', role: 'viewer' },
+      ]),
+    ); // not a Space member
+    auth.add(
+      share('B', 12, [
+        { user: 'B', role: 'owner' },
+        { user: 'C', role: 'editor' },
+      ]),
+    ); // Space viewer capped
     auth.add(share('B', 13, [{ user: 'B', role: 'editor' }])); // creator must own
     auth.add(share('B', 14, [{ user: 'B', role: 'owner' }], 'obj1'));
     auth.add(share('D', 15, [{ user: 'D', role: 'owner' }], 'obj1', 'OTHERSHARE')); // object already shared
@@ -290,12 +344,21 @@ describe('override shares (FR-011)', () => {
     auth.add(ev(SYS.shareMember, 'B', 14, { shareId: SHARE, action: 'role', user: 'B', role: 'viewer' })); // last owner
     auth.add(ev(SYS.shareMember, 'D', 15, { shareId: SHARE, action: 'remove', user: 'D' })); // leaves
     expect(auth.shareCurrentRole(SHARE, 'D')).toBeNull();
-    expect(inertReasons(auth)).toEqual(['share-member:share-owner-required', 'share-member:role-cap', 'share-member:last-share-owner']);
+    expect(inertReasons(auth)).toEqual([
+      'share-member:share-owner-required',
+      'share-member:role-cap',
+      'share-member:last-share-owner',
+    ]);
   });
 
   it('removing a user from the Space removes them from every share, and Space-viewer demotion caps the effective role', () => {
     const { auth } = basicSpace();
-    auth.add(share('B', 10, [{ user: 'B', role: 'owner' }, { user: 'D', role: 'editor' }]));
+    auth.add(
+      share('B', 10, [
+        { user: 'B', role: 'owner' },
+        { user: 'D', role: 'editor' },
+      ]),
+    );
     auth.add(setRole('A', 11, 'D', 'viewer'));
     expect(auth.shareRoleAt(SHARE, 'D', 'zzz')).toBe('viewer');
     auth.add(removeMember('A', 12, 'B', { B: 5 }));
@@ -313,7 +376,12 @@ describe('override shares (FR-011)', () => {
 
   it('share epochs need the share owner', () => {
     const { auth } = basicSpace();
-    auth.add(share('B', 10, [{ user: 'B', role: 'owner' }, { user: 'D', role: 'editor' }]));
+    auth.add(
+      share('B', 10, [
+        { user: 'B', role: 'owner' },
+        { user: 'D', role: 'editor' },
+      ]),
+    );
     auth.add(epoch('D', 11, SHARE, 0, 'aaaaaaaaaaaaaaaa'));
     auth.add(epoch('B', 12, SHARE, 0, 'bbbbbbbbbbbbbbbb'));
     auth.add(epoch('A', 13, SHARE, 1, 'cccccccccccccccc')); // Space Owner outside the share
@@ -326,7 +394,9 @@ describe('add / load', () => {
   it('ignores key grants and duplicates, and load() equals incremental add()', () => {
     const { auth, events } = basicSpace();
     expect(auth.add(events[0]!)).toEqual({ added: false, retroactive: false, newInert: [] });
-    expect(auth.add(ev(SYS.keygrant, 'A', 10, { to: 'B', scope: SPACE, eph: '', items: [] })).added).toBe(false);
+    expect(auth.add(ev(SYS.keygrant, 'A', 10, { to: 'B', scope: SPACE, eph: '', items: [] })).added).toBe(
+      false,
+    );
     const b = new Authority(SPACE);
     b.load([...events].reverse());
     expect(b.stateDigest()).toBe(auth.stateDigest());
@@ -353,7 +423,9 @@ describe('rotation need (FR-008)', () => {
     // the lowest-clock epoch 1 is the first one, which does not know about C's removal
     expect(auth.currentEpoch(SPACE)!.keyId).toBe('bbbbbbbbbbbbbbbb');
     expect(auth.uncoveredShrinks(SPACE).map((s) => s.id)).toEqual([rmC.id]);
-    auth.add(ev(SYS.epoch, 'A', 30, { scope: SPACE, epoch: 2, keyId: 'dddddddddddddddd', covers: [rmB.id, rmC.id] }));
+    auth.add(
+      ev(SYS.epoch, 'A', 30, { scope: SPACE, epoch: 2, keyId: 'dddddddddddddddd', covers: [rmB.id, rmC.id] }),
+    );
     expect(auth.uncoveredShrinks(SPACE)).toEqual([]);
   });
 
@@ -386,7 +458,16 @@ describe('rotation need (FR-008)', () => {
   it('a share needs rotation when a member leaves it, and the Space epoch is not touched', () => {
     const { auth } = basicSpace();
     const SHARE = 'SHAREAAAAAAAAAAAAAAAAAAAA';
-    auth.add(ev(SYS.share, 'B', 10, { shareId: SHARE, obj: 'o', members: [{ user: 'B', role: 'owner' }, { user: 'D', role: 'editor' }] }));
+    auth.add(
+      ev(SYS.share, 'B', 10, {
+        shareId: SHARE,
+        obj: 'o',
+        members: [
+          { user: 'B', role: 'owner' },
+          { user: 'D', role: 'editor' },
+        ],
+      }),
+    );
     auth.add(epoch('B', 11, SHARE, 0, 'aaaaaaaaaaaaaaaa'));
     expect(auth.uncoveredShrinks(SHARE)).toEqual([]);
     const rm = ev(SYS.shareMember, 'B', 12, { shareId: SHARE, action: 'remove', user: 'D' });

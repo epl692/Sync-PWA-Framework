@@ -23,13 +23,26 @@ describe('revoking a device', () => {
     const events: SecurityEvent[] = [];
     f.owner.spaces.on((e) => events.push(e));
     const earlier = await e2.core.create(f.space.id, 'note', { text: 'before the loss' });
-    await waitFor(async () => (await f.owner.core.get(earlier.id)) !== undefined, 8000, 'owner has the early note');
+    await waitFor(
+      async () => (await f.owner.core.get(earlier.id)) !== undefined,
+      8000,
+      'owner has the early note',
+    );
 
     await f.editor.spaces.revokeDevice(e2.core.deviceId); // done from the other device
-    await waitFor(() => events.some((e) => e.kind === 'key:rotated' && e.reason === 'device-revoked'), 10_000, 'an Owner rotates for the revoked device');
+    await waitFor(
+      () => events.some((e) => e.kind === 'key:rotated' && e.reason === 'device-revoked'),
+      10_000,
+      'an Owner rotates for the revoked device',
+    );
     const members = await f.owner.spaces.members(f.space.id);
     const editorUser = members.find((m) => m.devices.some((d) => d.id === f.editor.core.deviceId))!;
-    expect(editorUser.devices.map((d) => [d.id === e2.core.deviceId, d.active])).toEqual(expect.arrayContaining([[true, false], [false, true]]));
+    expect(editorUser.devices.map((d) => [d.id === e2.core.deviceId, d.active])).toEqual(
+      expect.arrayContaining([
+        [true, false],
+        [false, true],
+      ]),
+    );
     expect(await f.editor.core.get(earlier.id)).toBeDefined(); // what was written before stays
 
     // whoever has the lost device writes on: every peer refuses
@@ -38,12 +51,20 @@ describe('revoking a device', () => {
     expect((await f.owner.core.ingest(p.raw, 'memory:thief')).status).toBe('rejected');
     // and it cannot read what is written now
     const fresh = await f.owner.core.create(f.space.id, 'note', { text: 'after the revocation' });
-    await waitFor(async () => (await f.editor.core.get(fresh.id)) !== undefined, 8000, 'the other devices read it');
+    await waitFor(
+      async () => (await f.editor.core.get(fresh.id)) !== undefined,
+      8000,
+      'the other devices read it',
+    );
     await settle(f.g);
     expect(await e2.core.get(fresh.id)).toBeUndefined();
     // the user's remaining device is unaffected
     const mine = await f.editor.core.create(f.space.id, 'note', { text: 'still here' });
-    await waitFor(async () => (await f.owner.core.get(mine.id)) !== undefined, 8000, 'owner reads the remaining device');
+    await waitFor(
+      async () => (await f.owner.core.get(mine.id)) !== undefined,
+      8000,
+      'owner reads the remaining device',
+    );
     await f.g.close();
   });
 
@@ -54,11 +75,21 @@ describe('revoking a device', () => {
     const again = await createSecureNode({ name: 'viewer-again', clock: f.g.clock });
     f.g.nodes['viewer-again'] = again;
     f.g.link('owner', 'viewer-again');
-    const art = await f.owner.spaces.invite(f.space.id, { role: 'viewer', expiresAt: f.g.clock.now() + 3_600_000, maxUses: 1, approval: 'auto' });
+    const art = await f.owner.spaces.invite(f.space.id, {
+      role: 'viewer',
+      expiresAt: f.g.clock.now() + 3_600_000,
+      maxUses: 1,
+      approval: 'auto',
+    });
     await again.spaces.accept(art.url);
     await waitFor(async () => (await again.spaces.list()).length === 1, 12_000, 'the person is back');
     expect(again.spaces.session()!.user).not.toBe(lost.spaces.session()!.user); // a new identity: recovery is out of scope
-    expect((await f.owner.spaces.members(f.space.id)).map((m) => m.role).sort()).toEqual(['editor', 'owner', 'viewer', 'viewer']);
+    expect((await f.owner.spaces.members(f.space.id)).map((m) => m.role).sort()).toEqual([
+      'editor',
+      'owner',
+      'viewer',
+      'viewer',
+    ]);
     await f.g.close();
   });
 
@@ -68,7 +99,9 @@ describe('revoking a device', () => {
     await settle(f.g);
     const m = await f.owner.spaces.members(f.space.id);
     expect(m.flatMap((x) => x.devices).every((d) => d.active)).toBe(true);
-    expect((await readPacketRecords(f.owner.storage)).filter((r) => r.type === '$sys.device-revoke')).toHaveLength(0);
+    expect(
+      (await readPacketRecords(f.owner.storage)).filter((r) => r.type === '$sys.device-revoke'),
+    ).toHaveLength(0);
     await f.g.close();
   });
 });

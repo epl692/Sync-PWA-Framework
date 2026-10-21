@@ -2,7 +2,7 @@
 // and every peer ends in the same state as a peer that was only ever shown the valid packets.
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { b64urlEncode, decodeEnvelope, type PacketBody } from '@sync/core';
+import { b64urlEncode, decodeEnvelope } from '@sync/core';
 import { createSecureNode, readPacketRecords, type SecureNode } from '@sync/testkit';
 import { Keystore } from '../../src';
 import { SYS } from '../../src/authority/types';
@@ -12,12 +12,39 @@ const RUNS = Number(process.env.CONVERGENCE_RUNS ?? 12);
 const SEED = process.env.CONVERGENCE_SEED ? Number(process.env.CONVERGENCE_SEED) : undefined;
 const REMOVE_AT = 100;
 
-type Kind = 'A' | 'B' | 'Redit' | 'Rlate' | 'Rbackdated' | 'C' | 'X' | 'flip' | 'unsigned' | 'clock' | 'epochflip' | 'dupe';
-const kinds: Kind[] = ['A', 'B', 'Redit', 'Rlate', 'Rbackdated', 'C', 'X', 'flip', 'unsigned', 'clock', 'epochflip', 'dupe'];
-const VALID = new Set<Kind>(['A', 'B', 'Redit']);
+type Kind =
+  | 'A'
+  | 'B'
+  | 'Redit'
+  | 'Rlate'
+  | 'Rbackdated'
+  | 'C'
+  | 'X'
+  | 'flip'
+  | 'unsigned'
+  | 'clock'
+  | 'epochflip'
+  | 'dupe';
+const kinds: Kind[] = [
+  'A',
+  'B',
+  'Redit',
+  'Rlate',
+  'Rbackdated',
+  'C',
+  'X',
+  'flip',
+  'unsigned',
+  'clock',
+  'epochflip',
+  'dupe',
+];
 
 const scenario = fc.record({
-  steps: fc.array(fc.record({ kind: fc.constantFrom(...kinds), t: fc.integer({ min: 10, max: 90 }) }), { minLength: 4, maxLength: 16 }),
+  steps: fc.array(fc.record({ kind: fc.constantFrom(...kinds), t: fc.integer({ min: 10, max: 90 }) }), {
+    minLength: 4,
+    maxLength: 16,
+  }),
   seeds: fc.tuple(fc.integer(), fc.integer(), fc.integer()),
 });
 
@@ -48,17 +75,30 @@ async function run(steps: Array<{ kind: Kind; t: number }>, seeds: [number, numb
   const X = await makeDevice('X');
   await world.init(A);
   const binding = { kind: 'stub-token/1', proof: '' };
-  const bind = (d: TestDevice) => ({ kind: 'stub-token/1', proof: b64urlEncode(new TextEncoder().encode(`ok|${d.user}|${d.id}`)) });
+  const bind = (d: TestDevice) => ({
+    kind: 'stub-token/1',
+    proof: b64urlEncode(new TextEncoder().encode(`ok|${d.user}|${d.id}`)),
+  });
 
   // the valid control history
   const valid: Array<{ raw: Uint8Array; id: string }> = [];
-  const ctl = async <T extends keyof import('../../src/authority/types').ControlFields>(dev: TestDevice, type: T, fields: import('../../src/authority/types').ControlFields[T], t: number) => {
+  const ctl = async <T extends keyof import('../../src/authority/types').ControlFields>(
+    dev: TestDevice,
+    type: T,
+    fields: import('../../src/authority/types').ControlFields[T],
+    t: number,
+  ) => {
     const p = await world.control(dev, type, fields, t);
     valid.push({ raw: p.raw, id: p.env.id });
     return p;
   };
   void binding;
-  await ctl(A, SYS.genesis, { owner: { user: A.id, device: A.id, ...pub(A), binding: bind(A) }, nonce: b64urlEncode(world.nonce) }, 1);
+  await ctl(
+    A,
+    SYS.genesis,
+    { owner: { user: A.id, device: A.id, ...pub(A), binding: bind(A) }, nonce: b64urlEncode(world.nonce) },
+    1,
+  );
   await ctl(A, SYS.epoch, { scope: world.space, epoch: 0, keyId: [...world.keys.values()][0]!.keyId }, 2);
   let t = 3;
   for (const d of [B, C, R]) {
@@ -111,7 +151,9 @@ async function run(steps: Array<{ kind: Kind; t: number }>, seeds: [number, numb
         break;
       }
       case 'flip': {
-        const p = await world.packet(B, body, s.t, { tamper: (e) => ({ ...e, sig: e.sig!.map((b, k) => (k === 5 ? b ^ 1 : b)) }) });
+        const p = await world.packet(B, body, s.t, {
+          tamper: (e) => ({ ...e, sig: e.sig!.map((b, k) => (k === 5 ? b ^ 1 : b)) }),
+        });
         packets.push(p.raw);
         invalidIds.add(p.env.id);
         break;
@@ -124,14 +166,22 @@ async function run(steps: Array<{ kind: Kind; t: number }>, seeds: [number, numb
       }
       case 'clock': {
         const p = await world.packet(B, body, s.t, {
-          tamper: (e) => ({ ...e, clock: e.clock.replace(/^(.{12})-(.{4})-/, (_m, w: string, c: string) => `${w}-${(parseInt(c, 16) ^ 1).toString(16).padStart(4, '0')}-`) }),
+          tamper: (e) => ({
+            ...e,
+            clock: e.clock.replace(
+              /^(.{12})-(.{4})-/,
+              (_m, w: string, c: string) => `${w}-${(parseInt(c, 16) ^ 1).toString(16).padStart(4, '0')}-`,
+            ),
+          }),
         });
         packets.push(p.raw);
         invalidIds.add(p.env.id);
         break;
       }
       case 'epochflip': {
-        const p = await world.packet(B, body, s.t, { tamper: (e) => ({ ...e, body: e.body.map((b, k) => (k === 20 ? b ^ 1 : b)) }) });
+        const p = await world.packet(B, body, s.t, {
+          tamper: (e) => ({ ...e, body: e.body.map((b, k) => (k === 20 ? b ^ 1 : b)) }),
+        });
         packets.push(p.raw);
         invalidIds.add(p.env.id);
         break;
@@ -144,9 +194,17 @@ async function run(steps: Array<{ kind: Kind; t: number }>, seeds: [number, numb
       }
     }
   }
-  const removal = await ctl(A, SYS.member, { action: 'remove', user: R.user, cutoff: { [R.id]: rEarly } }, REMOVE_AT);
+  const removal = await ctl(
+    A,
+    SYS.member,
+    { action: 'remove', user: R.user, cutoff: { [R.id]: rEarly } },
+    REMOVE_AT,
+  );
 
-  const allValid = [...valid.map((v) => v.raw), ...packets.filter((raw) => !invalidIds.has(decodeEnvelope(raw).env.id))];
+  const allValid = [
+    ...valid.map((v) => v.raw),
+    ...packets.filter((raw) => !invalidIds.has(decodeEnvelope(raw).env.id)),
+  ];
   const everything = [...valid.map((v) => v.raw), ...packets];
 
   const ref = await judge(world);
@@ -161,7 +219,9 @@ async function run(steps: Array<{ kind: Kind; t: number }>, seeds: [number, numb
     await j.spaces.idle();
     await j.core.revalidate();
     await j.spaces.idle();
-    const applied = new Set((await readPacketRecords(j.storage)).filter((r) => r.status === 'applied').map((r) => r.id));
+    const applied = new Set(
+      (await readPacketRecords(j.storage)).filter((r) => r.status === 'applied').map((r) => r.id),
+    );
     for (const id of invalidIds) if (applied.has(id)) failures.push(`judge ${k} applied invalid ${id}`);
     const objs = new Set((await j.core.query({ type: 'item' }).once()).map((o) => o.id));
     for (const o of validObjs) if (!objs.has(o)) failures.push(`judge ${k} lacks valid ${o}`);

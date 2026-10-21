@@ -40,7 +40,7 @@ export async function createSecureNode(opts: SecureNodeOptions = {}): Promise<Se
       provider: (opts.provider ?? createStubIdentityProvider)(),
       now: clock.now,
       approveJoin: opts.approveJoin ?? (() => true),
-      approveLink: opts.approveLink,
+      approveLink: opts.approveLink ?? (() => true), // tests: the user always agrees unless a test says otherwise
       rotationGraceMs: opts.rotationGraceMs ?? 20,
       core: { storage, now: clock.now, autoCompact: false, ...(opts.coreConfig ?? {}) },
     });
@@ -61,7 +61,8 @@ export async function createSecureNode(opts: SecureNodeOptions = {}): Promise<Se
     return node;
   };
   const node = await open();
-  if (opts.signUp !== false) await node.spaces.signUp(typeof opts.signUp === 'string' ? opts.signUp : (opts.name ?? 'node'));
+  if (opts.signUp !== false)
+    await node.spaces.signUp(typeof opts.signUp === 'string' ? opts.signUp : (opts.name ?? 'node'));
   return node;
 }
 

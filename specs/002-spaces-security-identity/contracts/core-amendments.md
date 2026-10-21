@@ -10,6 +10,9 @@ Spec 001 is implemented. The items below are additive changes to `@sync/core` th
 | **A-4** | Plugin message channel `core.channel(name)` and relay forwarding | Join/link handshakes are not packets (the joiner is not a member) and must work through the relay | New unknown-`t` messages are already ignored by 001 peers ("Unknown `t` values are ignored"). Relay forwards channel messages to other peers that share the declared Space |
 | **A-5** | Queries hide `$`-prefixed types unless asked by exact type | Control objects must not appear in app queries | Behavior change only for types starting with `$`, which 001 never produced |
 | **A-6** | `registerCompactionPin((type, obj) => boolean)` | `$sys.*` events and keygrants must never be compacted (fold must be reproducible) | Optional; default pins nothing |
+| **A-8** | `onApplied`, `held`, `scanApplied`, `authorStats`, `codecs` introspection | The Spaces layer follows the log synchronously, reloads control events, and decides when a rebuild is needed | New methods; nothing changes for code that does not call them |
+| **A-9** | `CodecContext.envelope` | A codec can bind ciphertext to the envelope it travels in (authenticated data) | Optional field; always supplied by the core |
+| **A-10** | `PacketValidator.prepare(batch)` | Verify the signatures of a whole batch concurrently | Optional; validators must answer identically without it |
 | **A-7** | Validator context carries `raw` (exact envelope bytes) and `source`; `limits.maxParkedPerAuthor` | DoS bound on deferred packets from unknown authors | Added optional fields; limit default `maxParkedPerAuthor = 1000`. Over the limit, new packets from that author are **not stored and not counted as held** (so the summary stays honest and they are re-requested once the author's key arrives); they are reported, not dropped silently |
 
 ## A-1 PacketSigner
@@ -72,3 +75,14 @@ Wire: `{ "t": "chan", "name": "identity/1", "space": "<spaceId or *>", "payload"
 - A-3: a snapshot over a recording transport contains no plaintext marker; a snapshot with a bad signature is discarded and reported.
 - A-4: a relay forwards `chan` between two clients and stores nothing of it.
 - A-5/A-6: a `$sys.x` object is absent from `query({})`, present for `query({type: '$sys.x'})`, and survives `compact()`.
+
+## As built: additions and changes since this was first written
+
+- **A-3** is one `SnapshotGuard` (`seal`, `open`, `sign`, `verify`), described above. The snapshot message is sent **after** the packets. Share-bound objects are pinned (A-6), so a snapshot holds only Space-scoped objects.
+- **A-4** `chan` messages are sent through the session's queue, so a relay has seen the sender's `hello` (and its Spaces) before it routes the message.
+- **A-5/A-6**: the pin is `(type, obj) => boolean`.
+- **A-7**: `ValidatorContext` carries `raw` (the exact envelope bytes, so a signature is checked over unknown extra fields) and `source`; `limits.maxParkedPerAuthor` rejects further packets from one author without storing them or counting them as held.
+- **A-8**: `core.onApplied(cb)` fires synchronously after every packet is applied and committed, including a parked packet applied later. `core.held(space)` returns the per-author held intervals. `core.scanApplied(space, {typePrefix})` returns decoded applied packets (records now keep `type`). `core.authorStats(space)` returns the highest applied clock and sequence per author without decoding. `core.codecs()` lists the registered codecs and the default.
+- **A-9**: `CodecContext.envelope = { v, id, seq, clock, codec }`.
+- **A-10**: `ingestBatch` decodes the whole batch, calls `prepare` on every validator, then applies in order.
+- `rebuildSpace` also revisits packets previously marked `rejected`, so a packet refused under an earlier view of authority is accepted again if the view changes. A packet applied locally must come back `applied`: a parked or duplicate result now throws `PacketRejectedError`.

@@ -12,8 +12,8 @@ The authority state of a Space is computed only from `$sys.*` control events. Ev
 | `$sys.device-revoke` | `device`, `cutoff` | A device of the same user, or an Owner |
 | `$sys.invite` | `inviteId`, `role`, `expiresAt`, `maxUses`, `secretHash`, `approval` | Owner |
 | `$sys.invite-revoke` | `inviteId` | Owner |
-| `$sys.epoch` | `scope`, `epoch`, `keyId`, `prevKeyId` | Owner (Space scope) or share Owner (share scope) |
-| `$sys.keygrant` | `grant/1` body (codec `grant/1`) | Owner / share Owner, or a bound device of the same user for its own new device |
+| `$sys.epoch` | `scope`, `epoch`, `keyId`, `prevKeyId?`, `covers?` (IDs of the removals and revocations its author had seen) | Owner (Space scope) or share Owner (share scope) |
+| `$sys.keygrant` | `{to, scope, eph, items[]}` (crypto-envelope.md "Key grant") | Owner / share Owner, or a bound device of the same user for its own new device |
 | `$sys.share` | `shareId`, `obj`, `members: [{user, role}]` | Space Editor or Owner who can read the object |
 | `$sys.share-member` | `shareId`, `action`, `user`, `role?`, `cutoff?` | Share Owner |
 
@@ -43,6 +43,14 @@ for e in sort(controlEvents, by clock):           # total order: HLC string, dev
 6. **Shares**: share members must be Space members. A share role is capped by the Space role. Removing a user from the Space removes them from every share (inert share events from non-members).
 7. **Self-service**: any bound device may write `$sys.device` for its own `user`, and `$sys.keygrant` addressed to that user's own devices (only for epochs the author itself holds), regardless of role. It cannot write other control types, except leaving (rule 1).
 8. **Immutability**: any `update` or `delete` of a `$sys.*` object is rejected.
+
+## Rotation need
+
+A scope needs a new epoch when its **current epoch does not cover** a shrinking event: a member removal (including leaving), a device revocation, or a surplus invite join (an inert `member add` whose invite was used up). An epoch with a `covers` list covers exactly the events listed; an older epoch without one covers the events before it. See research R-09.
+
+## Ingest rule for control events
+
+A signature-valid control event from a known device is accepted into the log whether or not its author was entitled at that point; the fold makes it inert (research R-07). Rejected at ingest: bad signature, malformed fields, wrong scope, update or delete, a failed genesis or binding check, and a non-Owner authoring an Owner-only event.
 
 ## Role permissions (body validator)
 

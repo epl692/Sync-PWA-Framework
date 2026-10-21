@@ -40,7 +40,12 @@ export interface CodecHeader {
 /** Read the readable header without decrypting. Undefined if the bytes are too short or not this format. */
 export function parseHeader(bytes: Uint8Array): CodecHeader | undefined {
   if (bytes.byteLength < HEADER_BYTES || bytes[0] !== FMT) return undefined;
-  return { fmt: bytes[0], scope: base32(bytes.slice(1, 17)), epoch: readU32be(bytes, 17), keyId: hex(bytes.slice(21, 29)) };
+  return {
+    fmt: bytes[0],
+    scope: base32(bytes.slice(1, 17)),
+    epoch: readU32be(bytes, 17),
+    keyId: hex(bytes.slice(21, 29)),
+  };
 }
 
 export function buildHeader(scope: string, epoch: number, keyIdHex: string): Uint8Array {
@@ -60,7 +65,14 @@ export interface KeyAccess {
   /** Which scope (the Space, or an override share) a packet for this object is encrypted under. */
   scopeFor(space: string, body: PacketBody): string;
   /** The key new packets in this scope are written with. */
-  writeKey(scope: string): Promise<{ epoch: number; keyId: string; key: CryptoKey } | undefined>;
+  /**
+   * The key new packets in this scope are written with. `body` lets the implementation hold back ordinary writes while
+   * this device is mid-rotation (control events, including the rotation's own, are never held back).
+   */
+  writeKey(
+    scope: string,
+    body?: PacketBody,
+  ): Promise<{ epoch: number; keyId: string; key: CryptoKey } | undefined>;
   readKey(scope: string, keyId: string): Promise<CryptoKey | undefined>;
   /** Called after each encryption so nonce use can be counted. Resolves the new total. */
   used(scope: string, keyId: string): Promise<number>;
@@ -95,9 +107,10 @@ export class SpaceCodec implements PayloadCodec {
   async encode(body: PacketBody, ctx: CodecContext): Promise<Uint8Array> {
     if (!ctx.envelope) throw new Error('aes-gcm-space/1 needs the envelope context');
     const scope = this.keys.scopeFor(ctx.space, body);
-    const wk = await this.keys.writeKey(scope);
+    const wk = await this.keys.writeKey(scope, body);
     if (!wk) throw new NoWriteKeyError(scope);
-    if ((await this.keys.used(scope, wk.keyId)) > MAX_ENCRYPTIONS_PER_KEY) throw new Error('key exhausted: rotate before writing again');
+    if ((await this.keys.used(scope, wk.keyId)) > MAX_ENCRYPTIONS_PER_KEY)
+      throw new Error('key exhausted: rotate before writing again');
     const header = buildHeader(scope, wk.epoch, wk.keyId);
     const nonce = this.opts.nonce ? this.opts.nonce() : randomBytes(NONCE_BYTES);
     const aad = concat(envelopeAad(ctx.envelope, ctx.space, ctx.author), header);
@@ -107,12 +120,19 @@ export class SpaceCodec implements PayloadCodec {
 
   async decode(bytes: Uint8Array, ctx: CodecContext): Promise<DecodeResult> {
     const h = parseHeader(bytes);
-    if (!h) return { ok: false, reason: bytes.byteLength >= 1 && bytes[0] !== FMT ? 'unknown-codec' : 'malformed' };
-    if (bytes.byteLength < HEADER_BYTES + NONCE_BYTES + TAG_BYTES || !ctx.envelope) return { ok: false, reason: 'malformed' };
+    if (!h)
+      return { ok: false, reason: bytes.byteLength >= 1 && bytes[0] !== FMT ? 'unknown-codec' : 'malformed' };
+    if (bytes.byteLength < HEADER_BYTES + NONCE_BYTES + TAG_BYTES || !ctx.envelope)
+      return { ok: false, reason: 'malformed' };
     const key = await this.keys.readKey(h.scope, h.keyId);
     if (!key) return { ok: false, reason: 'missing-key' };
     const aad = concat(envelopeAad(ctx.envelope, ctx.space, ctx.author), bytes.slice(0, HEADER_BYTES));
-    const pt = await aesOpen(key, bytes.slice(HEADER_BYTES, HEADER_BYTES + NONCE_BYTES), bytes.slice(HEADER_BYTES + NONCE_BYTES), aad);
+    const pt = await aesOpen(
+      key,
+      bytes.slice(HEADER_BYTES, HEADER_BYTES + NONCE_BYTES),
+      bytes.slice(HEADER_BYTES + NONCE_BYTES),
+      aad,
+    );
     if (!pt) return { ok: false, reason: 'malformed' };
     try {
       const o = parseJsonBytes(pt);

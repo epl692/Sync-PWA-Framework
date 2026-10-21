@@ -18,11 +18,19 @@ describe('rejections are counted, reported and not forwarded', () => {
     const attacks: Array<[string, { raw: Uint8Array; env: { id: string } }]> = [
       ['role', await v.packet(f.space.id, v.body('a1', {}))],
       ['bad-signature', await e.packet(f.space.id, e.body('a2', {}), { sign: false })],
-      ['immutable-control', await o.packet(f.space.id, { ...o.body(SYS.inviteRevoke, {}, (await f.owner.core.query({ type: SYS.member }).once())[0]!.id), op: 'update' })],
+      [
+        'immutable-control',
+        await o.packet(f.space.id, {
+          ...o.body(SYS.inviteRevoke, {}, (await f.owner.core.query({ type: SYS.member }).once())[0]!.id),
+          op: 'update',
+        }),
+      ],
     ];
     for (const [, p] of attacks) await f.owner.core.ingest(p.raw, 'memory:attacker');
     await settle(f.g);
-    const reasons = seen.filter((x): x is Extract<SecurityEvent, { kind: 'packet:rejected' }> => x.kind === 'packet:rejected').map((x) => x.reason);
+    const reasons = seen
+      .filter((x): x is Extract<SecurityEvent, { kind: 'packet:rejected' }> => x.kind === 'packet:rejected')
+      .map((x) => x.reason);
     expect(reasons).toEqual(expect.arrayContaining(['role', 'bad-signature', 'immutable-control']));
     expect(await f.owner.spaces.rejectedCount(f.space.id)).toBeGreaterThanOrEqual(3);
     for (const [, p] of attacks) {
@@ -41,12 +49,18 @@ describe('rejections are counted, reported and not forwarded', () => {
     await settle(f.g);
     const events: CoreEvent[] = [];
     f.owner.core.on((x) => events.push(x));
-    const late = await e.packet(f.space.id, e.body('late', { n: 1 }), { seq: (await e.nextSeq(f.space.id)) + 10 });
+    const late = await e.packet(f.space.id, e.body('late', { n: 1 }), {
+      seq: (await e.nextSeq(f.space.id)) + 10,
+    });
     const r = await f.owner.core.ingest(late.raw, 'memory:editor');
     expect(r).toMatchObject({ status: 'rejected' });
     expect((r as { reason: string }).reason).toMatch(/revoked|beyond-cutoff/);
     // an old sequence number with a clock before the removal is still beyond what the Owner had seen? no: it is a duplicate id
-    await waitFor(async () => !(await f.obs.core.query({ type: 'late' }).once()).length, 2000, 'never reaches the observer');
+    await waitFor(
+      async () => !(await f.obs.core.query({ type: 'late' }).once()).length,
+      2000,
+      'never reaches the observer',
+    );
     await f.g.close();
   });
 });

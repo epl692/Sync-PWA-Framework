@@ -30,7 +30,9 @@ describe('Keystore', () => {
     const raw = rawKey();
     const keyId = await ks.putEpochKey(scope, 0, raw, 'self');
     expect(keyId).toBe(hex(await keyIdOf(raw)));
-    const dump = JSON.stringify((await db.all('epoch-keys')).map((r) => Array.from((r.value as { wrapped: Uint8Array }).wrapped)));
+    const dump = JSON.stringify(
+      (await db.all('epoch-keys')).map((r) => Array.from((r.value as { wrapped: Uint8Array }).wrapped)),
+    );
     expect(dump).not.toContain(Array.from(raw).join(','));
     expect(await ks.rawKey(scope, keyId)).toEqual(raw);
     expect((await ks.aesKey(scope, keyId))!.extractable).toBe(false);
@@ -90,5 +92,25 @@ describe('Keystore', () => {
     await ks.putInvite('inv1', { secret: new Uint8Array([1, 2, 3]), seenNonces: ['n1'] });
     expect((await ks.getInvite('inv1'))!.seenNonces).toEqual(['n1']);
     expect(await ks.getInvite('nope')).toBeUndefined();
+  });
+});
+
+describe('invite secrets at rest', () => {
+  it('are wrapped: the database holds no secret bytes, and a copy without the wrapping key reads nothing', async () => {
+    const db = memoryKeyDb();
+    const ks = await Keystore.open(db);
+    await ks.createDevice({ userId: 'self' });
+    const secret = Uint8Array.from({ length: 24 }, (_, i) => 200 - i);
+    await ks.putInvite('inv', { secret, seenNonces: ['n1', 'n2'] });
+    const raw = (await db.all('invites-local')).find((r) => r.key === 'inv')!.value as {
+      wrapped: Uint8Array;
+    };
+    expect(JSON.stringify(Array.from(raw.wrapped))).not.toContain(Array.from(secret).join(','));
+    expect(await ks.getInvite('inv')).toEqual({ secret, seenNonces: ['n1', 'n2'] });
+    const other = memoryKeyDb();
+    for (const r of await db.all('invites-local')) await other.put('invites-local', r.key, r.value);
+    const ks2 = await Keystore.open(other);
+    await ks2.createDevice({ userId: 'self' });
+    expect(await ks2.getInvite('inv')).toBeUndefined();
   });
 });

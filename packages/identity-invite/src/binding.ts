@@ -9,7 +9,16 @@
  */
 
 import { b64urlDecode, b64urlEncode } from '@sync/core';
-import { concat, deviceIdFromSignPub, equalBytes, utf8, verifySignature, type DeviceBinding, type DevicePublic, type LocalDevice } from '@sync/spaces';
+import {
+  concat,
+  deviceIdFromSignPub,
+  equalBytes,
+  utf8,
+  verifySignature,
+  type DeviceBinding,
+  type DevicePublic,
+  type LocalDevice,
+} from '@sync/spaces';
 
 export const GENESIS_KIND = 'genesis/1';
 export const CHAIN_KIND = 'chain/1';
@@ -29,16 +38,38 @@ export interface Chain {
 }
 
 const genesisMessage = (user: string, id: string, signPub: Uint8Array, agreePub: Uint8Array) =>
-  concat(utf8.encode('sync-binding/genesis/1|'), utf8.encode(user), utf8.encode('|'), utf8.encode(id), signPub, agreePub);
+  concat(
+    utf8.encode('sync-binding/genesis/1|'),
+    utf8.encode(user),
+    utf8.encode('|'),
+    utf8.encode(id),
+    signPub,
+    agreePub,
+  );
 
 const linkMessage = (user: string, issuer: string, id: string, signPub: Uint8Array, agreePub: Uint8Array) =>
-  concat(utf8.encode('sync-binding/link/1|'), utf8.encode(user), utf8.encode('|'), utf8.encode(issuer), utf8.encode('|'), utf8.encode(id), signPub, agreePub);
+  concat(
+    utf8.encode('sync-binding/link/1|'),
+    utf8.encode(user),
+    utf8.encode('|'),
+    utf8.encode(issuer),
+    utf8.encode('|'),
+    utf8.encode(id),
+    signPub,
+    agreePub,
+  );
 
 export async function issueGenesis(me: LocalDevice): Promise<DeviceBinding> {
-  return { kind: GENESIS_KIND, proof: await me.sign(genesisMessage(me.deviceId, me.deviceId, me.signPub, me.agreePub)) };
+  return {
+    kind: GENESIS_KIND,
+    proof: await me.sign(genesisMessage(me.deviceId, me.deviceId, me.signPub, me.agreePub)),
+  };
 }
 
-export const chainBinding = (c: Chain): DeviceBinding => ({ kind: CHAIN_KIND, proof: utf8.encode(JSON.stringify(c)) });
+export const chainBinding = (c: Chain): DeviceBinding => ({
+  kind: CHAIN_KIND,
+  proof: utf8.encode(JSON.stringify(c)),
+});
 
 export function parseChain(binding: DeviceBinding): Chain | undefined {
   if (binding.kind !== CHAIN_KIND) return undefined;
@@ -51,23 +82,48 @@ export function parseChain(binding: DeviceBinding): Chain | undefined {
 }
 
 /** Add `device` to the chain of `me` (who is already bound, as a first device or through `own`). */
-export async function extendChain(user: string, me: LocalDevice, own: Chain | undefined, device: DevicePublic): Promise<Chain> {
-  const base: Chain = own ?? { root: { signPub: b64urlEncode(me.signPub), agreePub: b64urlEncode(me.agreePub) }, links: [] };
+export async function extendChain(
+  user: string,
+  me: LocalDevice,
+  own: Chain | undefined,
+  device: DevicePublic,
+): Promise<Chain> {
+  const base: Chain = own ?? {
+    root: { signPub: b64urlEncode(me.signPub), agreePub: b64urlEncode(me.agreePub) },
+    links: [],
+  };
   const sig = await me.sign(linkMessage(user, me.deviceId, device.deviceId, device.signPub, device.agreePub));
   return {
     root: base.root,
-    links: [...base.links, { id: device.deviceId, signPub: b64urlEncode(device.signPub), agreePub: b64urlEncode(device.agreePub), issuer: me.deviceId, sig: b64urlEncode(sig) }],
+    links: [
+      ...base.links,
+      {
+        id: device.deviceId,
+        signPub: b64urlEncode(device.signPub),
+        agreePub: b64urlEncode(device.agreePub),
+        issuer: me.deviceId,
+        sig: b64urlEncode(sig),
+      },
+    ],
   };
 }
 
 /** Total: any malformed or unverifiable input is simply false. */
-export async function verifyDeviceBinding(user: string, device: DevicePublic, binding: DeviceBinding): Promise<boolean> {
+export async function verifyDeviceBinding(
+  user: string,
+  device: DevicePublic,
+  binding: DeviceBinding,
+): Promise<boolean> {
   try {
     if (binding.kind === GENESIS_KIND) {
       return (
         user === device.deviceId &&
         (await deviceIdFromSignPub(device.signPub)) === device.deviceId &&
-        (await verifySignature(device.signPub, binding.proof, genesisMessage(user, device.deviceId, device.signPub, device.agreePub)))
+        (await verifySignature(
+          device.signPub,
+          binding.proof,
+          genesisMessage(user, device.deviceId, device.signPub, device.agreePub),
+        ))
       );
     }
     const chain = parseChain(binding);
@@ -80,12 +136,23 @@ export async function verifyDeviceBinding(user: string, device: DevicePublic, bi
       const signPub = b64urlDecode(l.signPub);
       const agreePub = b64urlDecode(l.agreePub);
       if (l.issuer !== issuerId || (await deviceIdFromSignPub(signPub)) !== l.id) return false;
-      if (!(await verifySignature(issuerPub, b64urlDecode(l.sig), linkMessage(user, l.issuer, l.id, signPub, agreePub)))) return false;
+      if (
+        !(await verifySignature(
+          issuerPub,
+          b64urlDecode(l.sig),
+          linkMessage(user, l.issuer, l.id, signPub, agreePub),
+        ))
+      )
+        return false;
       issuerId = l.id;
       issuerPub = signPub;
     }
     const last = chain.links[chain.links.length - 1]!;
-    return last.id === device.deviceId && equalBytes(b64urlDecode(last.signPub), device.signPub) && equalBytes(b64urlDecode(last.agreePub), device.agreePub);
+    return (
+      last.id === device.deviceId &&
+      equalBytes(b64urlDecode(last.signPub), device.signPub) &&
+      equalBytes(b64urlDecode(last.agreePub), device.agreePub)
+    );
   } catch {
     return false;
   }

@@ -47,7 +47,12 @@ export type RejectCode =
   | 'device-id-mismatch';
 
 export interface BindingVerifier {
-  (user: string, device: { id: string; signPub: Uint8Array; agreePub: Uint8Array }, binding: { kind: string; proof: Uint8Array }, known: ReadonlyArray<{ id: string; signPub: Uint8Array; agreePub: Uint8Array }>): Promise<boolean>;
+  (
+    user: string,
+    device: { id: string; signPub: Uint8Array; agreePub: Uint8Array },
+    binding: { kind: string; proof: Uint8Array },
+    known: ReadonlyArray<{ id: string; signPub: Uint8Array; agreePub: Uint8Array }>,
+  ): Promise<boolean>;
 }
 
 export interface ValidatorDeps {
@@ -61,7 +66,10 @@ export interface ValidatorDeps {
   waiting?(w: { id: string; space: string; scope: string; epoch: number }): void;
 }
 
-const reject = (code: RejectCode, detail?: string): ValidationResult => ({ verdict: 'reject', reason: detail ? `${code}: ${detail}` : code });
+const reject = (code: RejectCode, detail?: string): ValidationResult => ({
+  verdict: 'reject',
+  reason: detail ? `${code}: ${detail}` : code,
+});
 const defer = (reason: string): ValidationResult => ({ verdict: 'defer', reason });
 const ACCEPT: ValidationResult = { verdict: 'accept' };
 
@@ -96,7 +104,12 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
     verified.set(k, v);
   };
 
-  async function checkSignature(env: DataPacketEnvelope, body: PacketBody | undefined, auth: Authority, raw: Uint8Array | undefined): Promise<ValidationResult | undefined> {
+  async function checkSignature(
+    env: DataPacketEnvelope,
+    body: PacketBody | undefined,
+    auth: Authority,
+    raw: Uint8Array | undefined,
+  ): Promise<ValidationResult | undefined> {
     if (!env.sig) return reject('bad-signature', 'unsigned');
     if (env.sig.byteLength !== SIGNATURE_BYTES) return defer('unknown-signature-suite');
     if (!raw) return reject('bad-signature', 'no envelope bytes');
@@ -126,14 +139,23 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
     return ok ? undefined : reject('bad-signature');
   }
 
-  async function validate(phase: ValidationPhase, env: DataPacketEnvelope, body: PacketBody | undefined, ctx: ValidatorContext): Promise<ValidationResult> {
+  async function validate(
+    phase: ValidationPhase,
+    env: DataPacketEnvelope,
+    body: PacketBody | undefined,
+    ctx: ValidatorContext,
+  ): Promise<ValidationResult> {
     if (env.codec !== SPACE_CODEC_ID) return defer('foreign-codec');
     const header = parseHeader(env.body);
-    if (!header) return env.body[0] !== undefined && env.body[0] !== 1 ? defer('unknown-format') : reject('malformed', 'no header');
+    if (!header)
+      return env.body[0] !== undefined && env.body[0] !== 1
+        ? defer('unknown-format')
+        : reject('malformed', 'no header');
     const auth = await deps.authorities.ensure(env.space);
     const local = phase === 'send' || ctx.source === 'local';
     // the genesis packet creates the Space's first Owner, so it cannot be judged by a role it has not yet granted
-    const genesisBootstrap = body?.type === SYS.genesis && (!auth.hasGenesis() || auth.genesis()!.event === env.id);
+    const genesisBootstrap =
+      body?.type === SYS.genesis && (!auth.hasGenesis() || auth.genesis()!.event === env.id);
 
     // 1. signature (our own packets are signed a moment ago by us)
     if (!local) {
@@ -154,7 +176,10 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
         role = dc.role;
       } else if (dc.reason === 'unknown-device') {
         return defer('unknown-device');
-      } else if (body?.type.startsWith(SYS_PREFIX) && (dc.reason === 'revoked' || dc.reason === 'beyond-cutoff' || dc.reason === 'not-member')) {
+      } else if (
+        body?.type.startsWith(SYS_PREFIX) &&
+        (dc.reason === 'revoked' || dc.reason === 'beyond-cutoff' || dc.reason === 'not-member')
+      ) {
         // Control events decide the very standing they are judged by (two Owners removing each other while apart is the
         // classic case), so a verified event from a known device is taken in and the fold makes it inert if it
         // was not allowed. Rejecting it here would make peers disagree about which of the two events came first.
@@ -211,27 +236,55 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
 
     switch (body.type) {
       case SYS.genesis: {
-        const o = f.owner as { user: string; device: string; signPub: string; agreePub: string; binding: { kind: string; proof: string } };
+        const o = f.owner as {
+          user: string;
+          device: string;
+          signPub: string;
+          agreePub: string;
+          binding: { kind: string; proof: string };
+        };
         if (o.device !== env.author) return reject('bad-genesis', 'owner is not the author');
         const pub = b64urlDecode(o.signPub);
-        if ((await deviceIdFromSignPub(pub)) !== o.device) return reject('bad-genesis', 'device ID does not hash the key');
-        if ((await spaceIdFor(pub, b64urlDecode(f.nonce))) !== env.space) return reject('bad-genesis', 'Space ID is not derived from this key');
-        const ok = await deps.verifyBinding(o.user, { id: o.device, signPub: pub, agreePub: b64urlDecode(o.agreePub) }, { kind: o.binding.kind, proof: b64urlDecode(o.binding.proof) }, []);
+        if ((await deviceIdFromSignPub(pub)) !== o.device)
+          return reject('bad-genesis', 'device ID does not hash the key');
+        if ((await spaceIdFor(pub, b64urlDecode(f.nonce))) !== env.space)
+          return reject('bad-genesis', 'Space ID is not derived from this key');
+        const ok = await deps.verifyBinding(
+          o.user,
+          { id: o.device, signPub: pub, agreePub: b64urlDecode(o.agreePub) },
+          { kind: o.binding.kind, proof: b64urlDecode(o.binding.proof) },
+          [],
+        );
         return ok ? ACCEPT : reject('bad-binding');
       }
       case SYS.member:
-        return f.action === 'remove' && f.user === user ? ACCEPT : owner ? ACCEPT : reject('role', 'Owner required');
+        return f.action === 'remove' && f.user === user
+          ? ACCEPT
+          : owner
+            ? ACCEPT
+            : reject('role', 'Owner required');
       case SYS.device: {
         if (!(f.user === user || owner)) return reject('role', 'only your own devices');
         const pub = b64urlDecode(f.signPub);
         if ((await deviceIdFromSignPub(pub)) !== f.device) return reject('device-id-mismatch');
-        const known = auth.activeDevices(f.user).map((d) => ({ id: d.id, signPub: b64urlDecode(d.signPub), agreePub: b64urlDecode(d.agreePub) }));
-        const ok = await deps.verifyBinding(f.user, { id: f.device, signPub: pub, agreePub: b64urlDecode(f.agreePub) }, { kind: f.binding.kind, proof: b64urlDecode(f.binding.proof) }, known);
+        const known = auth
+          .activeDevices(f.user)
+          .map((d) => ({ id: d.id, signPub: b64urlDecode(d.signPub), agreePub: b64urlDecode(d.agreePub) }));
+        const ok = await deps.verifyBinding(
+          f.user,
+          { id: f.device, signPub: pub, agreePub: b64urlDecode(f.agreePub) },
+          { kind: f.binding.kind, proof: b64urlDecode(f.binding.proof) },
+          known,
+        );
         return ok ? ACCEPT : reject('bad-binding');
       }
       case SYS.deviceRevoke: {
         const target = auth.device(f.device);
-        return owner || (target && target.user === user) ? ACCEPT : target ? reject('role', 'only your own devices') : defer('unknown-device');
+        return owner || (target && target.user === user)
+          ? ACCEPT
+          : target
+            ? reject('role', 'only your own devices')
+            : defer('unknown-device');
       }
       case SYS.invite:
       case SYS.inviteRevoke:
@@ -239,12 +292,15 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
       case SYS.epoch:
         if (f.scope === env.space) return owner ? ACCEPT : reject('role', 'Owner required');
         if (!auth.share(f.scope)) return defer('unknown-share');
-        return auth.shareCurrentRole(f.scope, user) === 'owner' ? ACCEPT : reject('role', 'share Owner required');
+        return auth.shareCurrentRole(f.scope, user) === 'owner'
+          ? ACCEPT
+          : reject('role', 'share Owner required');
       case SYS.keygrant: {
         if (owner) return ACCEPT;
         const to = auth.device(f.to);
         if (to && to.user === user) return ACCEPT; // my own new device
-        if (f.scope !== env.space && auth.share(f.scope) && auth.shareCurrentRole(f.scope, user) === 'owner') return ACCEPT;
+        if (f.scope !== env.space && auth.share(f.scope) && auth.shareCurrentRole(f.scope, user) === 'owner')
+          return ACCEPT;
         return reject('role', 'only Owners grant keys');
       }
       case SYS.share:
@@ -253,7 +309,9 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
         const s = auth.share(f.shareId);
         if (!s) return defer('unknown-share');
         const mine = auth.shareCurrentRole(f.shareId, user);
-        return mine === 'owner' || (f.action === 'remove' && f.user === user) ? ACCEPT : reject('role', 'share Owner required');
+        return mine === 'owner' || (f.action === 'remove' && f.user === user)
+          ? ACCEPT
+          : reject('role', 'share Owner required');
       }
       default:
         void genesisBootstrap;
@@ -266,7 +324,9 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
    * Verify the signatures of a whole batch concurrently and remember the verdicts. Only packets whose author device is
    * already known are checked here; the rest are checked in `validate`, once the batch has taught us the device.
    */
-  async function prepare(batch: ReadonlyArray<{ envelope: DataPacketEnvelope; raw: Uint8Array }>): Promise<void> {
+  async function prepare(
+    batch: ReadonlyArray<{ envelope: DataPacketEnvelope; raw: Uint8Array }>,
+  ): Promise<void> {
     const bySpace = new Map<string, Authority>();
     const work: Array<() => Promise<void>> = [];
     for (const { envelope: env, raw } of batch) {
@@ -293,7 +353,8 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
     prepare,
     async validate(phase, env, body, ctx) {
       const r = await validate(phase, env, body, ctx);
-      if (r.verdict === 'reject' && deps.report && !deps.quiet?.()) deps.report({ code: r.reason.split(':')[0] as RejectCode, id: env.id, space: env.space });
+      if (r.verdict === 'reject' && deps.report && !deps.quiet?.())
+        deps.report({ code: r.reason.split(':')[0] as RejectCode, id: env.id, space: env.space });
       return r;
     },
   };

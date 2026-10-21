@@ -8,7 +8,14 @@
 
 import { concat, hex, randomBytes, unhex, utf8 } from '../crypto/bytes';
 import { deviceIdFromSignPub, keyIdOf } from '../crypto/ids';
-import { aesOpen, aesSeal, generateAesKey, generateAgreeKeyPair, generateSignKeyPair, importAesKey } from '../crypto/suite';
+import {
+  aesOpen,
+  aesSeal,
+  generateAesKey,
+  generateAgreeKeyPair,
+  generateSignKeyPair,
+  importAesKey,
+} from '../crypto/suite';
 import { base32Decode } from '../crypto/bytes';
 import type { KeyDb } from './keydb';
 
@@ -135,7 +142,10 @@ export class Keystore {
   async rawKey(scope: string, keyId: string): Promise<Uint8Array | undefined> {
     const rec = await this.db.get<EpochKeyRecord>('epoch-keys', `${scope}:${keyId}`);
     if (!rec) return undefined;
-    return (await aesOpen(this.requireDevice().wrapKey, rec.nonce, rec.wrapped, this.aad(scope, keyId))) ?? undefined;
+    return (
+      (await aesOpen(this.requireDevice().wrapKey, rec.nonce, rec.wrapped, this.aad(scope, keyId))) ??
+      undefined
+    );
   }
 
   /** A non-extractable key for encrypt/decrypt, or undefined when this device does not hold it. */
@@ -176,12 +186,27 @@ export class Keystore {
 
   // ---- invites (only on the creating device) ----
 
-  putInvite(inviteId: string, v: InviteSecret): Promise<void> {
-    return this.db.put('invites-local', inviteId, v);
+  /** Invite secrets are wrapped like epoch keys, so a copy of the database without the wrapping key reveals none. */
+  async putInvite(inviteId: string, v: InviteSecret): Promise<void> {
+    const d = this.requireDevice();
+    const nonce = randomBytes(12);
+    const plain = utf8.encode(JSON.stringify({ secret: Array.from(v.secret), seenNonces: v.seenNonces }));
+    const wrapped = await aesSeal(d.wrapKey, nonce, plain, utf8.encode(`sync-invite/1|${inviteId}`));
+    await this.db.put('invites-local', inviteId, { nonce, wrapped });
   }
 
-  getInvite(inviteId: string): Promise<InviteSecret | undefined> {
-    return this.db.get<InviteSecret>('invites-local', inviteId);
+  async getInvite(inviteId: string): Promise<InviteSecret | undefined> {
+    const rec = await this.db.get<{ nonce: Uint8Array; wrapped: Uint8Array }>('invites-local', inviteId);
+    if (!rec) return undefined;
+    const plain = await aesOpen(
+      this.requireDevice().wrapKey,
+      rec.nonce,
+      rec.wrapped,
+      utf8.encode(`sync-invite/1|${inviteId}`),
+    );
+    if (!plain) return undefined;
+    const o = JSON.parse(new TextDecoder().decode(plain)) as { secret: number[]; seenNonces: string[] };
+    return { secret: Uint8Array.from(o.secret), seenNonces: o.seenNonces };
   }
 
   // ---- a small local key-value store for the Identity Provider (never synced) ----

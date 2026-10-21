@@ -11,14 +11,23 @@ async function gift() {
   f.g.link('editor', 'viewer');
   // the Editor makes a private object shared only with the Viewer
   const viewerUser = f.viewer.spaces.session()!.user;
-  const { object, share } = await f.editor.spaces.createInShare(f.space.id, 'gift', { idea: 'surprise party' }, [{ user: viewerUser, role: 'viewer' }]);
+  const { object, share } = await f.editor.spaces.createInShare(
+    f.space.id,
+    'gift',
+    { idea: 'surprise party' },
+    [{ user: viewerUser, role: 'viewer' }],
+  );
   return { f, object, share, viewerUser };
 }
 
 describe('override shares', () => {
   it('members of the share read it; Space members outside it store and relay it but cannot read it', async () => {
     const { f, object, share } = await gift();
-    await waitFor(async () => (await f.viewer.core.get(object.id)) !== undefined, 12_000, 'the share member reads it');
+    await waitFor(
+      async () => (await f.viewer.core.get(object.id)) !== undefined,
+      12_000,
+      'the share member reads it',
+    );
     expect((await f.viewer.core.get(object.id))!.fields.idea).toBe('surprise party');
     await settle(f.g);
 
@@ -71,20 +80,34 @@ describe('override shares', () => {
     const { f, object, share, viewerUser } = await gift();
     await waitFor(async () => (await f.viewer.core.get(object.id)) !== undefined, 12_000, 'shared');
     await expect(f.viewer.core.update(object.id, { idea: 'mine now' })).rejects.toThrow(/role/);
-    await expect(f.editor.spaces.setShareRole(share.shareId, viewerUser, 'editor')).rejects.toBeInstanceOf(NotAuthorizedError); // Space Viewer
+    await expect(f.editor.spaces.setShareRole(share.shareId, viewerUser, 'editor')).rejects.toBeInstanceOf(
+      NotAuthorizedError,
+    ); // Space Viewer
     // a Space Editor can be
     await f.editor.spaces.setShareRole(share.shareId, f.owner.spaces.session()!.user, 'editor');
-    await waitFor(async () => (await f.owner.core.get(object.id)) !== undefined, 12_000, 'the Owner, now in the share, reads it');
+    await waitFor(
+      async () => (await f.owner.core.get(object.id)) !== undefined,
+      12_000,
+      'the Owner, now in the share, reads it',
+    );
     const edited = await f.owner.core.update(object.id, { idea: 'cake' });
     expect(edited.fields.idea).toBe('cake');
-    await waitFor(async () => (await f.viewer.core.get(object.id))?.fields.idea === 'cake', 12_000, 'the share Viewer sees the edit');
+    await waitFor(
+      async () => (await f.viewer.core.get(object.id))?.fields.idea === 'cake',
+      12_000,
+      'the share Viewer sees the edit',
+    );
     await f.g.close();
   });
 
   it('only Space members can be added to a share, and only by a share Owner', async () => {
     const { f, object, share } = await gift();
-    await expect(f.editor.spaces.setShareRole(share.shareId, 'someone-outside', 'viewer')).rejects.toBeInstanceOf(NotAuthorizedError);
-    await expect(f.viewer.spaces.setShareRole(share.shareId, f.obs.spaces.session()!.user, 'viewer')).rejects.toBeInstanceOf(NotAuthorizedError);
+    await expect(
+      f.editor.spaces.setShareRole(share.shareId, 'someone-outside', 'viewer'),
+    ).rejects.toBeInstanceOf(NotAuthorizedError);
+    await expect(
+      f.viewer.spaces.setShareRole(share.shareId, f.obs.spaces.session()!.user, 'viewer'),
+    ).rejects.toBeInstanceOf(NotAuthorizedError);
     await expect(f.owner.spaces.share(object.id, [])).rejects.toBeInstanceOf(NotAuthorizedError); // already in a share
     await f.g.close();
   });
@@ -94,10 +117,21 @@ describe('override shares', () => {
     await waitFor(async () => (await f.viewer.core.get(object.id)) !== undefined, 12_000, 'shared');
     f.g.link('owner', 'editor');
     await f.owner.spaces.remove(f.space.id, viewerUser);
-    await waitFor(async () => (await f.editor.spaces.shareOf(object.id))!.members!.length === 1, 12_000, 'the share loses the member');
+    await waitFor(
+      async () => (await f.editor.spaces.shareOf(object.id))!.members!.length === 1,
+      12_000,
+      'the share loses the member',
+    );
     // the share's Owner (the Editor) rotates the share key, not the Space Owner, who has no key for it
-    await waitFor(async () => (await f.editor.core.query({ type: '$sys.epoch' }).once()).some((e) => e.fields.scope === share.shareId && e.fields.epoch === 1), 12_000, 'the share key rotates');
-    await f.editor.core.update(object.id, { idea: 'after the removal' });
+    await waitFor(
+      async () =>
+        (await f.editor.core.query({ type: '$sys.epoch' }).once()).some(
+          (e) => e.fields.scope === share.shareId && e.fields.epoch === 1,
+        ),
+      12_000,
+      'the share key rotates',
+    );
+    await f.editor.core.update(object.id, { idea: 'after the removal' }); // waits for the new share key if the rotation is still running
     await settle(f.g);
     expect((await f.viewer.core.get(object.id))!.fields.idea).toBe('surprise party'); // what it had, no more
     await f.g.close();

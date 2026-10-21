@@ -27,9 +27,9 @@ Common to all `$sys.*`: `op = create` only; random `obj` ID; author signature; b
 | `device` | `"self"` | `{ signPriv: CryptoKey, agreePriv: CryptoKey, wrapKey: CryptoKey, signPub, agreePub, deviceId, userId, displayName }` | `CryptoKey`s are non-extractable. One record per install |
 | `epoch-keys` | `scope:epoch:keyId` | `{ wrapped: bytes, nonce, createdAt, source: 'self'\|'grant'\|'join' }` | AES-GCM wrapped by `wrapKey`. Never plaintext |
 | `counters` | `scope:epoch:keyId` | `{ packetsEncrypted }` | Nonce-safety guard (auto-rotate at 2^31) |
-| `authority-cache` | `space` | `{ state, throughClock, eventCount }` | Rebuildable from the log |
-| `verified` | `packetId` | `{ verdict, at }` | Signature verdict cache, bounded LRU. Rebuilt, never trusted from older versions (cleared on version bump) |
-| `invites-local` | `inviteId` | `{ secret, seenNonces[] }` | Only on the creating device; `seenNonces` blocks replayed join requests until the invite expires |
+| `spaces` | `space` | `{ joinedAt }` | Spaces this install belongs to (keeps an empty, just-joined Space syncing across restarts) |
+| (memory only) | | | The authority state and a bounded signature-verdict cache are kept in memory and rebuilt from the log; nothing derived is stored |
+| `invites-local` | `inviteId` or `kv:<key>` | wrapped `{ secret, seenNonces[] }`; provider key-value bytes | Only on the creating device. Invite secrets are AES-GCM wrapped with the device wrapping key; `seenNonces` blocks replayed join requests |
 
 ## Messages (not stored)
 
@@ -109,4 +109,4 @@ created/used ──now ≥ expiresAt──► expired     created/used ──inv
 
 ## Limits and defaults (configurable)
 
-`maxInviteDays = 30`, `inviteApprovalTimeoutMs = 300000`, `joinHistory = 'all'`, `maxParkedPerAuthor = 1000`, `maxDevicesPerUser = 10`, `maxMembersPerSpace = 100` (soft; the UI warns), `rotateAtPackets = 2^31`, `verifiedCacheEntries = 50000`.
+`maxInviteDays = 30`, `inviteApprovalTimeoutMs = 300000`, `maxParkedPerAuthor = 1000`, `maxDevicesPerUser = 10`, `maxMembersPerSpace = 100` (soft; the UI warns), `rotateAtPackets = 2^31`, `verifiedCacheEntries = 50000`.

@@ -20,8 +20,10 @@ export interface GrantBody {
   items: GrantItem[];
 }
 
-const info = (scope: string, epoch: number, device: string) => concat(utf8.encode('sync-grant/1'), base32Decode(scope), u32be(epoch), utf8.encode(device));
-const aad = (to: string, scope: string, epoch: number, keyId: string) => concat(utf8.encode(to), base32Decode(scope), u32be(epoch), unhex(keyId));
+const info = (scope: string, epoch: number, device: string) =>
+  concat(utf8.encode('sync-grant/1'), base32Decode(scope), u32be(epoch), utf8.encode(device));
+const aad = (to: string, scope: string, epoch: number, keyId: string) =>
+  concat(utf8.encode(to), base32Decode(scope), u32be(epoch), unhex(keyId));
 
 export async function wrapKeys(
   scope: string,
@@ -32,10 +34,17 @@ export async function wrapKeys(
   const shared = await deriveShared(eph.privateKey, recipient.agreePub);
   const items: GrantItem[] = [];
   for (const k of keys) {
-    const wrapKey = await importAesKey(await hkdf(shared, new Uint8Array(32), info(scope, k.epoch, recipient.deviceId)));
+    const wrapKey = await importAesKey(
+      await hkdf(shared, new Uint8Array(32), info(scope, k.epoch, recipient.deviceId)),
+    );
     const nonce = randomBytes(12);
     const wrapped = await aesSeal(wrapKey, nonce, k.raw, aad(recipient.deviceId, scope, k.epoch, k.keyId));
-    items.push({ epoch: k.epoch, keyId: k.keyId, nonce: b64urlEncode(nonce), wrapped: b64urlEncode(wrapped) });
+    items.push({
+      epoch: k.epoch,
+      keyId: k.keyId,
+      nonce: b64urlEncode(nonce),
+      wrapped: b64urlEncode(wrapped),
+    });
   }
   return { to: recipient.deviceId, scope, eph: b64urlEncode(eph.publicRaw), items };
 }
@@ -56,8 +65,15 @@ export async function unwrapKeys(
   }
   for (const it of grant.items) {
     try {
-      const wrapKey = await importAesKey(await hkdf(shared, new Uint8Array(32), info(grant.scope, it.epoch, deviceId)));
-      const raw = await aesOpen(wrapKey, b64urlDecode(it.nonce), b64urlDecode(it.wrapped), aad(deviceId, grant.scope, it.epoch, it.keyId));
+      const wrapKey = await importAesKey(
+        await hkdf(shared, new Uint8Array(32), info(grant.scope, it.epoch, deviceId)),
+      );
+      const raw = await aesOpen(
+        wrapKey,
+        b64urlDecode(it.nonce),
+        b64urlDecode(it.wrapped),
+        aad(deviceId, grant.scope, it.epoch, it.keyId),
+      );
       if (!raw || raw.byteLength !== 32) continue;
       if (hex(await keyIdOf(raw)) !== it.keyId) continue;
       out.push({ epoch: it.epoch, keyId: it.keyId, raw });

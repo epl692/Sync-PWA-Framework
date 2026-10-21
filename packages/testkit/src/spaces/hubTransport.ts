@@ -46,9 +46,20 @@ export class HubNetwork {
 }
 
 export class HubTransport implements Transport {
-  readonly capabilities: TransportCapabilities = { maxMessageBytes: 64 * 1024 * 1024, ordered: true, multiPeer: false, blobs: false };
+  readonly capabilities: TransportCapabilities = {
+    maxMessageBytes: 64 * 1024 * 1024,
+    ordered: true,
+    multiPeer: false,
+    blobs: false,
+  };
   private _state: TransportState = 'idle';
-  private handlers: Handlers = { state: new Set(), peerConnected: new Set(), peerDisconnected: new Set(), message: new Set(), error: new Set() };
+  private handlers: Handlers = {
+    state: new Set(),
+    peerConnected: new Set(),
+    peerDisconnected: new Set(),
+    message: new Set(),
+    error: new Set(),
+  };
   online = true;
 
   constructor(

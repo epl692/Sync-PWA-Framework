@@ -56,25 +56,41 @@ export function createStubIdentityProvider(): IdentityProvider {
     const status = await host.inviteStatus(m.space, m.inviteId);
     if (!status.ok) return deny(peerKey, m.nonce, status.reason, m.space);
     if (stored.seenNonces.includes(m.nonce)) return deny(peerKey, m.nonce, 'replayed', m.space);
-    if (!sameBytes(await sha256(b64urlDecode(m.secret)), status.secretHash)) return deny(peerKey, m.nonce, 'bad-proof', m.space);
+    if (!sameBytes(await sha256(b64urlDecode(m.secret)), status.secretHash))
+      return deny(peerKey, m.nonce, 'bad-proof', m.space);
     stored.seenNonces.push(m.nonce);
     await host.secrets.put(m.inviteId, stored);
     const joiner = {
       user: m.user,
-      device: { deviceId: m.device.deviceId, signPub: b64urlDecode(m.device.signPub), agreePub: b64urlDecode(m.device.agreePub), name: m.device.name },
+      device: {
+        deviceId: m.device.deviceId,
+        signPub: b64urlDecode(m.device.signPub),
+        agreePub: b64urlDecode(m.device.agreePub),
+        name: m.device.name,
+      },
       binding: { kind: m.binding.kind, proof: b64urlDecode(m.binding.proof) },
       displayName: m.displayName,
     };
-    if (!(await self.verifyBinding(joiner.user, joiner.device, joiner.binding, []))) return deny(peerKey, m.nonce, 'bad-proof', m.space);
+    if (!(await self.verifyBinding(joiner.user, joiner.device, joiner.binding, [])))
+      return deny(peerKey, m.nonce, 'bad-proof', m.space);
     if (status.approval === 'required') {
       const sas = m.device.deviceId.slice(0, 5);
-      if (!(await host.approve({ space: m.space, inviteId: m.inviteId, role: status.role, deviceName: m.device.name, sas }))) return deny(peerKey, m.nonce, 'declined', m.space);
+      if (
+        !(await host.approve({
+          space: m.space,
+          inviteId: m.inviteId,
+          role: status.role,
+          deviceName: m.device.name,
+          sas,
+        }))
+      )
+        return deny(peerKey, m.nonce, 'declined', m.space);
     }
     const data = await host.admit(m.space, m.inviteId, joiner);
     await host.channel.send(peerKey, json({ kind: 'join-grant', nonce: m.nonce, data }), { space: m.space });
   }
 
-  function request<T>(nonce: string, timeoutMs: number): Promise<any> {
+  function request(nonce: string, timeoutMs: number): Promise<any> {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         waiting.delete(nonce);
@@ -97,7 +113,11 @@ export function createStubIdentityProvider(): IdentityProvider {
     },
     async createUser(opts) {
       const d = host.device();
-      return { user: `stub-${d.deviceId}`, displayName: opts?.displayName, device: { deviceId: d.deviceId, signPub: d.signPub, agreePub: d.agreePub, name: d.name } };
+      return {
+        user: `stub-${d.deviceId}`,
+        displayName: opts?.displayName,
+        device: { deviceId: d.deviceId, signPub: d.signPub, agreePub: d.agreePub, name: d.name },
+      };
     },
     async verifyBinding(user, device, binding) {
       return binding.kind === KIND && sameBytes(binding.proof, token(user, device.deviceId));
@@ -113,9 +133,31 @@ export function createStubIdentityProvider(): IdentityProvider {
       const inviteId = base32(host.random(10));
       const secret = host.random(16);
       await host.secrets.put(inviteId, { secret, seenNonces: [] });
-      await host.registerInvite({ space: spec.space, inviteId, role: spec.role, expiresAt: spec.expiresAt, maxUses: spec.maxUses, secretHash: await sha256(secret), approval: spec.approval ?? 'required' });
-      const body = b64urlEncode(json({ inviteId, space: spec.space, secret: b64urlEncode(secret), role: spec.role, expiresAt: spec.expiresAt, inviter: session.device.deviceId }));
-      return { inviteId, url: `stub://join#${body}`, qrPayload: `stub://join#${body}`, expiresAt: spec.expiresAt };
+      await host.registerInvite({
+        space: spec.space,
+        inviteId,
+        role: spec.role,
+        expiresAt: spec.expiresAt,
+        maxUses: spec.maxUses,
+        secretHash: await sha256(secret),
+        approval: spec.approval ?? 'required',
+      });
+      const body = b64urlEncode(
+        json({
+          inviteId,
+          space: spec.space,
+          secret: b64urlEncode(secret),
+          role: spec.role,
+          expiresAt: spec.expiresAt,
+          inviter: session.device.deviceId,
+        }),
+      );
+      return {
+        inviteId,
+        url: `stub://join#${body}`,
+        qrPayload: `stub://join#${body}`,
+        expiresAt: spec.expiresAt,
+      };
     },
     async revokeInvite(_s, space, inviteId) {
       await host.revokeInviteRecord(space, inviteId);
@@ -137,7 +179,12 @@ export function createStubIdentityProvider(): IdentityProvider {
           secret: a.secret,
           user: session.user,
           displayName: session.displayName,
-          device: { deviceId: device.deviceId, signPub: b64urlEncode(device.signPub), agreePub: b64urlEncode(device.agreePub), name: device.name },
+          device: {
+            deviceId: device.deviceId,
+            signPub: b64urlEncode(device.signPub),
+            agreePub: b64urlEncode(device.agreePub),
+            name: device.name,
+          },
           binding: { kind: binding.kind, proof: b64urlEncode(binding.proof) },
         }),
         { space: a.space },
@@ -155,10 +202,23 @@ export function createStubIdentityProvider(): IdentityProvider {
         host.channel.onMessage(async (peerKey, payload) => {
           const m = parse(payload);
           if (m?.kind !== 'link-offer' || m.nonce !== nonce) return;
-          const device: DevicePublic = { deviceId: m.device.deviceId, signPub: b64urlDecode(m.device.signPub), agreePub: b64urlDecode(m.device.agreePub), name: m.device.name };
+          const device: DevicePublic = {
+            deviceId: m.device.deviceId,
+            signPub: b64urlDecode(m.device.signPub),
+            agreePub: b64urlDecode(m.device.agreePub),
+            name: m.device.name,
+          };
           const binding = await self.issueBinding(session, device);
           const data = await host.linkNewDevice(device, binding);
-          await host.channel.send(peerKey, json({ kind: 'link-accept', nonce, data, binding: { kind: binding.kind, proof: b64urlEncode(binding.proof) } }));
+          await host.channel.send(
+            peerKey,
+            json({
+              kind: 'link-accept',
+              nonce,
+              data,
+              binding: { kind: binding.kind, proof: b64urlEncode(binding.proof) },
+            }),
+          );
           resolve({ device: device.deviceId });
         });
       });
@@ -169,10 +229,25 @@ export function createStubIdentityProvider(): IdentityProvider {
       if (!c?.nonce) throw new Error('not a link code');
       const d = host.device();
       const waitFor = request(c.nonce, 5000);
-      await host.channel.broadcast(json({ kind: 'link-offer', nonce: c.nonce, device: { deviceId: d.deviceId, signPub: b64urlEncode(d.signPub), agreePub: b64urlEncode(d.agreePub), name: d.name } }));
+      await host.channel.broadcast(
+        json({
+          kind: 'link-offer',
+          nonce: c.nonce,
+          device: {
+            deviceId: d.deviceId,
+            signPub: b64urlEncode(d.signPub),
+            agreePub: b64urlEncode(d.agreePub),
+            name: d.name,
+          },
+        }),
+      );
       const reply = await waitFor;
       await host.completeLink(reply.data);
-      return { user: reply.data.user, displayName: reply.data.displayName, device: { deviceId: d.deviceId, signPub: d.signPub, agreePub: d.agreePub, name: d.name } };
+      return {
+        user: reply.data.user,
+        displayName: reply.data.displayName,
+        device: { deviceId: d.deviceId, signPub: d.signPub, agreePub: d.agreePub, name: d.name },
+      };
     },
   };
   return self;

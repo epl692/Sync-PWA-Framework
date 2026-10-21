@@ -11,8 +11,10 @@ async function inject(f: Family, raw: Uint8Array) {
   return f.owner.core.ingest(raw, 'memory:attacker');
 }
 
-const visible = async (f: Family, node: Family['owner'], type: string) => (await node.core.query({ space: f.space.id, type }).once()).length;
-const holds = async (node: Family['owner'], id: string) => (await readPacketRecords(node.storage)).some((r) => r.id === id && r.status === 'applied');
+const visible = async (f: Family, node: Family['owner'], type: string) =>
+  (await node.core.query({ space: f.space.id, type }).once()).length;
+const holds = async (node: Family['owner'], id: string) =>
+  (await readPacketRecords(node.storage)).some((r) => r.id === id && r.status === 'applied');
 
 /** Never applied on any peer. A rejected packet is also never forwarded; a deferred one (unknown author) may be, unapplied. */
 async function expectNowhere(f: Family, id: string, type: string, opts: { forwarded?: boolean } = {}) {
@@ -46,10 +48,16 @@ describe('peers enforce roles (User Story 2)', () => {
     const f = await buildFamily();
     const e = await Forger.of(f.editor);
     const o = await Forger.of(f.owner);
-    const flipped = await e.packet(f.space.id, e.body('t-flip', {}), { tamper: (x) => ({ ...x, sig: x.sig!.map((b, i) => (i === 3 ? b ^ 1 : b)) }) });
+    const flipped = await e.packet(f.space.id, e.body('t-flip', {}), {
+      tamper: (x) => ({ ...x, sig: x.sig!.map((b, i) => (i === 3 ? b ^ 1 : b)) }),
+    });
     const unsigned = await e.packet(f.space.id, e.body('t-unsigned', {}), { sign: false });
     const borrowed = await e.packet(f.space.id, e.body('t-borrowed', {}), { signWith: o });
-    for (const [p, t] of [[flipped, 't-flip'], [unsigned, 't-unsigned'], [borrowed, 't-borrowed']] as const) {
+    for (const [p, t] of [
+      [flipped, 't-flip'],
+      [unsigned, 't-unsigned'],
+      [borrowed, 't-borrowed'],
+    ] as const) {
       expect((await inject(f, p.raw)).status).toBe('rejected');
       await expectNowhere(f, p.env.id, t);
     }
@@ -73,8 +81,19 @@ describe('peers enforce roles (User Story 2)', () => {
   it('rejects a changed envelope (clock), a changed header (epoch), and a flipped ciphertext byte', async () => {
     const f = await buildFamily();
     const e = await Forger.of(f.editor);
-    const cases: Array<[string, (x: import('@sync/core').DataPacketEnvelope) => import('@sync/core').DataPacketEnvelope]> = [
-      ['t-clock', (x) => ({ ...x, clock: x.clock.replace(/-(\d{4})-/, (_m, c) => `-${String((Number(c) + 1) % 10000).padStart(4, '0')}-`) })],
+    const cases: Array<
+      [string, (x: import('@sync/core').DataPacketEnvelope) => import('@sync/core').DataPacketEnvelope]
+    > = [
+      [
+        't-clock',
+        (x) => ({
+          ...x,
+          clock: x.clock.replace(
+            /-(\d{4})-/,
+            (_m, c) => `-${String((Number(c) + 1) % 10000).padStart(4, '0')}-`,
+          ),
+        }),
+      ],
       ['t-epoch', (x) => ({ ...x, body: x.body.map((b, i) => (i === 20 ? b ^ 1 : b)) })],
       ['t-ct', (x) => ({ ...x, body: x.body.map((b, i) => (i === x.body.length - 1 ? b ^ 1 : b)) })],
     ];
@@ -91,7 +110,10 @@ describe('peers enforce roles (User Story 2)', () => {
     const e = await Forger.of(f.editor);
     const good = await e.packet(f.space.id, e.body('t-good', { x: 1 }));
     const seq = (await e.nextSeq(f.space.id)) + 5;
-    const moved = await e.packet(f.space.id, e.body('t-moved', {}), { seq, tamper: (x) => ({ ...x, body: good.env.body }) });
+    const moved = await e.packet(f.space.id, e.body('t-moved', {}), {
+      seq,
+      tamper: (x) => ({ ...x, body: good.env.body }),
+    });
     const r = await inject(f, moved.raw);
     expect(r.status).toBe('rejected');
     await expectNowhere(f, moved.env.id, 't-moved');
@@ -115,8 +137,14 @@ describe('peers enforce roles (User Story 2)', () => {
     const f = await buildFamily();
     const e = await Forger.of(f.editor);
     const me = f.editor.spaces.session()!.user;
-    const promote = await e.packet(f.space.id, e.body(SYS.member, { action: 'role', user: me, role: 'owner' }));
-    const addSelf = await e.packet(f.space.id, e.body(SYS.member, { action: 'add', user: 'friend', role: 'editor' }));
+    const promote = await e.packet(
+      f.space.id,
+      e.body(SYS.member, { action: 'role', user: me, role: 'owner' }),
+    );
+    const addSelf = await e.packet(
+      f.space.id,
+      e.body(SYS.member, { action: 'add', user: 'friend', role: 'editor' }),
+    );
     for (const p of [promote, addSelf]) expect((await inject(f, p.raw)).status).toBe('rejected');
     expect((await f.owner.spaces.members(f.space.id)).find((m) => m.user === me)!.role).toBe('editor');
     await f.g.close();
@@ -129,7 +157,10 @@ describe('peers enforce roles (User Story 2)', () => {
     for (const op of ['update', 'delete'] as const) {
       const fields = op === 'delete' ? {} : { action: 'role', user: 'x', role: 'viewer' };
       const p = await o.packet(f.space.id, { ...o.body(SYS.member, fields, target.id), op });
-      expect(await inject(f, p.raw)).toMatchObject({ status: 'rejected', reason: expect.stringContaining('immutable') });
+      expect(await inject(f, p.raw)).toMatchObject({
+        status: 'rejected',
+        reason: expect.stringContaining('immutable'),
+      });
     }
     await f.g.close();
   });
@@ -137,7 +168,10 @@ describe('peers enforce roles (User Story 2)', () => {
   it('refuses a packet in a foreign codec (the plaintext codec is not accepted)', async () => {
     const f = await buildFamily();
     const e = await Forger.of(f.editor);
-    const p = await e.packet(f.space.id, e.body('t-foreign', { x: 1 }), { tamper: (x) => ({ ...x, codec: 'test-plaintext/1' }), sign: true });
+    const p = await e.packet(f.space.id, e.body('t-foreign', { x: 1 }), {
+      tamper: (x) => ({ ...x, codec: 'test-plaintext/1' }),
+      sign: true,
+    });
     const r = await inject(f, p.raw);
     expect(r.status).not.toBe('applied');
     await expectNowhere(f, p.env.id, 't-foreign', { forwarded: true });

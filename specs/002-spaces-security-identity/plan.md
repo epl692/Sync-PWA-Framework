@@ -18,7 +18,7 @@ Technical approach (details in [research.md](./research.md)):
 - **Review of 001 found gaps this feature must close first**: no signing hook, plaintext and unsigned snapshots, no way to carry the join handshake, and no way to exempt control events from compaction. They are delivered as seven additive core amendments (A-1 to A-7) before any spaces code ([contracts/core-amendments.md](./contracts/core-amendments.md)).
 - **Identity is a thin provider contract** covering who a user is, device bindings, and how invites and device links travel. The framework keeps all crypto and authority. The default provider does invite links/QR with approval, expiry and use limits; offline join runs over the 001 WebRTC manual-signaling transport (R-13, R-14).
 
-**Clarification applied / spec follow-up**: the spec's Assumption "offline joining over Bluetooth needs two Chromium-based devices" is superseded by 001 R-01 (Web Bluetooth cannot connect two browsers). Offline join is **local network + WebRTC manual signaling in every modern browser**, iOS included. The spec's FR-005 assumption (per-member LWW, removal wins ties) is refined to clock-order replay with inert conflicting events (R-07). A one-line edit to those two spec items is recommended via `/speckit-clarify`; it does not change any requirement.
+**Clarifications applied**: offline joining is **local network + WebRTC manual signaling in every modern browser**, iOS included (Web Bluetooth cannot connect two browsers, 001 R-01), and FR-005 is clock-order replay with inert conflicting events and a notification to the author (R-07). Both are now in the spec (`/speckit-clarify`, 2026-10-21).
 
 ## Technical Context
 
@@ -38,7 +38,7 @@ Technical approach (details in [research.md](./research.md)):
 
 **Project Type**: Library monorepo, two new packages added to the 001 workspaces, plus additive changes to `core`, `relay-server` and `testkit`.
 
-**Performance Goals**: Join via QR with no internet < 60 s (SC-004). Rotation for 100 devices < 2 s. Signature verification ≥ 2,000 packets/s. 10,000-packet sync ≤ 30% slower than the plaintext codec. Main thread never blocked (async `crypto.subtle`, batched verification, 001 constraint).
+**Performance Goals**: Join via QR with no internet < 60 s (SC-004; measured about 4 s). Rotation for 100 devices < 2 s on the phone profile (measured about 1 s). Signature verification ≥ 2,000 packets/s on the phone profile (measured 2,600 to 3,600). Ingest of encrypted packets is bounded in absolute terms (about 350 to 550/s on the phone profile) rather than relative to plaintext; see research R-18. Main thread never blocked (async `crypto.subtle`, batched concurrent verification, 001 constraint).
 
 **Constraints**: Offline-first: everything except delivering keys to other devices works with no transport. Secret material never leaves the device unwrapped. Modules never receive the keystore. Static-hostable: no server needed beyond the optional relay.
 
@@ -98,7 +98,7 @@ packages/
 │   ├── src/
 │   │   ├── crypto/          # suite-1 primitives, canonical sign input, HKDF, wrap/unwrap, ids
 │   │   ├── keystore/        # `sync-keys` IndexedDB: device keys, epoch keys, counters, caches
-│   │   ├── codec/           # aes-gcm-space/1 and grant/1 codecs, snapshot sealer
+│   │   ├── codec/           # aes-gcm-space/1 codec, snapshot guard (key grants are ordinary control objects)
 │   │   ├── authority/       # $sys.* schemas, fold, state cache, incremental recompute
 │   │   ├── validators/      # envelope validator, body validator, snapshot validator
 │   │   ├── rotation/        # rotate/grant/cutoff, auto-rotate, surplus-invite handling

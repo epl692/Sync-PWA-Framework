@@ -2,4 +2,6 @@
 import { identityProviderContract } from '@sync/testkit';
 import { createInviteProvider } from '../../src';
 
-identityProviderContract('invite-qr', () => createInviteProvider({ baseUrl: 'https://app.test/', joinTimeoutMs: 5000 }));
+identityProviderContract('invite-qr', () =>
+  createInviteProvider({ baseUrl: 'https://app.test/', joinTimeoutMs: 5000 }),
+);

@@ -13,7 +13,13 @@ export function resetSeqs(): void {
 }
 
 /** An event authored by `author` (a device ID) at wall time `WALL + t`. */
-export function ev<T extends SysType>(type: T, author: string, t: number, fields: ControlFields[T], seq?: number): ControlEvent<T> {
+export function ev<T extends SysType>(
+  type: T,
+  author: string,
+  t: number,
+  fields: ControlFields[T],
+  seq?: number,
+): ControlEvent<T> {
   const s = seq ?? (seqs.get(author) ?? 0) + 1;
   seqs.set(author, s);
   return { id: `${author}:${s}`, type, clock: formatClock(WALL + t, 0, author), author, seq: s, fields };
@@ -22,16 +28,39 @@ export function ev<T extends SysType>(type: T, author: string, t: number, fields
 export const key = (d: string) => ({ signPub: `sign-${d}`, agreePub: `agree-${d}` });
 export const binding = { kind: 'test', proof: '' };
 
-export const genesis = (dev = 'A', t = 1) => ev(SYS.genesis, dev, t, { owner: { user: dev, device: dev, ...key(dev), binding }, nonce: 'n' });
-export const device = (author: string, t: number, user: string, dev: string) => ev(SYS.device, author, t, { user, device: dev, ...key(dev), binding });
-export const addMember = (author: string, t: number, user: string, role: Role, extra: { inviteId?: string } = {}) =>
-  ev(SYS.member, author, t, { action: 'add', user, role, ...extra });
-export const setRole = (author: string, t: number, user: string, role: Role) => ev(SYS.member, author, t, { action: 'role', user, role });
+export const genesis = (dev = 'A', t = 1) =>
+  ev(SYS.genesis, dev, t, { owner: { user: dev, device: dev, ...key(dev), binding }, nonce: 'n' });
+export const device = (author: string, t: number, user: string, dev: string) =>
+  ev(SYS.device, author, t, { user, device: dev, ...key(dev), binding });
+export const addMember = (
+  author: string,
+  t: number,
+  user: string,
+  role: Role,
+  extra: { inviteId?: string } = {},
+) => ev(SYS.member, author, t, { action: 'add', user, role, ...extra });
+export const setRole = (author: string, t: number, user: string, role: Role) =>
+  ev(SYS.member, author, t, { action: 'role', user, role });
 export const removeMember = (author: string, t: number, user: string, cutoff: Record<string, number> = {}) =>
   ev(SYS.member, author, t, { action: 'remove', user, cutoff });
-export const invite = (author: string, t: number, inviteId: string, role: Role, over: Partial<ControlFields[typeof SYS.invite]> = {}) =>
-  ev(SYS.invite, author, t, { inviteId, role, expiresAt: WALL + t + DAY, maxUses: 1, secretHash: 'h', approval: 'required', ...over });
-export const epoch = (author: string, t: number, scope: string, n: number, keyId: string) => ev(SYS.epoch, author, t, { scope, epoch: n, keyId });
+export const invite = (
+  author: string,
+  t: number,
+  inviteId: string,
+  role: Role,
+  over: Partial<ControlFields[typeof SYS.invite]> = {},
+) =>
+  ev(SYS.invite, author, t, {
+    inviteId,
+    role,
+    expiresAt: WALL + t + DAY,
+    maxUses: 1,
+    secretHash: 'h',
+    approval: 'required',
+    ...over,
+  });
+export const epoch = (author: string, t: number, scope: string, n: number, keyId: string) =>
+  ev(SYS.epoch, author, t, { scope, epoch: n, keyId });
 
 /** A Space where device A (user A) is Owner, and B (Editor), C (Viewer) and D (Editor) joined as one-device users. */
 export function basicSpace(): { auth: Authority; events: ControlEvent[] } {

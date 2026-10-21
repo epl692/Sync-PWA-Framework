@@ -31,9 +31,18 @@ function build(specs: Spec[]): ControlEvent[] {
   const mk = (type: string, author: string, t: number, fields: unknown): ControlEvent => {
     const seq = (seqs.get(author) ?? 0) + 1;
     seqs.set(author, seq);
-    return { id: `${author}:${seq}`, type: type as never, clock: formatClock(WALL + t, 0, author), author, seq, fields: fields as never };
+    return {
+      id: `${author}:${seq}`,
+      type: type as never,
+      clock: formatClock(WALL + t, 0, author),
+      author,
+      seq,
+      fields: fields as never,
+    };
   };
-  const out: ControlEvent[] = [mk(SYS.genesis, 'A', 1, { owner: { user: 'A', device: 'A', ...key('A'), binding }, nonce: 'n' })];
+  const out: ControlEvent[] = [
+    mk(SYS.genesis, 'A', 1, { owner: { user: 'A', device: 'A', ...key('A'), binding }, nonce: 'n' }),
+  ];
   // everyone gets a device and a base role from A so there is something to fight over
   USERS.slice(1).forEach((u, i) => {
     out.push(mk(SYS.device, 'A', 2 + i, { user: u, device: u, ...key(u), binding }));
@@ -48,7 +57,9 @@ function build(specs: Spec[]): ControlEvent[] {
         out.push(mk(SYS.member, author, s.t, { action: 'role', user: target, role }));
         break;
       case 1:
-        out.push(mk(SYS.member, author, s.t, { action: 'remove', user: target, cutoff: { [target]: s.extra * 3 } }));
+        out.push(
+          mk(SYS.member, author, s.t, { action: 'remove', user: target, cutoff: { [target]: s.extra * 3 } }),
+        );
         break;
       case 2:
         out.push(mk(SYS.member, author, s.t, { action: 'add', user: target, role }));
@@ -57,22 +68,60 @@ function build(specs: Spec[]): ControlEvent[] {
         out.push(mk(SYS.deviceRevoke, author, s.t, { device: target, cutoff: s.extra }));
         break;
       case 4:
-        out.push(mk(SYS.device, author, s.t, { user: target, device: `${target}${s.extra}`, ...key(target), binding }));
+        out.push(
+          mk(SYS.device, author, s.t, {
+            user: target,
+            device: `${target}${s.extra}`,
+            ...key(target),
+            binding,
+          }),
+        );
         break;
       case 5:
-        out.push(mk(SYS.invite, author, s.t, { inviteId: `i${s.extra}`, role, expiresAt: WALL + s.t + 5000, maxUses: 1 + (s.extra % 2), secretHash: 'h', approval: 'required' }));
+        out.push(
+          mk(SYS.invite, author, s.t, {
+            inviteId: `i${s.extra}`,
+            role,
+            expiresAt: WALL + s.t + 5000,
+            maxUses: 1 + (s.extra % 2),
+            secretHash: 'h',
+            approval: 'required',
+          }),
+        );
         break;
       case 6:
         out.push(mk(SYS.member, author, s.t, { action: 'add', user: target, role, inviteId: `i${s.extra}` }));
         break;
       case 7:
-        out.push(mk(SYS.epoch, author, s.t, { scope: s.extra % 2 ? SPACE : SHARE, epoch: s.extra, keyId: HEX[s.extra % 3]! }));
+        out.push(
+          mk(SYS.epoch, author, s.t, {
+            scope: s.extra % 2 ? SPACE : SHARE,
+            epoch: s.extra,
+            keyId: HEX[s.extra % 3]!,
+          }),
+        );
         break;
       case 8:
-        out.push(mk(SYS.share, author, s.t, { shareId: SHARE, obj: `o${s.extra % 2}`, members: [{ user: author, role: 'owner' }, { user: target, role }] }));
+        out.push(
+          mk(SYS.share, author, s.t, {
+            shareId: SHARE,
+            obj: `o${s.extra % 2}`,
+            members: [
+              { user: author, role: 'owner' },
+              { user: target, role },
+            ],
+          }),
+        );
         break;
       default:
-        out.push(mk(SYS.shareMember, author, s.t, { shareId: SHARE, action: s.extra % 3 === 0 ? 'remove' : s.extra % 3 === 1 ? 'add' : 'role', user: target, role }));
+        out.push(
+          mk(SYS.shareMember, author, s.t, {
+            shareId: SHARE,
+            action: s.extra % 3 === 0 ? 'remove' : s.extra % 3 === 1 ? 'add' : 'role',
+            user: target,
+            role,
+          }),
+        );
     }
   }
   return out;

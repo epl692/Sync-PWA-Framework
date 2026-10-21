@@ -15,7 +15,10 @@ describe('conflicting membership changes', () => {
     const { auth, events } = twoOwners();
     const aRemovesB = removeMember('A', 20, 'B', { B: 50 });
     const bRemovesA = removeMember('B', 21, 'A', { A: 50 });
-    for (const order of [[aRemovesB, bRemovesA], [bRemovesA, aRemovesB]]) {
+    for (const order of [
+      [aRemovesB, bRemovesA],
+      [bRemovesA, aRemovesB],
+    ]) {
       const peer = new Authority(SPACE);
       for (const e of [...events, ...order]) peer.add(e);
       expect(peer.currentRole('A')).toBe('owner');

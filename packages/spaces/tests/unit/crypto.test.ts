@@ -25,7 +25,13 @@ describe('known answers', () => {
   it('Ed25519 (RFC 8032 test 1): signature is exactly the published one and verifies', async () => {
     const seed = unhex('9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60');
     const pub = unhex('d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a');
-    const key = await subtle.importKey('jwk', { kty: 'OKP', crv: 'Ed25519', d: b64urlEncode(seed), x: b64urlEncode(pub) }, { name: 'Ed25519' }, false, ['sign']);
+    const key = await subtle.importKey(
+      'jwk',
+      { kty: 'OKP', crv: 'Ed25519', d: b64urlEncode(seed), x: b64urlEncode(pub) },
+      { name: 'Ed25519' },
+      false,
+      ['sign'],
+    );
     const sig = await signBytes(key, new Uint8Array());
     expect(hex(sig)).toBe(
       'e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b',
@@ -37,13 +43,28 @@ describe('known answers', () => {
     const alicePriv = unhex('77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a');
     const alicePub = unhex('8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a');
     const bobPub = unhex('de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f');
-    const key = await subtle.importKey('jwk', { kty: 'OKP', crv: 'X25519', d: b64urlEncode(alicePriv), x: b64urlEncode(alicePub) }, { name: 'X25519' }, false, ['deriveBits']);
-    expect(hex(await deriveShared(key, bobPub))).toBe('4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742');
+    const key = await subtle.importKey(
+      'jwk',
+      { kty: 'OKP', crv: 'X25519', d: b64urlEncode(alicePriv), x: b64urlEncode(alicePub) },
+      { name: 'X25519' },
+      false,
+      ['deriveBits'],
+    );
+    expect(hex(await deriveShared(key, bobPub))).toBe(
+      '4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742',
+    );
   });
 
   it('HKDF-SHA-256 (RFC 5869 test case 1)', async () => {
-    const okm = await hkdf(new Uint8Array(22).fill(0x0b), unhex('000102030405060708090a0b0c'), unhex('f0f1f2f3f4f5f6f7f8f9'), 42);
-    expect(hex(okm)).toBe('3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865');
+    const okm = await hkdf(
+      new Uint8Array(22).fill(0x0b),
+      unhex('000102030405060708090a0b0c'),
+      unhex('f0f1f2f3f4f5f6f7f8f9'),
+      42,
+    );
+    expect(hex(okm)).toBe(
+      '3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865',
+    );
   });
 
   it('AES-256-GCM matches an independent implementation (node:crypto), including AAD and tag layout', async () => {
@@ -53,7 +74,11 @@ describe('known answers', () => {
     const pt = utf8.encode('attack at dawn');
     const c = createCipheriv('aes-256-gcm', key, nonce);
     c.setAAD(aad);
-    const expected = concat(new Uint8Array(c.update(pt)), new Uint8Array(c.final()), new Uint8Array(c.getAuthTag()));
+    const expected = concat(
+      new Uint8Array(c.update(pt)),
+      new Uint8Array(c.final()),
+      new Uint8Array(c.getAuthTag()),
+    );
     const sealed = await aesSeal(await importAesKey(key), nonce, pt, aad);
     expect(hex(sealed)).toBe(hex(expected));
     expect(await aesOpen(await importAesKey(key), nonce, sealed, aad)).toEqual(pt);
@@ -65,9 +90,17 @@ describe('known answers', () => {
     expect(await deviceIdFromSignPub(pub)).toBe(expected);
     expect(expected).toHaveLength(26);
     const nonce = new Uint8Array(16).fill(7);
-    const space = base32(new Uint8Array(createHash('sha256').update(concat(utf8.encode('space/1'), pub, nonce)).digest()).slice(0, 16));
+    const space = base32(
+      new Uint8Array(
+        createHash('sha256')
+          .update(concat(utf8.encode('space/1'), pub, nonce))
+          .digest(),
+      ).slice(0, 16),
+    );
     expect(await spaceIdFor(pub, nonce)).toBe(space);
-    expect(await keyIdOf(new Uint8Array(32))).toEqual(new Uint8Array(createHash('sha256').update(new Uint8Array(32)).digest()).slice(0, 8));
+    expect(await keyIdOf(new Uint8Array(32))).toEqual(
+      new Uint8Array(createHash('sha256').update(new Uint8Array(32)).digest()).slice(0, 8),
+    );
   });
 });
 
@@ -135,16 +168,24 @@ describe('key grants', () => {
   it('is unreadable for another device, a wrong recipient ID, or a modified item', async () => {
     const { agree, raw, keyId } = await setup();
     const other = await generateAgreeKeyPair();
-    const grant = await wrapKeys(scope, { deviceId: 'DEVICE1', agreePub: agree.publicRaw }, [{ epoch: 0, keyId, raw }]);
+    const grant = await wrapKeys(scope, { deviceId: 'DEVICE1', agreePub: agree.publicRaw }, [
+      { epoch: 0, keyId, raw },
+    ]);
     expect(await unwrapKeys(other.privateKey, 'DEVICE1', grant)).toEqual([]);
     expect(await unwrapKeys(agree.privateKey, 'DEVICE2', grant)).toEqual([]);
-    expect(await unwrapKeys(agree.privateKey, 'DEVICE1', { ...grant, items: [{ ...grant.items[0]!, epoch: 5 }] })).toEqual([]);
-    expect(await unwrapKeys(agree.privateKey, 'DEVICE1', { ...grant, scope: base32(new Uint8Array(16).fill(2)) })).toEqual([]);
+    expect(
+      await unwrapKeys(agree.privateKey, 'DEVICE1', { ...grant, items: [{ ...grant.items[0]!, epoch: 5 }] }),
+    ).toEqual([]);
+    expect(
+      await unwrapKeys(agree.privateKey, 'DEVICE1', { ...grant, scope: base32(new Uint8Array(16).fill(2)) }),
+    ).toEqual([]);
   });
 
   it('skips an item whose key does not match its keyId', async () => {
     const { agree, raw } = await setup();
-    const grant = await wrapKeys(scope, { deviceId: 'DEVICE1', agreePub: agree.publicRaw }, [{ epoch: 0, keyId: '0000000000000000', raw }]);
+    const grant = await wrapKeys(scope, { deviceId: 'DEVICE1', agreePub: agree.publicRaw }, [
+      { epoch: 0, keyId: '0000000000000000', raw },
+    ]);
     expect(await unwrapKeys(agree.privateKey, 'DEVICE1', grant)).toEqual([]);
   });
 });

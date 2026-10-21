@@ -6,7 +6,7 @@
  */
 
 import type { SyncCore, SyncableObject, ObjectId } from '../../001-sync-core/contracts/public-api';
-import type { IdentityProvider, UserSession, Role, SpaceId, UserId, DeviceId, InviteSpec, InviteArtifact, JoinResult, JoinRequestView } from './identity-provider';
+import type { IdentityProvider, UserSession, Role, SpaceId, UserId, DeviceId, InviteSpec, InviteArtifact, JoinResult, JoinRequestView, DevicePublic } from './identity-provider';
 
 export interface SpaceInfo {
   id: SpaceId;
@@ -44,8 +44,11 @@ export interface SpacesConfig {
   provider: IdentityProvider;
   /** IndexedDB name for keys. Default "sync-keys". */
   keyDb?: string;
-  /** Join policy for new members. Default 'all' history. */
-  joinHistory?: 'all' | 'from-join';
+  /** Called for a join that needs approval (default: refuse). */
+  approveJoin?: (req: JoinRequestView) => boolean | Promise<boolean>;
+  /** Called before a new device of this user is linked (default: refuse). Show `sas`, the words the new device also shows. */
+  approveLink?: (device: DevicePublic, sas: string) => boolean | Promise<boolean>;
+  rotationGraceMs?: number;
   /** Auto-rotate and invite defaults. */
   limits?: { maxInviteDays?: number; maxParkedPerAuthor?: number };
 }
@@ -86,6 +89,6 @@ export interface Spaces {
 }
 
 export declare function installSpaces(config: SpacesConfig): Promise<Spaces>;
-/** Registers codecs (aes-gcm-space/1, grant/1), signer, validators, sealer, compaction pin, channel. Throws if called twice on one core. */
+/** Registers the codec (aes-gcm-space/1), signer, validators, snapshot guard, compaction pin and the identity channel. Prefer `openSecureCore`, which also creates the device keys and gives the core the matching device ID. */
 
 export type { SyncableObject };

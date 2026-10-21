@@ -18,9 +18,16 @@ export interface KeyPairInfo {
   publicRaw: Uint8Array;
 }
 
-async function pair(alg: 'Ed25519' | 'X25519', usages: KeyUsage[], extractable: boolean): Promise<KeyPairInfo> {
+async function pair(
+  alg: 'Ed25519' | 'X25519',
+  usages: KeyUsage[],
+  extractable: boolean,
+): Promise<KeyPairInfo> {
   const kp = (await subtle().generateKey({ name: alg }, extractable, usages)) as CryptoKeyPair;
-  return { privateKey: kp.privateKey, publicRaw: new Uint8Array(await subtle().exportKey('raw', kp.publicKey)) };
+  return {
+    privateKey: kp.privateKey,
+    publicRaw: new Uint8Array(await subtle().exportKey('raw', kp.publicKey)),
+  };
 }
 
 /** Private keys are non-extractable unless a test asks otherwise. */
@@ -45,7 +52,11 @@ function importVerifyKey(publicRaw: Uint8Array): Promise<CryptoKey> {
 }
 
 /** False for any bad key, bad length or bad signature. Never throws. */
-export async function verifySignature(publicRaw: Uint8Array, sig: Uint8Array, bytes: Uint8Array): Promise<boolean> {
+export async function verifySignature(
+  publicRaw: Uint8Array,
+  sig: Uint8Array,
+  bytes: Uint8Array,
+): Promise<boolean> {
   if (publicRaw.byteLength !== 32 || sig.byteLength !== SIGNATURE_BYTES) return false;
   try {
     return await subtle().verify({ name: 'Ed25519' }, await importVerifyKey(publicRaw), bs(sig), bs(bytes));
@@ -62,9 +73,20 @@ export async function deriveShared(privateKey: CryptoKey, peerPublicRaw: Uint8Ar
   return bits;
 }
 
-export async function hkdf(ikm: Uint8Array, salt: Uint8Array, info: Uint8Array, length = 32): Promise<Uint8Array> {
+export async function hkdf(
+  ikm: Uint8Array,
+  salt: Uint8Array,
+  info: Uint8Array,
+  length = 32,
+): Promise<Uint8Array> {
   const base = await subtle().importKey('raw', bs(ikm), 'HKDF', false, ['deriveBits']);
-  return new Uint8Array(await subtle().deriveBits({ name: 'HKDF', hash: 'SHA-256', salt: bs(salt), info: bs(info) }, base, length * 8));
+  return new Uint8Array(
+    await subtle().deriveBits(
+      { name: 'HKDF', hash: 'SHA-256', salt: bs(salt), info: bs(info) },
+      base,
+      length * 8,
+    ),
+  );
 }
 
 export function importAesKey(raw: Uint8Array, extractable = false): Promise<CryptoKey> {
@@ -72,18 +94,43 @@ export function importAesKey(raw: Uint8Array, extractable = false): Promise<Cryp
 }
 
 export async function generateAesKey(extractable = false): Promise<CryptoKey> {
-  return (await subtle().generateKey({ name: 'AES-GCM', length: 256 }, extractable, ['encrypt', 'decrypt'])) as CryptoKey;
+  return (await subtle().generateKey({ name: 'AES-GCM', length: 256 }, extractable, [
+    'encrypt',
+    'decrypt',
+  ])) as CryptoKey;
 }
 
 /** AES-256-GCM; the 16-byte tag is appended to the ciphertext. */
-export async function aesSeal(key: CryptoKey, nonce: Uint8Array, plaintext: Uint8Array, aad: Uint8Array): Promise<Uint8Array> {
-  return new Uint8Array(await subtle().encrypt({ name: 'AES-GCM', iv: bs(nonce), additionalData: bs(aad), tagLength: 128 }, key, bs(plaintext)));
+export async function aesSeal(
+  key: CryptoKey,
+  nonce: Uint8Array,
+  plaintext: Uint8Array,
+  aad: Uint8Array,
+): Promise<Uint8Array> {
+  return new Uint8Array(
+    await subtle().encrypt(
+      { name: 'AES-GCM', iv: bs(nonce), additionalData: bs(aad), tagLength: 128 },
+      key,
+      bs(plaintext),
+    ),
+  );
 }
 
 /** Null on any failure (wrong key, tampered data or AAD). */
-export async function aesOpen(key: CryptoKey, nonce: Uint8Array, ciphertext: Uint8Array, aad: Uint8Array): Promise<Uint8Array | null> {
+export async function aesOpen(
+  key: CryptoKey,
+  nonce: Uint8Array,
+  ciphertext: Uint8Array,
+  aad: Uint8Array,
+): Promise<Uint8Array | null> {
   try {
-    return new Uint8Array(await subtle().decrypt({ name: 'AES-GCM', iv: bs(nonce), additionalData: bs(aad), tagLength: 128 }, key, bs(ciphertext)));
+    return new Uint8Array(
+      await subtle().decrypt(
+        { name: 'AES-GCM', iv: bs(nonce), additionalData: bs(aad), tagLength: 128 },
+        key,
+        bs(ciphertext),
+      ),
+    );
   } catch {
     return null;
   }

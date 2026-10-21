@@ -1,7 +1,13 @@
 /** The local-only `sync-keys` database (research R-16). Never synced, snapshotted or exported. */
 
 export type KeyStoreName = 'device' | 'epoch-keys' | 'counters' | 'invites-local' | 'spaces';
-export const KEY_STORES: readonly KeyStoreName[] = ['device', 'epoch-keys', 'counters', 'invites-local', 'spaces'];
+export const KEY_STORES: readonly KeyStoreName[] = [
+  'device',
+  'epoch-keys',
+  'counters',
+  'invites-local',
+  'spaces',
+];
 
 export interface KeyDb {
   get<T>(store: KeyStoreName, key: string): Promise<T | undefined>;
@@ -50,7 +56,8 @@ export async function indexedDbKeyDb(opts: IndexedDbKeyDbOptions = {}): Promise<
   if (!factory) throw new Error('IndexedDB is not available');
   const open = factory.open(opts.name ?? 'sync-keys', 1);
   open.onupgradeneeded = () => {
-    for (const s of KEY_STORES) if (!open.result.objectStoreNames.contains(s)) open.result.createObjectStore(s);
+    for (const s of KEY_STORES)
+      if (!open.result.objectStoreNames.contains(s)) open.result.createObjectStore(s);
   };
   const db = await req(open);
   const store = (s: KeyStoreName, mode: IDBTransactionMode) => db.transaction(s, mode).objectStore(s);

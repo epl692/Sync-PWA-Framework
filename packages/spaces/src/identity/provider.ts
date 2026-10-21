@@ -28,6 +28,7 @@ export interface DeviceBinding {
 
 /** This install's device. Private keys are never exposed; the provider can only use them. */
 export interface LocalDevice extends DevicePublic {
+  /** Signs only messages that begin with "sync-binding/" (device bindings). Anything else is refused, so a provider cannot forge packets. */
   sign(bytes: Uint8Array): Promise<Uint8Array>;
   /** X25519 shared secret with a peer public key (for sealing handshake messages). */
   deriveShared(peerAgreePub: Uint8Array): Promise<Uint8Array>;
@@ -70,7 +71,15 @@ export interface JoinRequestView {
 }
 
 export type InviteStatus =
-  | { ok: true; space: string; role: Role; approval: 'required' | 'auto'; expiresAt: number; secretHash: Uint8Array; usesLeft: number }
+  | {
+      ok: true;
+      space: string;
+      role: Role;
+      approval: 'required' | 'auto';
+      expiresAt: number;
+      secretHash: Uint8Array;
+      usesLeft: number;
+    }
   | { ok: false; reason: 'unknown' | 'expired' | 'used-up' | 'revoked' };
 
 export interface JoinerRequest {
@@ -97,7 +106,10 @@ export interface LinkGrantData {
 }
 
 export class JoinDeniedError extends Error {
-  constructor(readonly reason: 'expired' | 'used-up' | 'revoked' | 'declined' | 'bad-proof' | 'unknown' | 'replayed' | 'timeout') {
+  constructor(
+    readonly reason:
+      'expired' | 'used-up' | 'revoked' | 'declined' | 'bad-proof' | 'unknown' | 'replayed' | 'timeout',
+  ) {
     super(`join denied: ${reason}`);
     this.name = 'JoinDeniedError';
   }
@@ -117,16 +129,30 @@ export interface ProviderHost {
   now(): number;
   random(bytes: number): Uint8Array;
   /** Local-only storage for invite secrets and replay nonces (never synced). */
-  secrets: { get(inviteId: string): Promise<InviteSecret | undefined>; put(inviteId: string, v: InviteSecret): Promise<void> };
+  secrets: {
+    get(inviteId: string): Promise<InviteSecret | undefined>;
+    put(inviteId: string, v: InviteSecret): Promise<void>;
+  };
   /** Small persistent local key-value store for the provider's own state (for example its device binding). Never synced. */
-  store: { get(key: string): Promise<Uint8Array | undefined>; put(key: string, value: Uint8Array): Promise<void> };
+  store: {
+    get(key: string): Promise<Uint8Array | undefined>;
+    put(key: string, value: Uint8Array): Promise<void>;
+  };
   /** Ask the signed-in human to approve a join request. Resolves false on decline or timeout. */
   approve(req: JoinRequestView): Promise<boolean>;
   /** Ask whether a new device may be linked to this user (shown with a short authentication string). */
   approveLink(device: DevicePublic, sas: string): Promise<boolean>;
 
   // Owner side
-  registerInvite(spec: { space: string; inviteId: string; role: Role; expiresAt: number; maxUses: number; secretHash: Uint8Array; approval: 'required' | 'auto' }): Promise<void>;
+  registerInvite(spec: {
+    space: string;
+    inviteId: string;
+    role: Role;
+    expiresAt: number;
+    maxUses: number;
+    secretHash: Uint8Array;
+    approval: 'required' | 'auto';
+  }): Promise<void>;
   revokeInviteRecord(space: string, inviteId: string): Promise<void>;
   inviteStatus(space: string, inviteId: string): Promise<InviteStatus>;
   /** Write the joiner's device and membership, rotate if needed, and return the keys to deliver. */
@@ -161,7 +187,12 @@ export interface IdentityProvider {
    * validators, so it must also never throw: unknown input is simply `false`.
    * `known` are the user's devices already accepted in the Space, so chain-style providers can check the issuer.
    */
-  verifyBinding(user: string, device: DevicePublic, binding: DeviceBinding, known: ReadonlyArray<DevicePublic>): Promise<boolean>;
+  verifyBinding(
+    user: string,
+    device: DevicePublic,
+    binding: DeviceBinding,
+    known: ReadonlyArray<DevicePublic>,
+  ): Promise<boolean>;
 
   /** Produce evidence for this install's own device when it becomes a user's first device or is linked. */
   issueBinding(session: UserSession, device: DevicePublic): Promise<DeviceBinding>;
@@ -170,13 +201,20 @@ export interface IdentityProvider {
   /** On the existing device: returns the code to show (QR or text) and a promise that resolves once the new device is linked. */
   beginLink(session: UserSession): Promise<{ code: string; done: Promise<{ device: string }> }>;
   /** On the new device: consume the code and become a bound device of that user. */
-  completeLink(code: string): Promise<UserSession>;
+  completeLink(
+    code: string,
+    opts?: { timeoutMs?: number; onSas?: (sas: string) => void },
+  ): Promise<UserSession>;
 
   // ---- invites (User Story 3) ----
   createInvite(session: UserSession, spec: InviteSpec): Promise<InviteArtifact>;
   revokeInvite(session: UserSession, space: string, inviteId: string): Promise<void>;
   /** Joiner side: consume an artifact (link or scanned QR) and run the handshake. Rejects with JoinDeniedError. */
-  acceptInvite(session: UserSession, artifact: string, opts?: { timeoutMs?: number; onSas?: (sas: string) => void }): Promise<{ space: string; role: Role }>;
+  acceptInvite(
+    session: UserSession,
+    artifact: string,
+    opts?: { timeoutMs?: number; onSas?: (sas: string) => void },
+  ): Promise<{ space: string; role: Role }>;
 
   /** Provider-side effects of revoking a device (for example telling an org directory). May be a no-op. */
   onDeviceRevoked?(user: string, device: string): Promise<void>;

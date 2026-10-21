@@ -9,9 +9,15 @@ describe('shares and compaction', () => {
   it('keeps a share’s packets (and all control events) out of snapshots; ordinary objects are still compacted', async () => {
     const f = await buildFamily();
     const plain = await f.editor.core.create(f.space.id, 'note', { text: 'ordinary' });
-    const { object } = await f.editor.spaces.createInShare(f.space.id, 'gift', { idea: 'private' }, [{ user: f.owner.spaces.session()!.user, role: 'editor' }]);
+    const { object } = await f.editor.spaces.createInShare(f.space.id, 'gift', { idea: 'private' }, [
+      { user: f.owner.spaces.session()!.user, role: 'editor' },
+    ]);
     await f.editor.core.update(object.id, { idea: 'private v2' });
-    await waitFor(async () => (await f.owner.core.get(object.id)) !== undefined, 12_000, 'owner in the share reads it');
+    await waitFor(
+      async () => (await f.owner.core.get(object.id)) !== undefined,
+      12_000,
+      'owner in the share reads it',
+    );
     f.g.clock.advance(40 * DAY);
 
     const r = await f.editor.core.compact();

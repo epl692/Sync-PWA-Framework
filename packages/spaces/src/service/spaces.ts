@@ -35,10 +35,18 @@ import {
 } from '../identity/provider';
 import type { Keystore } from '../keystore/keystore';
 import { createSpacesValidator, type RejectCode } from '../validators/spacesValidator';
-import { NotAuthorizedError, type MemberInfo, type ShareInfo, type SpaceInfo, type Spaces, type SpacesOptions } from './api';
+import {
+  NotAuthorizedError,
+  type MemberInfo,
+  type ShareInfo,
+  type SpaceInfo,
+  type Spaces,
+  type SpacesOptions,
+} from './api';
 import type { SecurityEvent } from './events';
 import { createKeyAccess } from './keyAccess';
 
+const BINDING_TAG = Array.from(new TextEncoder().encode('sync-binding/'));
 const FLIP_CODES = new Set<RejectCode>(['role', 'wrong-scope', 'revoked', 'beyond-cutoff']);
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -47,7 +55,8 @@ export interface ServiceDeps extends SpacesOptions {
   keystore: Keystore;
 }
 
-const maxSeq = (held: Record<string, Array<[number, number]>>, device: string): number => (held[device] ?? []).reduce((m, [, hi]) => Math.max(m, hi), 0);
+const maxSeq = (held: Record<string, Array<[number, number]>>, device: string): number =>
+  (held[device] ?? []).reduce((m, [, hi]) => Math.max(m, hi), 0);
 
 export class SpacesService implements Spaces {
   readonly state = 'ready' as const;
@@ -66,6 +75,8 @@ export class SpacesService implements Spaces {
   private closed = false;
   private tail: Promise<unknown> = Promise.resolve();
   private pendingRotations = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Scopes this device is rotating right now; ordinary writes in them wait for the new key. */
+  private readonly rotating = new Map<string, Promise<void>>();
 
   constructor(private readonly d: ServiceDeps) {
     this.core = d.core;
@@ -79,7 +90,12 @@ export class SpacesService implements Spaces {
   // ---- setup ----
 
   async start(): Promise<void> {
-    const keys = createKeyAccess({ keystore: this.keystore, hub: this.hub, onKeyWornOut: (scope) => this.enqueue(() => this.rotateScope(scope, 'key-exhausted')) });
+    const keys = createKeyAccess({
+      keystore: this.keystore,
+      hub: this.hub,
+      rotationGate: (scope) => this.rotating.get(scope),
+      onKeyWornOut: (scope) => this.enqueue(() => this.rotateScope(scope, 'key-exhausted')),
+    });
     this.hub.onControl = (c) => this.onControl(c);
     this.hub.onGrant = (space, ev, local) => {
       if (!local) this.enqueue(() => this.handleGrant(space, ev));
@@ -116,8 +132,17 @@ export class SpacesService implements Spaces {
         },
       }),
     );
-    this.core.registerSnapshotGuard(createSnapshotGuard({ keys, keystore: this.keystore, authorities: this.hub, settle: () => this.idle() }));
-    this.core.registerCompactionPin((type, obj) => type.startsWith('$sys.') || this.hub.shareOfObjAnywhere(obj) !== undefined);
+    this.core.registerSnapshotGuard(
+      createSnapshotGuard({
+        keys,
+        keystore: this.keystore,
+        authorities: this.hub,
+        settle: () => this.idle(),
+      }),
+    );
+    this.core.registerCompactionPin(
+      (type, obj) => type.startsWith('$sys.') || this.hub.shareOfObjAnywhere(obj) !== undefined,
+    );
 
     await this.provider.init(this.host());
     const known = await this.keystore.spaces();
@@ -131,7 +156,10 @@ export class SpacesService implements Spaces {
   }
 
   private fail(e: unknown): void {
-    this.events.emit({ kind: 'security:unsupported', reason: `background task failed: ${(e as Error)?.message ?? e}` });
+    this.events.emit({
+      kind: 'security:unsupported',
+      reason: `background task failed: ${(e as Error)?.message ?? e}`,
+    });
   }
 
   idle(): Promise<void> {
@@ -178,7 +206,11 @@ export class SpacesService implements Spaces {
   session(): UserSession | undefined {
     const d = this.keystore.device();
     if (!d?.userId) return undefined;
-    return { user: d.userId, displayName: d.displayName, device: { deviceId: d.deviceId, signPub: d.signPub, agreePub: d.agreePub } };
+    return {
+      user: d.userId,
+      displayName: d.displayName,
+      device: { deviceId: d.deviceId, signPub: d.signPub, agreePub: d.agreePub },
+    };
   }
 
   async signUp(displayName?: string): Promise<UserSession> {
@@ -190,15 +222,19 @@ export class SpacesService implements Spaces {
   }
 
   private localDevice(): LocalDevice {
-    const self = this;
     const d = this.device();
     return {
       deviceId: d.deviceId,
       signPub: d.signPub,
       agreePub: d.agreePub,
       name: d.displayName,
-      sign: (bytes) => signBytes(self.device().signPriv, bytes),
-      deriveShared: (peer) => deriveShared(self.device().agreePriv, peer),
+      // A provider may sign device bindings, never packets: packet signing inputs are JSON, bindings start with a fixed tag.
+      sign: async (bytes) => {
+        if (!BINDING_TAG.every((b, i) => bytes[i] === b))
+          throw new Error('providers may only sign device bindings');
+        return signBytes(this.device().signPriv, bytes);
+      },
+      deriveShared: (peer) => deriveShared(this.device().agreePriv, peer),
     };
   }
 
@@ -207,7 +243,8 @@ export class SpacesService implements Spaces {
   private async requireRole(space: string, ...roles: Role[]): Promise<Authority> {
     const auth = await this.hub.ensure(space);
     const r = auth.currentRole(this.userId());
-    if (!r || !roles.includes(r)) throw new NotAuthorizedError(`${roles.join(' or ')} role required in this Space`);
+    if (!r || !roles.includes(r))
+      throw new NotAuthorizedError(`${roles.join(' or ')} role required in this Space`);
     return auth;
   }
 
@@ -224,11 +261,22 @@ export class SpacesService implements Spaces {
     await this.keystore.putEpochKey(space, 0, raw, 'self');
     await this.keystore.addSpace(space);
     await this.core.create(space, SYS.genesis, {
-      owner: { user, device: dev.deviceId, ...(session.displayName ? { displayName: session.displayName } : {}), signPub: b64urlEncode(dev.signPub), agreePub: b64urlEncode(dev.agreePub), binding: { kind: binding.kind, proof: b64urlEncode(binding.proof) } },
+      owner: {
+        user,
+        device: dev.deviceId,
+        ...(session.displayName ? { displayName: session.displayName } : {}),
+        signPub: b64urlEncode(dev.signPub),
+        agreePub: b64urlEncode(dev.agreePub),
+        binding: { kind: binding.kind, proof: b64urlEncode(binding.proof) },
+      },
       nonce: b64urlEncode(nonce),
       ...(name ? { name } : {}),
     } satisfies ControlFields[typeof SYS.genesis] as never);
-    await this.core.create(space, SYS.epoch, { scope: space, epoch: 0, keyId } satisfies ControlFields[typeof SYS.epoch] as never);
+    await this.core.create(space, SYS.epoch, {
+      scope: space,
+      epoch: 0,
+      keyId,
+    } satisfies ControlFields[typeof SYS.epoch] as never);
     this.core.channel('spaces/1').setRoutes(await this.keystore.spaces());
     return (await this.info(space))!;
   }
@@ -238,7 +286,13 @@ export class SpacesService implements Spaces {
     const me = this.device().userId;
     const role = me ? auth.currentRole(me) : null;
     if (!role) return undefined;
-    return { id: space, name: auth.genesis()?.name, myRole: role, currentEpoch: auth.currentEpoch(space)?.epoch ?? 0, memberCount: auth.members().length };
+    return {
+      id: space,
+      name: auth.genesis()?.name,
+      myRole: role,
+      currentEpoch: auth.currentEpoch(space)?.epoch ?? 0,
+      memberCount: auth.members().length,
+    };
   }
 
   async list(): Promise<SpaceInfo[]> {
@@ -261,7 +315,11 @@ export class SpacesService implements Spaces {
     }));
   }
 
-  private async write<T extends keyof ControlFields>(space: string, type: T, fields: ControlFields[T]): Promise<void> {
+  private async write<T extends keyof ControlFields>(
+    space: string,
+    type: T,
+    fields: ControlFields[T],
+  ): Promise<void> {
     await this.core.create(space, type, fields as never);
   }
 
@@ -269,7 +327,8 @@ export class SpacesService implements Spaces {
     const auth = await this.requireRole(space, 'owner');
     const cur = auth.currentRole(user);
     if (!cur) throw new NotAuthorizedError('that user is not a member');
-    if (cur === 'owner' && role !== 'owner' && auth.ownerCount() <= 1) throw new NotAuthorizedError('a Space needs at least one Owner');
+    if (cur === 'owner' && role !== 'owner' && auth.ownerCount() <= 1)
+      throw new NotAuthorizedError('a Space needs at least one Owner');
     await this.write(space, SYS.member, { action: 'role', user, role });
   }
 
@@ -285,7 +344,8 @@ export class SpacesService implements Spaces {
     const auth = await this.requireRole(space, 'owner');
     const rec = auth.user(user);
     if (!rec || !auth.currentRole(user)) throw new NotAuthorizedError('that user is not a member');
-    if (auth.currentRole(user) === 'owner' && auth.ownerCount() <= 1) throw new NotAuthorizedError('a Space needs at least one Owner');
+    if (auth.currentRole(user) === 'owner' && auth.ownerCount() <= 1)
+      throw new NotAuthorizedError('a Space needs at least one Owner');
     const cutoff = await this.cutoffFor(space, rec.devices);
     await this.write(space, SYS.member, { action: 'remove', user, cutoff });
     await this.rotateIfNeeded(space, 'member-removed');
@@ -296,7 +356,8 @@ export class SpacesService implements Spaces {
     const auth = await this.hub.ensure(space);
     const role = auth.currentRole(user);
     if (!role) throw new NotAuthorizedError('you are not a member');
-    if (role === 'owner' && auth.ownerCount() <= 1) throw new NotAuthorizedError('the last Owner cannot leave');
+    if (role === 'owner' && auth.ownerCount() <= 1)
+      throw new NotAuthorizedError('the last Owner cannot leave');
     const cutoff = await this.cutoffFor(space, auth.user(user)!.devices);
     await this.write(space, SYS.member, { action: 'remove', user, cutoff });
     // an Owner device rotates once it sees this (or this device does, if it was an Owner of several)
@@ -308,7 +369,15 @@ export class SpacesService implements Spaces {
     const { space, event } = c;
     const auth = this.hub.authority(space);
     const me = this.device().deviceId;
-    for (const i of c.newInert) if (i.author === me) this.events.emit({ kind: 'member:change-ignored', space, event: i.event, type: i.type, reason: i.reason });
+    for (const i of c.newInert)
+      if (i.author === me)
+        this.events.emit({
+          kind: 'member:change-ignored',
+          space,
+          event: i.event,
+          type: i.type,
+          reason: i.reason,
+        });
     if (event.type === SYS.member) {
       const f = event.fields as ControlFields[typeof SYS.member];
       this.events.emit({ kind: 'member:changed', space, user: f.user, role: auth.currentRole(f.user) });
@@ -339,7 +408,8 @@ export class SpacesService implements Spaces {
         const auth = this.hub.authority(space);
         const devices = auth.user(f.user)?.devices ?? [];
         if (f.action === 'remove') return devices.some((d) => gone(d, f.cutoff?.[d]));
-        if (f.action === 'role' && f.role === 'viewer') return devices.some((d) => (this.hub.maxAppliedOf(space, d)?.clock ?? '') >= clock);
+        if (f.action === 'role' && f.role === 'viewer')
+          return devices.some((d) => (this.hub.maxAppliedOf(space, d)?.clock ?? '') >= clock);
         return (this.flippable.get(space) ?? 0) > 0;
       }
       case SYS.deviceRevoke: {
@@ -435,22 +505,29 @@ export class SpacesService implements Spaces {
     if (!mine) return [];
     const scopes: string[] = [];
     if (auth.currentRole(me) === 'owner') scopes.push(space);
-    for (const s of auth.state.shares.values()) if (auth.shareCurrentRole(s.id, me) === 'owner') scopes.push(s.id);
+    for (const s of auth.state.shares.values())
+      if (auth.shareCurrentRole(s.id, me) === 'owner') scopes.push(s.id);
     return scopes.filter((scope) => auth.uncoveredShrinks(scope).length > 0);
   }
 
-  private async rotateIfNeeded(space: string, reason?: 'member-removed' | 'device-revoked' | 'invite-surplus'): Promise<void> {
+  private async rotateIfNeeded(
+    space: string,
+    reason?: 'member-removed' | 'device-revoked' | 'invite-surplus',
+  ): Promise<void> {
     const auth = await this.hub.ensure(space);
-    for (const scope of this.scopesNeedingRotation(auth, space)) await this.rotate(space, scope, reason ?? this.whyRotate(auth, scope));
+    for (const scope of this.scopesNeedingRotation(auth, space))
+      await this.rotate(space, scope, reason ?? this.whyRotate(auth, scope));
   }
 
   /** What made this scope's key stale, for the event: the latest shrinking event. */
   private whyRotate(auth: Authority, scope: string): 'member-removed' | 'device-revoked' | 'invite-surplus' {
     const latest = auth.uncoveredShrinks(scope).at(-1);
     if (!latest) return 'member-removed';
-    if (auth.state.inert.some((i) => i.event === latest.id && i.reason === 'invite-used-up')) return 'invite-surplus';
+    if (auth.state.inert.some((i) => i.event === latest.id && i.reason === 'invite-used-up'))
+      return 'invite-surplus';
     const dev = [...auth.state.devices.values()].find((d) => d.revoked?.event === latest.id);
-    if (dev && !auth.state.users.get(dev.user)?.history.some((h) => h.event === latest.id)) return 'device-revoked';
+    if (dev && !auth.state.users.get(dev.user)?.history.some((h) => h.event === latest.id))
+      return 'device-revoked';
     return 'member-removed';
   }
 
@@ -467,7 +544,26 @@ export class SpacesService implements Spaces {
   }
 
   /** New epoch: announce it, wrap the key for every device that should have it, then start using it. */
-  private async rotate(space: string, scope: string, reason: 'member-removed' | 'device-revoked' | 'invite-surplus' | 'manual' | 'key-exhausted'): Promise<void> {
+  private async rotate(
+    space: string,
+    scope: string,
+    reason: 'member-removed' | 'device-revoked' | 'invite-surplus' | 'manual' | 'key-exhausted',
+  ): Promise<void> {
+    let open!: () => void;
+    this.rotating.set(scope, new Promise<void>((resolve) => (open = resolve)));
+    try {
+      await this.rotateNow(space, scope, reason);
+    } finally {
+      this.rotating.delete(scope);
+      open();
+    }
+  }
+
+  private async rotateNow(
+    space: string,
+    scope: string,
+    reason: 'member-removed' | 'device-revoked' | 'invite-surplus' | 'manual' | 'key-exhausted',
+  ): Promise<void> {
     const auth = await this.hub.ensure(space);
     const cur = auth.currentEpoch(scope);
     const held = await this.keystore.epochs(scope);
@@ -479,9 +575,17 @@ export class SpacesService implements Spaces {
 
     // Written while the old key is still the write key, so members who have not seen the new one can read these.
     const covers = auth.shrinkEvents(scope).map((s) => s.id);
-    await this.write(space, SYS.epoch, { scope, epoch, keyId, ...(cur ? { prevKeyId: cur.keyId } : {}), covers });
+    await this.write(space, SYS.epoch, {
+      scope,
+      epoch,
+      keyId,
+      ...(cur ? { prevKeyId: cur.keyId } : {}),
+      covers,
+    });
     for (const r of recipients) {
-      const grant = await wrapKeys(scope, { deviceId: r.id, agreePub: b64urlDecode(r.agreePub) }, [{ epoch, keyId, raw }]);
+      const grant = await wrapKeys(scope, { deviceId: r.id, agreePub: b64urlDecode(r.agreePub) }, [
+        { epoch, keyId, raw },
+      ]);
       await this.write(space, SYS.keygrant, grant);
     }
     await this.keystore.putEpochKey(scope, epoch, raw, 'self');
@@ -493,7 +597,8 @@ export class SpacesService implements Spaces {
     const share = auth.share(scope);
     if (!share) return [];
     const out: DeviceRec[] = [];
-    for (const user of share.members.keys()) if (auth.shareCurrentRole(scope, user)) out.push(...auth.activeDevices(user));
+    for (const user of share.members.keys())
+      if (auth.shareCurrentRole(scope, user)) out.push(...auth.activeDevices(user));
     return out.sort((a, b) => (a.id < b.id ? -1 : 1));
   }
 
@@ -523,8 +628,11 @@ export class SpacesService implements Spaces {
     return this.provider.beginLink(this.session() ?? this.noSession());
   }
 
-  async joinAsDevice(code: string): Promise<UserSession> {
-    return this.provider.completeLink(code);
+  async joinAsDevice(
+    code: string,
+    opts?: { timeoutMs?: number; onSas?: (sas: string) => void },
+  ): Promise<UserSession> {
+    return this.provider.completeLink(code, opts);
   }
 
   async revokeDevice(device: string): Promise<void> {
@@ -547,23 +655,22 @@ export class SpacesService implements Spaces {
   // ---- the host the Identity Provider talks to ----
 
   private host(): ProviderHost {
-    const self = this;
     return {
       channel: this.core.channel('identity/1'),
-      device: () => self.localDevice(),
-      now: () => self.now(),
+      device: () => this.localDevice(),
+      now: () => this.now(),
       random: (n) => randomBytes(n),
-      secrets: { get: (id) => self.keystore.getInvite(id), put: (id, v) => self.keystore.putInvite(id, v) },
-      store: { get: (k) => self.keystore.getLocal(k), put: (k, v) => self.keystore.putLocal(k, v) },
-      approveLink: async (device, sas) => (await self.d.approveLink?.(device, sas)) ?? true,
+      secrets: { get: (id) => this.keystore.getInvite(id), put: (id, v) => this.keystore.putInvite(id, v) },
+      store: { get: (k) => this.keystore.getLocal(k), put: (k, v) => this.keystore.putLocal(k, v) },
+      approveLink: async (device, sas) => (await this.d.approveLink?.(device, sas)) ?? false,
       approve: async (req: JoinRequestView) => {
-        self.events.emit({ kind: 'join:request', req });
-        return (await self.d.approveJoin?.(req)) ?? false;
+        this.events.emit({ kind: 'join:request', req });
+        return (await this.d.approveJoin?.(req)) ?? false;
       },
 
-      async registerInvite(spec) {
-        await self.requireRole(spec.space, 'owner');
-        await self.write(spec.space, SYS.invite, {
+      registerInvite: async (spec) => {
+        await this.requireRole(spec.space, 'owner');
+        await this.write(spec.space, SYS.invite, {
           inviteId: spec.inviteId,
           role: spec.role,
           expiresAt: spec.expiresAt,
@@ -573,25 +680,33 @@ export class SpacesService implements Spaces {
         });
       },
 
-      async revokeInviteRecord(space, inviteId) {
-        await self.requireRole(space, 'owner');
-        await self.write(space, SYS.inviteRevoke, { inviteId });
+      revokeInviteRecord: async (space, inviteId) => {
+        await this.requireRole(space, 'owner');
+        await this.write(space, SYS.inviteRevoke, { inviteId });
       },
 
-      async inviteStatus(space, inviteId): Promise<InviteStatus> {
-        const inv = (await self.hub.ensure(space)).invite(inviteId);
+      inviteStatus: async (space, inviteId): Promise<InviteStatus> => {
+        const inv = (await this.hub.ensure(space)).invite(inviteId);
         if (!inv) return { ok: false, reason: 'unknown' };
         if (inv.revoked) return { ok: false, reason: 'revoked' };
-        if (self.now() >= inv.expiresAt) return { ok: false, reason: 'expired' };
+        if (this.now() >= inv.expiresAt) return { ok: false, reason: 'expired' };
         if (inv.uses.length >= inv.maxUses) return { ok: false, reason: 'used-up' };
-        return { ok: true, space, role: inv.role, approval: inv.approval, expiresAt: inv.expiresAt, secretHash: b64urlDecode(inv.secretHash), usesLeft: inv.maxUses - inv.uses.length };
+        return {
+          ok: true,
+          space,
+          role: inv.role,
+          approval: inv.approval,
+          expiresAt: inv.expiresAt,
+          secretHash: b64urlDecode(inv.secretHash),
+          usesLeft: inv.maxUses - inv.uses.length,
+        };
       },
 
-      admit: (space, inviteId, joiner) => self.serialAdmit(() => self.admit(space, inviteId, joiner)),
-      completeJoin: (data) => self.completeJoin(data),
-      currentSession: () => self.session(),
-      linkNewDevice: (device, binding) => self.linkNewDevice(device, binding),
-      completeLink: (data) => self.completeLink(data),
+      admit: (space, inviteId, joiner) => this.serialAdmit(() => this.admit(space, inviteId, joiner)),
+      completeJoin: (data) => this.completeJoin(data),
+      currentSession: () => this.session(),
+      linkNewDevice: (device, binding) => this.linkNewDevice(device, binding),
+      completeLink: (data) => this.completeLink(data),
     };
   }
 
@@ -616,7 +731,8 @@ export class SpacesService implements Spaces {
       if (inv.uses.length >= inv.maxUses) throw new JoinDeniedError('used-up');
     }
     // verify the evidence before writing anything
-    if (!(await this.provider.verifyBinding(joiner.user, joiner.device, joiner.binding, []))) throw new JoinDeniedError('bad-proof');
+    if (!(await this.provider.verifyBinding(joiner.user, joiner.device, joiner.binding, [])))
+      throw new JoinDeniedError('bad-proof');
     if (!auth.device(joiner.device.deviceId)) {
       await this.write(space, SYS.device, {
         user: joiner.user,
@@ -628,7 +744,13 @@ export class SpacesService implements Spaces {
       });
     }
     if (!already) {
-      await this.write(space, SYS.member, { action: 'add', user: joiner.user, role: inv.role, inviteId, ...(joiner.displayName ? { displayName: joiner.displayName } : {}) });
+      await this.write(space, SYS.member, {
+        action: 'add',
+        user: joiner.user,
+        role: inv.role,
+        inviteId,
+        ...(joiner.displayName ? { displayName: joiner.displayName } : {}),
+      });
     }
     const role = (await this.hub.ensure(space)).currentRole(joiner.user) ?? inv.role;
     return { space, role, grants: await this.grantsFor(space, space, joiner.device) };
@@ -648,14 +770,17 @@ export class SpacesService implements Spaces {
       const raw = await this.keystore.rawKey(scope, h.keyId);
       if (raw) items.push({ epoch: h.epoch, keyId: h.keyId, raw });
     }
-    return items.length ? [await wrapKeys(scope, { deviceId: device.deviceId, agreePub: device.agreePub }, items)] : [];
+    return items.length
+      ? [await wrapKeys(scope, { deviceId: device.deviceId, agreePub: device.agreePub }, items)]
+      : [];
   }
 
   private async storeGrants(grants: GrantBody[]): Promise<void> {
     const dev = this.device();
     for (const g of grants) {
       for (const k of await unwrapKeys(dev.agreePriv, dev.deviceId, g)) {
-        if (!(await this.keystore.hasKey(g.scope, k.keyId))) await this.keystore.putEpochKey(g.scope, k.epoch, k.raw, 'join');
+        if (!(await this.keystore.hasKey(g.scope, k.keyId)))
+          await this.keystore.putEpochKey(g.scope, k.epoch, k.raw, 'join');
       }
     }
   }
@@ -686,7 +811,10 @@ export class SpacesService implements Spaces {
         });
       }
       const grants: GrantBody[] = [];
-      const scopes = [space, ...[...auth.state.shares.keys()].filter((s) => auth.shareCurrentRole(s, session.user))];
+      const scopes = [
+        space,
+        ...[...auth.state.shares.keys()].filter((s) => auth.shareCurrentRole(s, session.user)),
+      ];
       for (const scope of scopes) grants.push(...(await this.grantsFor(space, scope, device)));
       spaces.push({ space, role, grants });
     }
@@ -714,18 +842,29 @@ export class SpacesService implements Spaces {
     if (!s) return undefined;
     const me = this.device().userId;
     const myRole = me ? (auth.shareCurrentRole(shareId, me) ?? undefined) : undefined;
-    const members = myRole ? [...s.members.keys()].map((user) => ({ user, role: auth.shareCurrentRole(shareId, user) })).filter((m): m is { user: string; role: Role } => !!m.role) : undefined;
+    const members = myRole
+      ? [...s.members.keys()]
+          .map((user) => ({ user, role: auth.shareCurrentRole(shareId, user) }))
+          .filter((m): m is { user: string; role: Role } => !!m.role)
+      : undefined;
     return { shareId, obj: s.obj, myRole, members };
   }
 
-  private async createShare(space: string, obj: string, members: Array<{ user: string; role: Role }>): Promise<ShareInfo> {
+  private async createShare(
+    space: string,
+    obj: string,
+    members: Array<{ user: string; role: Role }>,
+  ): Promise<ShareInfo> {
     const auth = await this.requireRole(space, 'owner', 'editor');
     const me = this.userId();
-    const list = members.some((m) => m.user === me) ? members.map((m) => (m.user === me ? { ...m, role: 'owner' as Role } : m)) : [...members, { user: me, role: 'owner' as Role }];
+    const list = members.some((m) => m.user === me)
+      ? members.map((m) => (m.user === me ? { ...m, role: 'owner' as Role } : m))
+      : [...members, { user: me, role: 'owner' as Role }];
     for (const m of list) {
       const spaceRole = auth.currentRole(m.user);
       if (!spaceRole) throw new NotAuthorizedError(`${m.user} is not a member of this Space`);
-      if (spaceRole === 'viewer' && m.role !== 'viewer') throw new NotAuthorizedError('a Space viewer can be at most a viewer in a share');
+      if (spaceRole === 'viewer' && m.role !== 'viewer')
+        throw new NotAuthorizedError('a Space viewer can be at most a viewer in a share');
     }
     if (auth.shareOfObj(obj)) throw new NotAuthorizedError('this object is already in a share');
     const shareId = newId();
@@ -736,7 +875,13 @@ export class SpacesService implements Spaces {
     const fresh = this.hub.authority(space);
     const myDevice = this.device().deviceId;
     for (const r of this.recipientsOf(fresh, space, shareId).filter((x) => x.id !== myDevice)) {
-      await this.write(space, SYS.keygrant, await wrapKeys(shareId, { deviceId: r.id, agreePub: b64urlDecode(r.agreePub) }, [{ epoch: 0, keyId, raw }]));
+      await this.write(
+        space,
+        SYS.keygrant,
+        await wrapKeys(shareId, { deviceId: r.id, agreePub: b64urlDecode(r.agreePub) }, [
+          { epoch: 0, keyId, raw },
+        ]),
+      );
     }
     await this.keystore.putEpochKey(shareId, 0, raw, 'self');
     return this.shareInfo(fresh, shareId)!;
@@ -748,7 +893,12 @@ export class SpacesService implements Spaces {
     return this.createShare(o.space, obj, members);
   }
 
-  async createInShare(space: string, type: string, fields: Record<string, JSONValue>, members: Array<{ user: string; role: Role }>): Promise<{ object: SyncableObject; share: ShareInfo }> {
+  async createInShare(
+    space: string,
+    type: string,
+    fields: Record<string, JSONValue>,
+    members: Array<{ user: string; role: Role }>,
+  ): Promise<{ object: SyncableObject; share: ShareInfo }> {
     const id = newId();
     const share = await this.createShare(space, id, members);
     const object = await this.core.create(space, type, fields, { id });
@@ -771,28 +921,38 @@ export class SpacesService implements Spaces {
     if (!space) throw new NotAuthorizedError('unknown share');
     const auth = await this.hub.ensure(space);
     const me = this.userId();
-    if (auth.shareCurrentRole(shareId, me) !== 'owner' && !(role === 'none' && user === me)) throw new NotAuthorizedError('only a share Owner manages its members');
+    if (auth.shareCurrentRole(shareId, me) !== 'owner' && !(role === 'none' && user === me))
+      throw new NotAuthorizedError('only a share Owner manages its members');
     const cur = auth.shareCurrentRole(shareId, user);
     if (role === 'none') {
       if (!cur) return;
-      if (cur === 'owner' && auth.shareOwnerCount(shareId) <= 1) throw new NotAuthorizedError('a share needs at least one Owner');
+      if (cur === 'owner' && auth.shareOwnerCount(shareId) <= 1)
+        throw new NotAuthorizedError('a share needs at least one Owner');
       await this.write(space, SYS.shareMember, { shareId, action: 'remove', user });
       await this.rotateIfNeeded(space, 'member-removed');
       return;
     }
     if (cur) {
       if (cur === role) return;
-      if (auth.currentRole(user) === 'viewer' && role !== 'viewer') throw new NotAuthorizedError('a Space viewer can be at most a viewer in a share');
-      if (cur === 'owner' && role !== 'owner' && auth.shareOwnerCount(shareId) <= 1) throw new NotAuthorizedError('a share needs at least one Owner');
+      if (auth.currentRole(user) === 'viewer' && role !== 'viewer')
+        throw new NotAuthorizedError('a Space viewer can be at most a viewer in a share');
+      if (cur === 'owner' && role !== 'owner' && auth.shareOwnerCount(shareId) <= 1)
+        throw new NotAuthorizedError('a share needs at least one Owner');
       await this.write(space, SYS.shareMember, { shareId, action: 'role', user, role });
       return;
     }
     const spaceRole = auth.currentRole(user);
     if (!spaceRole) throw new NotAuthorizedError('that user is not a member of the Space');
-    if (spaceRole === 'viewer' && role !== 'viewer') throw new NotAuthorizedError('a Space viewer can be at most a viewer in a share');
+    if (spaceRole === 'viewer' && role !== 'viewer')
+      throw new NotAuthorizedError('a Space viewer can be at most a viewer in a share');
     await this.write(space, SYS.shareMember, { shareId, action: 'add', user, role });
     for (const d of this.hub.authority(space).activeDevices(user)) {
-      for (const g of await this.grantsFor(space, shareId, { deviceId: d.id, signPub: b64urlDecode(d.signPub), agreePub: b64urlDecode(d.agreePub) })) await this.write(space, SYS.keygrant, g);
+      for (const g of await this.grantsFor(space, shareId, {
+        deviceId: d.id,
+        signPub: b64urlDecode(d.signPub),
+        agreePub: b64urlDecode(d.agreePub),
+      }))
+        await this.write(space, SYS.keygrant, g);
     }
   }
 }

@@ -70,7 +70,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 - [X] T023 [P] Implement suite-1 primitives, `deviceId` derivation and feature detection in `packages/spaces/src/crypto/suite.ts`, `packages/spaces/src/crypto/ids.ts` and `packages/spaces/src/crypto/support.ts`
 - [X] T024 Implement the `sync-keys` IndexedDB keystore (stores `device`, `epoch-keys`, `counters`, `authority-cache`, `verified`, `invites-local` per [data-model.md](./data-model.md)) in `packages/spaces/src/keystore/keystore.ts` (depends on T023). Auto-rotate trigger at `rotateAtPackets = 2^31`
 - [X] T025 [P] Implement key wrapping and unwrapping for grants in `packages/spaces/src/crypto/wrap.ts` (depends on T023)
-- [X] T026 Implement the `aes-gcm-space/1` codec, the exported header parser, and the `grant/1` codec in `packages/spaces/src/codec/spaceCodec.ts` and `packages/spaces/src/codec/grantCodec.ts` (depends on T024, T025)
+- [X] T026 Implement the `aes-gcm-space/1` codec, the exported header parser, in `packages/spaces/src/codec/spaceCodec.ts` (key grants are ordinary control objects, not a second codec) (depends on T024, T025)
 - [X] T027 [P] Implement the Ed25519 `PacketSigner` (`ed25519/1`, 64-byte signatures) in `packages/spaces/src/crypto/signer.ts` (depends on T023, T024)
 
 ### 2e. Authority fold and validators (tests first)
@@ -84,7 +84,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 - [X] T032 [P] Define versioned `$sys.*` schemas (`genesis`, `member`, `device`, `device-revoke`, `invite`, `invite-revoke`, `epoch`, `keygrant`, `share`, `share-member`) with validation in `packages/spaces/src/authority/types.ts`. `maxDevicesPerUser = 10`, `maxInviteDays = 30`
 - [X] T033 Implement the deterministic fold (sorted by clock, inert on failure, derived `SpaceId`; returns the list of inert events with the reason each was ignored) in `packages/spaces/src/authority/fold.ts` (depends on T032)
-- [X] T034 Implement the authority state cache with incremental recompute from the earliest changed clock, persisted in `authority-cache`, in `packages/spaces/src/authority/state.ts` (depends on T024, T033)
+- [X] T034 Implement the authority state cache with incremental recompute from the earliest changed clock, kept in memory by the hub (`packages/spaces/src/authority/hub.ts`) and rebuilt from the log (depends on T024, T033)
 - [X] T035 Implement the envelope validator, body validator and snapshot validator in `packages/spaces/src/validators/envelopeValidator.ts`, `packages/spaces/src/validators/bodyValidator.ts` and `packages/spaces/src/validators/snapshotValidator.ts`. Include a signature verdict cache (LRU, `verifiedCacheEntries = 50000`, rebuilt not trusted across versions) (depends on T026, T034)
 
 ### 2g. Identity Provider contract and test kit
@@ -164,7 +164,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 - [X] T060 [P] [US3] Implement artifact encode/decode, secret hash and proof in `packages/identity-invite/src/invite.ts`
 - [X] T061 [US3] Implement the `identity/1` handshake (`join-request`, `join-pending`, `join-grant`, `join-deny`) with ECIES sealing and 5-minute approval timeout in `packages/identity-invite/src/handshake.ts` (depends on T018, T059, T060)
 - [X] T062 [P] [US3] Implement QR render with `qrcode-generator` and `BarcodeDetector` scanning with a paste-link fallback in `packages/identity-invite/src/qr.ts`
-- [X] T063 [US3] Implement key grant writing (`$sys.keygrant` for every held epoch, `joinHistory = 'all'` default) in `packages/spaces/src/rotation/grants.ts`
+- [X] T063 [US3] Implement key grant writing (`$sys.keygrant` objects, and every held epoch in a join or link grant) in `packages/spaces/src/rotation/grants.ts`
 - [X] T064 [US3] Implement `invite()`, `revokeInvite()`, `accept()` and the `join:request` approval event, writing `$sys.invite`, `$sys.invite-revoke`, `$sys.device` and `$sys.member add` in `packages/spaces/src/service/invites.ts`
 
 **Checkpoint**: US3 works with US1 and US2.
@@ -250,7 +250,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 ## Phase 10: Polish & Cross-Cutting Concerns
 
 - [X] T085 [P] Edge-case tests in `packages/spaces/tests/integration/edge-cases.test.ts` for every spec Edge Case (quickstart S10): mutual removal, simultaneous single-use invite, backdated clock beyond cutoff, offline across rotations, photographed QR (needs approval), lost device with no other device
-- [X] T086 [P] Benchmarks in `packages/spaces/bench/rotation.bench.ts` and `packages/spaces/bench/verify.bench.ts` against the 001 reference profile: rotation for 100 devices < 2 s, ≥ 2,000 verifications/s, 10,000-packet sync ≤ 30% slower than the plaintext codec (quickstart S11)
+- [X] T086 [P] Benchmarks in `packages/spaces/bench/rotation.bench.ts` and `packages/spaces/bench/verify.bench.ts` against the 001 reference profile: rotation for 100 devices < 2 s, ≥ 2,000 verifications/s, measured against absolute bounds (see research R-18; the relative "30% slower than plaintext" goal was dropped as meaningless in memory) (quickstart S11)
 - [X] T087 [P] Add `packages/spaces/tests/vectors/` README and a test that regenerates nothing but reproduces the stored vectors byte for byte
 - [ ] T088 Update `specs/002-spaces-security-identity/research.md` R-07 and `plan.md` to say the author of an inert membership event is notified (spec FR-005), and align `contracts/authority-rules.md`
 - [ ] T089 [P] Write the compatibility note for signing, encryption and the snapshot wire change in `specs/002-spaces-security-identity/contracts/crypto-envelope.md` (verify it matches the implementation) and record deviations
