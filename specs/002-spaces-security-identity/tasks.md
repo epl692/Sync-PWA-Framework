@@ -156,7 +156,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 - [X] T055 [P] [US3] Contract test running `identityProviderContract` against the default provider in `packages/identity-invite/tests/contract/provider.test.ts`
 - [X] T056 [P] [US3] Handshake integration test in `packages/identity-invite/tests/integration/join.test.ts`: approval required by default and automatic when chosen; `join-deny` for expired, used-up, revoked, bad proof or declined; interrupted handshake writes nothing and retries cleanly; a replayed `join-request` (same `inviteId` and `nonce`) is refused and writes nothing; a joiner who is already a member gets an idempotent grant; the SAS matches on both sides
 - [X] T057 [P] [US3] Edge-case test in `packages/identity-invite/tests/integration/invite-race.test.ts`: two joiners race for a single-use invite, the earlier clock stays a member, the other becomes inert and an Owner rotates
-- [ ] T058 [P] [US3] Playwright tests `tests/e2e/invite-online.spec.ts` (relay) and `tests/e2e/invite-offline-webrtc.spec.ts` (network blocked, WebRTC manual signaling, timed under 60 s for SC-004), each checking the joiner reads existing history (all epochs) and writes per role
+- [X] T058 [P] [US3] Playwright tests `tests/e2e/invite-online.spec.ts` (relay) and `tests/e2e/invite-offline-webrtc.spec.ts` (network blocked, WebRTC manual signaling, timed under 60 s for SC-004), each checking the joiner reads existing history (all epochs) and writes per role
 
 ### Implementation for User Story 3
 
