@@ -47,6 +47,8 @@ export interface PacketRecord {
   status: 'applied' | 'parked' | 'rejected';
   reason?: string;
   obj?: string;
+  /** Body type, kept so callers can find packets by type without decoding (A-8). */
+  type?: string;
   op?: PacketBody['op'];
   fields?: string[];
   receivedAt: number;
@@ -261,7 +263,7 @@ export class Applier {
           if (status !== rec.status) {
             if (status === 'rejected') rejected++;
             if (status === 'applied') reapplied++;
-            changedRecs.push({ ...rec, status, reason, ...(status === 'applied' && body ? { obj: body.obj, op: body.op, fields: Object.keys(body.fields) } : {}) });
+            changedRecs.push({ ...rec, status, reason, ...(status === 'applied' && body ? { obj: body.obj, type: body.type, op: body.op, fields: Object.keys(body.fields) } : {}) });
           }
         }
         const cached = [...d.cache.all()].filter((o) => o.space === space);
@@ -437,6 +439,7 @@ export class Applier {
       raw,
       status: 'applied',
       obj: body.obj,
+      type: body.type,
       op: body.op,
       fields: Object.keys(body.fields),
       receivedAt: d.cfg.now(),

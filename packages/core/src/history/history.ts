@@ -12,6 +12,7 @@ import type { StorageAdapter } from '../storage/types';
 import {
   NotUndoableError,
   UNSET,
+  type DataPacketEnvelope,
   type DeviceId,
   type JSONValue,
   type ObjectId,
@@ -126,6 +127,30 @@ export class History {
     }
     if (hidden) throw new NotUndoableError('the object is deleted');
     await d.writer.update(id, restore);
+  }
+
+  /**
+   * A-8: decoded applied packets of a Space, oldest clock first. With `typePrefix`, only packets whose body type
+   * starts with it are decoded and returned (packets recorded before `type` was kept are decoded to find out).
+   */
+  async scanApplied(space: SpaceId, opts: { typePrefix?: string } = {}): Promise<Array<{ env: DataPacketEnvelope; body: PacketBody }>> {
+    const rows = await this.d.storage.transaction(['packets'], 'readonly', async (tx) => {
+      const out: PacketRecord[] = [];
+      for await (const { value } of tx.scan<PacketRecord>('packets', { index: 'bySpace', range: { gte: space, lt: `${space}\u0000` } })) {
+        if (value.status !== 'applied') continue;
+        if (opts.typePrefix !== undefined && value.type !== undefined && !value.type.startsWith(opts.typePrefix)) continue;
+        out.push(value);
+      }
+      return out;
+    });
+    rows.sort((a, b) => (a.clock < b.clock ? -1 : a.clock > b.clock ? 1 : a.id < b.id ? -1 : 1));
+    const out: Array<{ env: DataPacketEnvelope; body: PacketBody }> = [];
+    for (const rec of rows) {
+      const body = await this.bodyOf(rec);
+      if (!body || (opts.typePrefix !== undefined && !body.type.startsWith(opts.typePrefix))) continue;
+      out.push({ env: decodeEnvelope(rec.raw).env, body });
+    }
+    return out;
   }
 
   async exportSnapshot(space: SpaceId): Promise<Snapshot | undefined> {
