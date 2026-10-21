@@ -68,7 +68,7 @@ export class History {
       const { env } = decodeEnvelope(rec.raw);
       const codec = this.d.ext.codec(env.codec);
       if (!codec) return undefined;
-      const r = await codec.decode(env.body, { space: env.space, author: env.author });
+      const r = await codec.decode(env.body, { space: env.space, author: env.author, envelope: { v: env.v, id: env.id, seq: env.seq, clock: env.clock, codec: env.codec } });
       return r.ok ? r.body : undefined;
     } catch {
       return undefined;

@@ -27,6 +27,8 @@ import {
   type SpaceId,
   type SyncCore,
   type SyncableObject,
+  type DataPacketEnvelope,
+  type PacketBody,
   type UNSET,
 } from './types';
 import type { CompactionPin, PacketSigner, PacketValidator, PayloadCodec, SnapshotGuard } from './extension/types';
@@ -46,6 +48,7 @@ class CoreImpl implements SyncCore {
       manager: TransportManager;
       channels: ChannelHub;
       history: History;
+      summaries: SummaryCache;
       stopTimers: () => void;
     },
   ) {}
@@ -68,6 +71,13 @@ class CoreImpl implements SyncCore {
   }
   rebuildSpace(space: SpaceId): Promise<{ reapplied: number; rejected: number }> {
     return this.parts.applier.rebuildSpace(space);
+  }
+  onApplied(cb: (e: { env: DataPacketEnvelope; body: PacketBody; source: string }) => void): () => void {
+    return this.parts.applier.applied.on(cb);
+  }
+  async held(space: SpaceId): Promise<Record<string, Array<[number, number]>>> {
+    await this.parts.summaries.ensure(space);
+    return structuredClone(this.parts.summaries.snapshot(space)) as Record<string, Array<[number, number]>>;
   }
   channel(name: string): Channel {
     return this.parts.channels.channel(name);
@@ -234,5 +244,5 @@ export async function createSyncCore(config: Config): Promise<SyncCore> {
     timers.push(first, every);
   }
   const stopTimers = () => timers.forEach((t) => clearTimeout(t));
-  return new CoreImpl(state.deviceId, { cfg, ext, cache, queries, applier, writer, events, manager, channels, history, stopTimers });
+  return new CoreImpl(state.deviceId, { cfg, ext, cache, queries, applier, writer, events, manager, channels, history, summaries, stopTimers });
 }

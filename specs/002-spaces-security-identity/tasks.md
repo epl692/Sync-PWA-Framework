@@ -61,17 +61,17 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### 2c. Crypto, keystore, codec (tests first)
 
-- [ ] T020 [P] Known-answer and unit tests for suite-1 in `packages/spaces/tests/unit/crypto.test.ts`: Ed25519 sign/verify, X25519 + HKDF wrap/unwrap (`info = "sync-grant/1" || scope || epoch || recipientDeviceId`), AES-256-GCM, `deviceId = base32(SHA-256(signPub))[0..128 bits]`, and `unsupported` reporting when Ed25519 or X25519 is missing. Vectors live in `packages/spaces/tests/vectors/`
-- [ ] T021 [P] Keystore tests with `fake-indexeddb` in `packages/spaces/tests/unit/keystore.test.ts`: device `CryptoKey`s are non-extractable, epoch keys are stored only wrapped by the local wrapping key, a database copy without the wrapping key yields no key bytes, counters persist, and `sync-keys` is never touched by sync, snapshots or export
-- [ ] T022 [P] Codec tests in `packages/spaces/tests/unit/codec.test.ts` against [contracts/crypto-envelope.md](./contracts/crypto-envelope.md): header layout (`fmt` 0x01, `scopeId` 16 B, `epoch` u32, `keyId` 8 B, `nonce` 12 B), AAD binds envelope fields so a transplanted body fails, changed `clock` or `author` fails, key chosen by `keyId`, `missing-key` and `malformed` results, unknown `fmt` parks, and a `grant/1` round trip
+- [X] T020 [P] Known-answer and unit tests for suite-1 in `packages/spaces/tests/unit/crypto.test.ts`: Ed25519 sign/verify, X25519 + HKDF wrap/unwrap (`info = "sync-grant/1" || scope || epoch || recipientDeviceId`), AES-256-GCM, `deviceId = base32(SHA-256(signPub))[0..128 bits]`, and `unsupported` reporting when Ed25519 or X25519 is missing. Vectors live in `packages/spaces/tests/vectors/`
+- [X] T021 [P] Keystore tests with `fake-indexeddb` in `packages/spaces/tests/unit/keystore.test.ts`: device `CryptoKey`s are non-extractable, epoch keys are stored only wrapped by the local wrapping key, a database copy without the wrapping key yields no key bytes, counters persist, and `sync-keys` is never touched by sync, snapshots or export
+- [X] T022 [P] Codec tests in `packages/spaces/tests/unit/codec.test.ts` against [contracts/crypto-envelope.md](./contracts/crypto-envelope.md): header layout (`fmt` 0x01, `scopeId` 16 B, `epoch` u32, `keyId` 8 B, `nonce` 12 B), AAD binds envelope fields so a transplanted body fails, changed `clock` or `author` fails, key chosen by `keyId`, `missing-key` and `malformed` results, unknown `fmt` parks, and a `grant/1` round trip
 
 ### 2d. Crypto, keystore, codec (implementation)
 
-- [ ] T023 [P] Implement suite-1 primitives, `deviceId` derivation and feature detection in `packages/spaces/src/crypto/suite.ts`, `packages/spaces/src/crypto/ids.ts` and `packages/spaces/src/crypto/support.ts`
-- [ ] T024 Implement the `sync-keys` IndexedDB keystore (stores `device`, `epoch-keys`, `counters`, `authority-cache`, `verified`, `invites-local` per [data-model.md](./data-model.md)) in `packages/spaces/src/keystore/keystore.ts` (depends on T023). Auto-rotate trigger at `rotateAtPackets = 2^31`
-- [ ] T025 [P] Implement key wrapping and unwrapping for grants in `packages/spaces/src/crypto/wrap.ts` (depends on T023)
-- [ ] T026 Implement the `aes-gcm-space/1` codec, the exported header parser, and the `grant/1` codec in `packages/spaces/src/codec/spaceCodec.ts` and `packages/spaces/src/codec/grantCodec.ts` (depends on T024, T025)
-- [ ] T027 [P] Implement the Ed25519 `PacketSigner` (`ed25519/1`, 64-byte signatures) in `packages/spaces/src/crypto/signer.ts` (depends on T023, T024)
+- [X] T023 [P] Implement suite-1 primitives, `deviceId` derivation and feature detection in `packages/spaces/src/crypto/suite.ts`, `packages/spaces/src/crypto/ids.ts` and `packages/spaces/src/crypto/support.ts`
+- [X] T024 Implement the `sync-keys` IndexedDB keystore (stores `device`, `epoch-keys`, `counters`, `authority-cache`, `verified`, `invites-local` per [data-model.md](./data-model.md)) in `packages/spaces/src/keystore/keystore.ts` (depends on T023). Auto-rotate trigger at `rotateAtPackets = 2^31`
+- [X] T025 [P] Implement key wrapping and unwrapping for grants in `packages/spaces/src/crypto/wrap.ts` (depends on T023)
+- [X] T026 Implement the `aes-gcm-space/1` codec, the exported header parser, and the `grant/1` codec in `packages/spaces/src/codec/spaceCodec.ts` and `packages/spaces/src/codec/grantCodec.ts` (depends on T024, T025)
+- [X] T027 [P] Implement the Ed25519 `PacketSigner` (`ed25519/1`, 64-byte signatures) in `packages/spaces/src/crypto/signer.ts` (depends on T023, T024)
 
 ### 2e. Authority fold and validators (tests first)
 

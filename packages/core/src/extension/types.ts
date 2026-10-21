@@ -5,6 +5,11 @@ import type { DataPacketEnvelope, PacketBody } from '../types';
 export interface CodecContext {
   space: string;
   author: string;
+  /**
+   * The envelope this body travels in (A-9), so a codec can bind ciphertext to it as authenticated data.
+   * Always present from the core; optional so older callers and tests still type-check.
+   */
+  envelope?: { v: number; id: string; seq: number; clock: string; codec: string };
 }
 
 export type DecodeResult =

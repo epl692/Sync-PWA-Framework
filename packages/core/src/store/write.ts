@@ -2,7 +2,7 @@
 
 import { maxClock, nextAfter, type HLC } from '../clock/hlc';
 import type { Extensions } from '../extension/registry';
-import { buildEnvelope, encodeEnvelope } from '../packet/envelope';
+import { buildEnvelope, ENVELOPE_VERSION, encodeEnvelope } from '../packet/envelope';
 import { newObjectId } from '../packet/ids';
 import { StorageQuotaError } from '../storage/types';
 import type { QuotaMonitor } from '../storage/quota';
@@ -111,7 +111,7 @@ export class LocalWriter {
 
       const body: PacketBody = { obj: change.obj, op: change.op, type, schemaVersion, fields };
       const seq = state.seqCounter + 1;
-      const envBody = await codec.encode(body, { space, author: state.deviceId });
+      const envBody = await codec.encode(body, { space, author: state.deviceId, envelope: { v: ENVELOPE_VERSION, id: `${state.deviceId}:${seq}`, seq, clock, codec: codec.id } });
       let env = buildEnvelope({ author: state.deviceId, seq, space, clock, codec: codec.id, body: envBody, sig: null });
       const signer = d.ext.signer();
       if (signer) env = { ...env, sig: await signer.sign(encodeEnvelope(env), { space, author: state.deviceId }) };

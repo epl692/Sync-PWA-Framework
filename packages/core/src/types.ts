@@ -218,6 +218,10 @@ export interface SyncCore extends ExtensionRegistry {
 
   /** A-4: a named message channel for plugins. Messages are never stored by the core. */
   channel(name: string): Channel;
+  /** A-8: called synchronously after each packet is applied and committed (including parked packets applied later). */
+  onApplied(cb: (e: { env: DataPacketEnvelope; body: PacketBody; source: string }) => void): () => void;
+  /** A-8: which packets this device holds for a Space (per author, inclusive seq intervals). */
+  held(space: SpaceId): Promise<Record<string, Array<[number, number]>>>;
   /** Currently connected peers across all transports. */
   peers(): PeerSummary[];
 

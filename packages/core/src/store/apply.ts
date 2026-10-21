@@ -21,6 +21,12 @@ import { joinObjects, mergeInto, type StoredObject } from './objects';
 import { addOutbox, newOutboxEntry } from './outbox';
 import { SummaryCache, type SummaryRecord } from './summaries';
 
+const ctxOf = (env: DataPacketEnvelope) => ({
+  space: env.space,
+  author: env.author,
+  envelope: { v: env.v, id: env.id, seq: env.seq, clock: env.clock, codec: env.codec },
+});
+
 /** Device-level state persisted under meta/state in the same transaction as each local packet. */
 export interface LocalState {
   deviceId: string;
@@ -79,6 +85,8 @@ export interface ApplierDeps {
 export class Applier {
   private tail: Promise<unknown> = Promise.resolve();
   readonly accepted = new Emitter<Accepted>();
+  /** Fires after every packet that is applied and committed, including parked packets applied later (A-8). */
+  readonly applied = new Emitter<{ env: DataPacketEnvelope; body: PacketBody; source: string }>();
 
   constructor(private readonly d: ApplierDeps) {}
 
@@ -226,7 +234,7 @@ export class Applier {
                 status = 'parked';
                 reason = 'undecodable-codec';
               } else {
-                const dr = await codec.decode(env.body, { space: env.space, author: env.author });
+                const dr = await codec.decode(env.body, ctxOf(env));
                 if (dr.ok) body = dr.body;
                 else if (dr.reason === 'malformed') {
                   status = 'rejected';
@@ -300,7 +308,7 @@ export class Applier {
         const codec = d.ext.codec(env.codec);
         if (!codec) parkReason = 'undecodable-codec';
         else {
-          const dr = await codec.decode(env.body, { space: env.space, author: env.author });
+          const dr = await codec.decode(env.body, ctxOf(env));
           if (dr.ok) body = dr.body;
           else if (dr.reason === 'malformed') return this.reject(env, 'malformed body');
           else parkReason = 'undecodable-codec';
@@ -462,6 +470,7 @@ export class Applier {
     }
     void d.quota.checkSoon();
     if (!reapply) this.accepted.emit({ space: env.space, id: env.id, raw, source: local ? 'local' : source, status: 'applied' });
+    this.applied.emit({ env, body, source: local ? 'local' : source });
     return { status: 'applied', id: env.id };
   }
 }
