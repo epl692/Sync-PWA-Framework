@@ -24,6 +24,7 @@ This spec plugs into spec 001 by supplying the **encrypting payload codec** and 
 - Q: How do users/devices join? → A: Pluggable identity providers; invite link/QR is the default.
 - Q: Permission model? → A: Fixed Owner/Editor/Viewer roles only.
 - Q: Can a new member read data written before they joined? → A: Yes, joiners can read all existing history in the Space.
+- Q: Can Space Owners outside an override share read or edit it? → A: No; only the share's own members can.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -161,6 +162,7 @@ An App Developer replaces invite/QR identity with a different provider (e.g. an 
 **Override shares**
 
 - **FR-011**: The Framework MUST support per-object override shares with their own member list, roles, and key.
+- **FR-011a**: Space Owner status MUST NOT grant access to an override share. Only the share's own members and roles apply. Removing a user from the Space removes them from every override share.
 - **FR-012**: Space members outside an override share MUST still store and relay its packets without being able to decrypt them.
 
 **Identity**
