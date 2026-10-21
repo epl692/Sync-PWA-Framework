@@ -118,6 +118,15 @@ export class RelayHub {
       case 'packets':
         this.onPackets(peerId, peer, m.space, m.items);
         return;
+      case 'chan': {
+        // A-4: plugin messages (invite handshakes). Forwarded, never stored, never decoded.
+        if (!peer.spaces.size) return; // the sender must have said hello
+        for (const [otherId, other] of this.peers) {
+          if (otherId === peerId || other.dead) continue;
+          if (m.space === ANY_SPACE || other.spaces.has(m.space)) this.emit(otherId, m);
+        }
+        return;
+      }
       case 'ping':
         this.emit(peerId, { t: 'pong' });
         return;

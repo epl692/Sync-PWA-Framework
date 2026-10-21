@@ -1,6 +1,6 @@
 // Usage: node scripts/mark-tasks.mjs T001 T002 T010-T015 ...  (marks tasks done in tasks.md)
 import { readFileSync, writeFileSync } from 'node:fs';
-const file = 'specs/001-sync-core/tasks.md';
+const file = process.env.TASKS ?? 'specs/001-sync-core/tasks.md';
 let text = readFileSync(file, 'utf8');
 const ids = new Set();
 for (const arg of process.argv.slice(2)) {

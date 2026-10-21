@@ -23,11 +23,11 @@ description: "Task list for Spaces, Security & Identity (002-spaces-security-ide
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Scaffold `packages/spaces` (`@sync/spaces`) with `package.json` and `tsconfig.json`. It MUST declare no runtime `dependencies`; it imports `@sync/core` as a peer
-- [ ] T002 [P] Scaffold `packages/identity-invite` (`@sync/identity-invite`) with `package.json` and `tsconfig.json`. Its only runtime dependency is `qrcode-generator`; it imports `@sync/spaces` as a peer
-- [ ] T003 [P] Add `packages/testkit/src/spaces/index.ts` (empty exports for now) and re-export it from `packages/testkit/src/index.ts`
-- [ ] T004 [P] Add root npm scripts `test:adversarial` (`vitest run packages/spaces/tests/adversarial`) and a `bench` entry for `packages/spaces/bench` in root `package.json`
-- [ ] T005 [P] Release-surface guard test in `packages/spaces/tests/unit/release-surface.test.ts`: `@sync/spaces` has zero runtime dependencies, `@sync/identity-invite` depends only on `qrcode-generator`, and neither imports `@sync/testkit` from `src/`
+- [X] T001 Scaffold `packages/spaces` (`@sync/spaces`) with `package.json` and `tsconfig.json`. It MUST declare no runtime `dependencies`; it imports `@sync/core` as a peer
+- [X] T002 [P] Scaffold `packages/identity-invite` (`@sync/identity-invite`) with `package.json` and `tsconfig.json`. Its only runtime dependency is `qrcode-generator`; it imports `@sync/spaces` as a peer
+- [X] T003 [P] Add `packages/testkit/src/spaces/index.ts` (empty exports for now) and re-export it from `packages/testkit/src/index.ts`
+- [X] T004 [P] Add root npm scripts `test:adversarial` (`vitest run packages/spaces/tests/adversarial`) and a `bench` entry for `packages/spaces/bench` in root `package.json`
+- [X] T005 [P] Release-surface guard test in `packages/spaces/tests/unit/release-surface.test.ts`: `@sync/spaces` has zero runtime dependencies, `@sync/identity-invite` depends only on `qrcode-generator`, and neither imports `@sync/testkit` from `src/`
 
 ---
 
@@ -41,23 +41,23 @@ description: "Task list for Spaces, Security & Identity (002-spaces-security-ide
 
 See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
-- [ ] T006 [P] A-1 test: a registered `PacketSigner` output appears in `sig` for local writes, signing input is the canonical envelope with `sig: null`, and a core with no signer is unchanged, in `packages/core/tests/integration/amendments/signer.test.ts`
-- [ ] T007 [P] A-2 test: after `rebuildSpace(space)` the `stateHash` equals that of a peer which received the same packets in valid order, and a packet that now fails validation is no longer visible, in `packages/core/tests/integration/amendments/rebuild.test.ts`
-- [ ] T008 [P] A-3 test: with a `SnapshotSealer` registered, a snapshot over a recording transport contains no plaintext marker; a snapshot with a bad signature is discarded and reported; a receiver without a sealer discards the sealed snapshot and catches up by packets, in `packages/core/tests/integration/amendments/snapshot-sealed.test.ts`
-- [ ] T009 [P] A-4 test: `core.channel('x')` messages reach a peer, are never persisted by the core, and the relay forwards `chan` messages between two clients that share a Space while storing nothing of them, in `packages/core/tests/integration/amendments/channel.test.ts` and `packages/relay-server/tests/chan-forward.test.ts`
-- [ ] T010 [P] A-5 and A-6 test: a `$sys.x` object is absent from `query({})`, present for `query({ type: '$sys.x' })`, and survives `compact()` when pinned, in `packages/core/tests/integration/amendments/hidden-pinned.test.ts`
-- [ ] T011 [P] A-7 test: more than `maxParkedPerAuthor` (default 1000) parked packets from one author: further packets from that author are not stored, not counted as held and not relayed, a `packet:rejected` event is emitted, and they are re-requested and accepted after the author's key arrives, in `packages/core/tests/unit/parked-limit.test.ts`
+- [X] T006 [P] A-1 test: a registered `PacketSigner` output appears in `sig` for local writes, signing input is the canonical envelope with `sig: null`, and a core with no signer is unchanged, in `packages/core/tests/integration/amendments/signer.test.ts`
+- [X] T007 [P] A-2 test: after `rebuildSpace(space)` the `stateHash` equals that of a peer which received the same packets in valid order, and a packet that now fails validation is no longer visible, in `packages/core/tests/integration/amendments/rebuild.test.ts`
+- [X] T008 [P] A-3 test: with a `SnapshotSealer` registered, a snapshot over a recording transport contains no plaintext marker; a snapshot with a bad signature is discarded and reported; a receiver without a sealer discards the sealed snapshot and catches up by packets, in `packages/core/tests/integration/amendments/snapshot-sealed.test.ts`
+- [X] T009 [P] A-4 test: `core.channel('x')` messages reach a peer, are never persisted by the core, and the relay forwards `chan` messages between two clients that share a Space while storing nothing of them, in `packages/core/tests/integration/amendments/channel.test.ts` and `packages/relay-server/tests/chan-forward.test.ts`
+- [X] T010 [P] A-5 and A-6 test: a `$sys.x` object is absent from `query({})`, present for `query({ type: '$sys.x' })`, and survives `compact()` when pinned, in `packages/core/tests/integration/amendments/hidden-pinned.test.ts`
+- [X] T011 [P] A-7 test: more than `maxParkedPerAuthor` (default 1000) parked packets from one author: further packets from that author are not stored, not counted as held and not relayed, a `packet:rejected` event is emitted, and they are re-requested and accepted after the author's key arrives, in `packages/core/tests/unit/parked-limit.test.ts`
 
 ### 2b. Core amendments (implementation)
 
-- [ ] T012 A-1: add `PacketSigner` and `registerSigner()` in `packages/core/src/extension/types.ts` and `packages/core/src/extension/registry.ts`; add the signing step (encode → build envelope → sign → send validators → apply) in `packages/core/src/store/write.ts`
-- [ ] T013 [P] A-5: hide types starting with `$` from queries unless `spec.type` equals that exact type, in `packages/core/src/query/engine.ts`
-- [ ] T014 [P] A-6: add `CompactionPolicy.pin(type)` so pinned types and their packets are excluded from snapshots and never removed, in `packages/core/src/history/history.ts` and `packages/core/src/history/snapshot.ts`
-- [ ] T015 [P] A-7: add optional `peer` to `ValidatorContext` and enforce `limits.maxParkedPerAuthor` (default 1000; packets over the limit are not stored or counted as held, and are reported, so the summary stays honest and they can be re-requested later) in `packages/core/src/extension/types.ts` and `packages/core/src/store/apply.ts`
-- [ ] T016 A-2: implement `rebuildSpace(space)` (clear derived objects of the Space, re-run retained non-rejected packets in clock order through validators, mark now-invalid packets `rejected`) and expose it on `SyncCore` in `packages/core/src/core.ts` and `packages/core/src/store/apply.ts`
-- [ ] T017 A-3: add `SnapshotSealer` and `SnapshotValidator` hooks; when a sealer is present send `sealed` parts per scope plus `signer` and `sig`; discard snapshots that fail validation or cannot be opened, in `packages/core/src/sync/session.ts`, `packages/core/src/sync/messages.ts` and `packages/core/src/history/snapshot.ts`
-- [ ] T018 A-4: add `core.channel(name)` and the `chan` message (`{t, name, space, payload}`), size-limited by `limits.maxMessageBytes`, in `packages/core/src/sync/session.ts` and `packages/core/src/sync/manager.ts`; make `RelayHub` forward `chan` to other peers whose `hello.spaces` include the Space (or `*`), storing nothing, in `packages/relay-server/src/relayHub.ts`
-- [ ] T019 Update `specs/001-sync-core/contracts/extension-points.ts`, `specs/001-sync-core/contracts/sync-protocol.md` and `specs/001-sync-core/contracts/public-api.ts` with the amendments and their compatibility notes, and run the full 001 suite plus T006 to T011 to confirm gate S0 passes (`npm run test` and `npm run test:contract`)
+- [X] T012 A-1: add `PacketSigner` and `registerSigner()` in `packages/core/src/extension/types.ts` and `packages/core/src/extension/registry.ts`; add the signing step (encode → build envelope → sign → send validators → apply) in `packages/core/src/store/write.ts`
+- [X] T013 [P] A-5: hide types starting with `$` from queries unless `spec.type` equals that exact type, in `packages/core/src/query/engine.ts`
+- [X] T014 [P] A-6: add `CompactionPolicy.pin(type)` so pinned types and their packets are excluded from snapshots and never removed, in `packages/core/src/history/history.ts` and `packages/core/src/history/snapshot.ts`
+- [X] T015 [P] A-7: add optional `peer` to `ValidatorContext` and enforce `limits.maxParkedPerAuthor` (default 1000; packets over the limit are not stored or counted as held, and are reported, so the summary stays honest and they can be re-requested later) in `packages/core/src/extension/types.ts` and `packages/core/src/store/apply.ts`
+- [X] T016 A-2: implement `rebuildSpace(space)` (clear derived objects of the Space, re-run retained non-rejected packets in clock order through validators, mark now-invalid packets `rejected`) and expose it on `SyncCore` in `packages/core/src/core.ts` and `packages/core/src/store/apply.ts`
+- [X] T017 A-3: add `SnapshotSealer` and `SnapshotValidator` hooks; when a sealer is present send `sealed` parts per scope plus `signer` and `sig`; discard snapshots that fail validation or cannot be opened, in `packages/core/src/sync/session.ts`, `packages/core/src/sync/messages.ts` and `packages/core/src/history/snapshot.ts`
+- [X] T018 A-4: add `core.channel(name)` and the `chan` message (`{t, name, space, payload}`), size-limited by `limits.maxMessageBytes`, in `packages/core/src/sync/session.ts` and `packages/core/src/sync/manager.ts`; make `RelayHub` forward `chan` to other peers whose `hello.spaces` include the Space (or `*`), storing nothing, in `packages/relay-server/src/relayHub.ts`
+- [X] T019 Update `specs/001-sync-core/contracts/extension-points.ts`, `specs/001-sync-core/contracts/sync-protocol.md` and `specs/001-sync-core/contracts/public-api.ts` with the amendments and their compatibility notes, and run the full 001 suite plus T006 to T011 to confirm gate S0 passes (`npm run test` and `npm run test:contract`)
 
 ### 2c. Crypto, keystore, codec (tests first)
 

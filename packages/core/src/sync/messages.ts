@@ -12,7 +12,10 @@ export type Msg =
   | { t: 'summary'; space: string; held: Held }
   | { t: 'want'; space: string; ranges: Held; max?: number }
   | { t: 'packets'; space: string; items: string[] }
-  | { t: 'snapshot'; space: string; covers: Held; objects: unknown[]; part: number; of: number }
+  /** `objects` is plain state (dev/test). With a SnapshotGuard it is replaced by `sealed` plus `signer` and `sig` (A-3). */
+  | { t: 'snapshot'; space: string; covers: Held; objects?: unknown[]; sealed?: string; signer?: string; sig?: string; part: number; of: number }
+  /** Plugin channel message (A-4). Never stored. `space` lets a relay route it ("*" = every other peer). */
+  | { t: 'chan'; name: string; space: string; payload: string }
   | { t: 'ack'; space: string; ids: string[] }
   | { t: 'error'; code: string; message: string; fatal: boolean }
   | { t: 'ping' }
@@ -59,9 +62,11 @@ export function decodeMessage(bytes: Uint8Array, maxBytes?: number): Decoded {
     case 'packets':
       return isStr(o.space) && Array.isArray(o.items) && o.items.every(isStr) ? { ok: true, msg: o } : bad;
     case 'snapshot':
-      return isStr(o.space) && isHeld(o.covers) && Array.isArray(o.objects) && Number.isInteger(o.part) && Number.isInteger(o.of) && o.part >= 0 && o.part < o.of
+      return isStr(o.space) && isHeld(o.covers) && (Array.isArray(o.objects) || isStr(o.sealed)) && (o.signer === undefined || isStr(o.signer)) && (o.sig === undefined || isStr(o.sig)) && Number.isInteger(o.part) && Number.isInteger(o.of) && o.part >= 0 && o.part < o.of
         ? { ok: true, msg: o }
         : bad;
+    case 'chan':
+      return isStr(o.name) && isStr(o.space) && isStr(o.payload) ? { ok: true, msg: o } : bad;
     case 'ack':
       return isStr(o.space) && Array.isArray(o.ids) && o.ids.every(isStr) ? { ok: true, msg: o } : bad;
     case 'error':

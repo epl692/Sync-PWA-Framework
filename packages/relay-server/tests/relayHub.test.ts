@@ -115,3 +115,32 @@ describe('RelayHub', () => {
     expect(a.got('ack')).toHaveLength(0);
   });
 });
+
+describe('RelayHub channel forwarding (A-4)', () => {
+  it('forwards chan messages to other peers of the Space and stores nothing', () => {
+    const { hub, connect } = harness();
+    const a = connect('a');
+    const b = connect('b');
+    const c = connect('c');
+    a.send(hello(['s1']));
+    b.send(hello(['s1']));
+    c.send(hello(['other']));
+    a.send({ t: 'chan', name: 'identity/1', space: 's1', payload: 'AAAA' });
+    expect(b.got('chan')).toEqual([{ t: 'chan', name: 'identity/1', space: 's1', payload: 'AAAA' }]);
+    expect(a.got('chan')).toHaveLength(0);
+    expect(c.got('chan')).toHaveLength(0);
+    expect(hub.stats.packets).toBe(0);
+  });
+
+  it('routes "*" to every other peer, and ignores chan from a peer that has not said hello', () => {
+    const { connect } = harness();
+    const a = connect('a');
+    const b = connect('b');
+    b.send(hello(['s1']));
+    a.send({ t: 'chan', name: 'x', space: '*', payload: 'AA' });
+    expect(b.got('chan')).toHaveLength(0); // a never said hello
+    a.send(hello(['s9']));
+    a.send({ t: 'chan', name: 'x', space: '*', payload: 'AA' });
+    expect(b.got('chan')).toHaveLength(1);
+  });
+});

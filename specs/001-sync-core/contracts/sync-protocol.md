@@ -13,6 +13,7 @@ All messages are canonical JSON objects with a `t` discriminator.
 | `want` | both | `space`, `ranges: {author: [[lo,hi],...]}`, `max?` | Ask for specific missing packet ranges |
 | `packets` | both | `space`, `items: Envelope[]` (≤ batch limits) | Deliver packets. Each is raw envelope bytes embedded as base64url |
 | `snapshot` | both | `space`, `covers`, `objects` (chunked via `part`/`of`) | Bootstrap a peer whose gap is compacted away |
+| `chan` | both | `name`, `space` (`*` = any), `payload` (base64url) | Plugin channel message (spec 002 A-4). Never stored. A relay forwards it to other peers of the Space |
 | `ack` | both | `space`, `ids: string[]` | Confirm receipt so the sender can clear its outbox |
 | `error` | both | `code`, `message`, `fatal` | Report protocol problems |
 | `ping`/`pong` | both | none | Liveness. Transports may use their own |
@@ -50,3 +51,9 @@ Additions and clarifications found while implementing; none change the envelope.
 - **Snapshots.** `snapshot` is chunked (`part` of `of`, 100 objects per part). A receiver installs it only when every part has arrived, joins the objects into its state, adds `covers` to what it holds, and keeps the union so it can pass the snapshot on. The sender sends a snapshot only when what the peer lacks was compacted away, then the newer packets.
 - **Live forwarding** starts after the peer's `summary` arrives; before that, the catch-up push reads the log and includes the packet.
 - **Limits.** A message larger than `limits.maxMessageBytes` is dropped; the connection stays open.
+
+## Spec 002 additions (additive; older peers ignore or discard safely)
+
+- **`chan`** (A-4): unknown `t` values are already ignored, so older peers drop it. Relays forward it without storing.
+- **Sealed snapshots** (A-3): when a `SnapshotGuard` is registered, `snapshot` carries `sealed` (base64url, one per part) plus `signer` and `sig` instead of `objects`. The signature covers the canonical message with `sig: null`. A receiver with a guard discards plain snapshots; a receiver without one discards sealed snapshots. Both report `packet:rejected` with a reason containing "snapshot discarded" and catch up from packets.
+- **Rejected packets** (A-2): a packet the local validators refuse after a rebuild stays in the log as `rejected`, is counted as held, and is never sent to peers.

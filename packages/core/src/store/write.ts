@@ -112,12 +112,14 @@ export class LocalWriter {
       const body: PacketBody = { obj: change.obj, op: change.op, type, schemaVersion, fields };
       const seq = state.seqCounter + 1;
       const envBody = await codec.encode(body, { space, author: state.deviceId });
-      const env = buildEnvelope({ author: state.deviceId, seq, space, clock, codec: codec.id, body: envBody, sig: null });
-
-      const sendVerdict = await d.ext.validate('send', env, body, { now: d.cfg.now, existing });
-      if (sendVerdict.verdict !== 'accept') throw new PacketRejectedError(sendVerdict.reason);
+      let env = buildEnvelope({ author: state.deviceId, seq, space, clock, codec: codec.id, body: envBody, sig: null });
+      const signer = d.ext.signer();
+      if (signer) env = { ...env, sig: await signer.sign(encodeEnvelope(env), { space, author: state.deviceId }) };
 
       const raw = encodeEnvelope(env);
+      const sendVerdict = await d.ext.validate('send', env, body, { now: d.cfg.now, existing, raw, source: 'local' });
+      if (sendVerdict.verdict !== 'accept') throw new PacketRejectedError(sendVerdict.reason);
+
       if (raw.byteLength > d.cfg.limits.maxEnvelopeBytes) {
         throw new PacketRejectedError(`envelope is ${raw.byteLength} bytes (limit ${d.cfg.limits.maxEnvelopeBytes})`);
       }

@@ -18,7 +18,9 @@
       "@sync/testkit": ["packages/testkit/src/index.ts"],
       "@sync/transport-websocket": ["packages/transport-websocket/src/index.ts"],
       "@sync/transport-webrtc": ["packages/transport-webrtc/src/index.ts"],
-      "@sync/relay-server": ["packages/relay-server/src/index.ts"]
+      "@sync/relay-server": ["packages/relay-server/src/index.ts"],
+      "@sync/spaces": ["packages/spaces/src/index.ts"],
+      "@sync/identity-invite": ["packages/identity-invite/src/index.ts"]
     }
   }
 }

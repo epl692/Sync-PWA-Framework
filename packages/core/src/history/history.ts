@@ -170,6 +170,7 @@ export class History {
     for (const rec of eligible.sort((a, b) => (a.clock < b.clock ? -1 : a.clock > b.clock ? 1 : 0))) {
       const body = await this.bodyOf(rec);
       if (!body) continue; // cannot read it now (e.g. a codec is missing): leave it in the log
+      if (d.ext.isPinned(body.type, body.obj)) continue; // A-6: pinned objects are never folded or deleted
       objects.set(body.obj, mergeInto(objects.get(body.obj), body, { clock: rec.clock, space }).obj);
       covers[rec.author] = addValue(covers[rec.author] ?? [], rec.seq);
       folded.push(rec);

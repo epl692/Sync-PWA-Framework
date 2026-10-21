@@ -6,11 +6,11 @@ Spec 001 is implemented. The items below are additive changes to `@sync/core` th
 |---|---|---|---|
 | **A-1** | `PacketSigner` extension point | The write path builds the envelope with `sig: null` and never signs | Optional. With no signer registered, behavior is unchanged (`sig: null`). Order on send: encode → build envelope → **sign** → send validators → apply |
 | **A-2** | `rebuildSpace(space)` | Authority can change retroactively; merge cannot un-apply | New method. Not called by 001 code paths |
-| **A-3** | Sealed + signed snapshots (`SnapshotSealer`, `SnapshotValidator`) | Snapshots are plaintext and unsigned (research R-11) | Optional hooks. Without them, snapshots work as in 001 (dev/test only; release gate in the plan requires them) |
+| **A-3** | Sealed + signed snapshots (`SnapshotGuard`) | Snapshots are plaintext and unsigned (research R-11) | Optional hooks. Without them, snapshots work as in 001 (dev/test only; release gate in the plan requires them) |
 | **A-4** | Plugin message channel `core.channel(name)` and relay forwarding | Join/link handshakes are not packets (the joiner is not a member) and must work through the relay | New unknown-`t` messages are already ignored by 001 peers ("Unknown `t` values are ignored"). Relay forwards channel messages to other peers that share the declared Space |
 | **A-5** | Queries hide `$`-prefixed types unless asked by exact type | Control objects must not appear in app queries | Behavior change only for types starting with `$`, which 001 never produced |
-| **A-6** | `CompactionPolicy.pin(type)` | `$sys.*` events and keygrants must never be compacted (fold must be reproducible) | Optional; default pins nothing |
-| **A-7** | Validator context carries `peer?: PeerId` and a `parkedLimit` | DoS bound on deferred packets from unknown authors | Added optional fields; limit default `maxParkedPerAuthor = 1000`. Over the limit, new packets from that author are **not stored and not counted as held** (so the summary stays honest and they are re-requested once the author's key arrives); they are reported, not dropped silently |
+| **A-6** | `registerCompactionPin((type, obj) => boolean)` | `$sys.*` events and keygrants must never be compacted (fold must be reproducible) | Optional; default pins nothing |
+| **A-7** | Validator context carries `raw` (exact envelope bytes) and `source`; `limits.maxParkedPerAuthor` | DoS bound on deferred packets from unknown authors | Added optional fields; limit default `maxParkedPerAuthor = 1000`. Over the limit, new packets from that author are **not stored and not counted as held** (so the summary stays honest and they are re-requested once the author's key arrives); they are reported, not dropped silently |
 
 ## A-1 PacketSigner
 
@@ -30,31 +30,37 @@ The core passes the canonical bytes (001 canonical encoding) and stores the retu
 rebuildSpace(space: SpaceId): Promise<{ reapplied: number; rejected: number }>;
 ```
 
-Clears derived state (`objects`, `summary` stay) for the Space, then re-runs the apply pipeline over retained packets in clock order. Packets that now fail validation are marked `rejected` in the log (kept, never applied, never relayed). Snapshot-covered ranges are not replayed (see research R-10 limit).
+`reapplied` and `rejected` count packets whose status changed (to applied, or to rejected).
+
+Clears derived state (`objects`; `summary` stays; the Space's snapshot is the starting state) for the Space, then re-runs the apply pipeline over retained packets in clock order. Packets that now fail validation are marked `rejected` in the log (kept, never applied, never relayed). Snapshot-covered ranges are not replayed (see research R-10 limit).
 
 ## A-3 Sealed and signed snapshots
 
 ```ts
-export interface SnapshotSealer {
-  seal(space: string, scope: string, objects: unknown[]): Promise<Uint8Array>;
-  open(space: string, bytes: Uint8Array): Promise<{ ok: true; scope: string; objects: unknown[] } | { ok: false; reason: 'missing-key' | 'malformed' }>;
+export interface SnapshotGuard {
+  seal(space: string, objects: unknown[]): Promise<Uint8Array>;
+  open(space: string, bytes: Uint8Array): Promise<{ ok: true; objects: unknown[] } | { ok: false; reason: 'missing-key' | 'malformed' }>;
+  sign(space: string, canonical: Uint8Array): Promise<{ signer: string; sig: Uint8Array }>;
+  verify(space: string, signer: string | undefined, canonical: Uint8Array, sig: Uint8Array | undefined): Promise<{ accept: true } | { accept: false; reason: string }>;
 }
-export interface SnapshotValidator {
-  validate(space: string, signer: string | undefined, canonical: Uint8Array, sig: Uint8Array | undefined): Promise<{ accept: boolean; reason?: string }>;
-}
+// SyncCore: registerSnapshotGuard(guard)
 ```
 
-Wire change to the `snapshot` message (additive): `objects` is replaced by `sealed: base64url[]` (one per scope per part) when a sealer is registered; `signer` and `sig` are added. Receivers without a sealer ignore the new fields and fail to read `objects`, so they **discard** the snapshot (reported, not applied) and catch up by packets. No corruption results.
+Wire change to `snapshot` (additive): `objects` is replaced by `sealed` (base64url) plus `signer` and `sig` when a guard is registered. `sig` covers the canonical message `{t, space, covers, part, of, sealed, sig: null}`. A receiver with a guard discards plain snapshots; one without discards sealed snapshots; both report `packet:rejected` ("snapshot discarded: …") and catch up from packets. No corruption results.
+
+**Share-bound objects are pinned (A-6)**, so snapshots only ever hold Space-scoped objects, and one sealed group per part (sealed with the Space key) is enough. See research R-12.
 
 ## A-4 Channel
 
 ```ts
 core.channel(name: string): {
-  send(peerId: PeerId, payload: Uint8Array): Promise<void>;
-  onMessage(handler: (peerId: PeerId, payload: Uint8Array) => void): () => void;
-  /** Spaces this device advertises for the relay to route by (opaque space IDs only). */
+  send(peerKey: string, payload: Uint8Array, opts?: { space?: string }): Promise<void>;
+  broadcast(payload: Uint8Array, opts?: { space?: string }): Promise<number>;
+  onMessage(handler: (peerKey: string, payload: Uint8Array) => void): () => void;
+  /** Spaces this device advertises in `hello` for the relay to route by (opaque space IDs only). */
   setRoutes(spaces: string[]): void;
 };
+core.peers(): Array<{ key: string; transport: string; peerId: string; label?: string }>;  // key = `${transportId}:${peerId}`
 ```
 
 Wire: `{ "t": "chan", "name": "identity/1", "space": "<spaceId or *>", "payload": "<base64url>" }`. The relay (RelayHub) forwards `chan` messages to the other connected peers whose `hello.spaces` include the Space, without storing them. Size limit is `limits.maxMessageBytes`. Channel messages are never persisted by the core.

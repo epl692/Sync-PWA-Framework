@@ -25,6 +25,13 @@ export class ObjectCache {
     set.add(obj.id);
   }
 
+  delete(id: string): void {
+    const prev = this.byId.get(id);
+    if (!prev) return;
+    this.byType.get(prev.type)?.delete(id);
+    this.byId.delete(id);
+  }
+
   *ofType(type: string): IterableIterator<StoredObject> {
     const ids = this.byType.get(type);
     if (!ids) return;

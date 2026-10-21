@@ -73,6 +73,7 @@ export interface Config {
     maxFieldsPerPacket?: number; // default 256
     maxMessageBytes?: number;    // default 4 MiB
     seqGapWarn?: number;         // default 1,000,000
+    maxParkedPerAuthor?: number; // default 1000 (spec 002 A-7): excess parked packets are not stored or counted as held
   };
   now?: () => number;         // injectable for tests
 }
@@ -104,6 +105,13 @@ export interface SyncCore extends ExtensionRegistry {
   undo(id: ObjectId): Promise<void>;
   history(id: ObjectId): Promise<ReadonlyArray<{ packetId: string; clock: string; op: string; fields: string[] }>>;
   compact(opts?: { space?: SpaceId; olderThanMs?: number }): Promise<{ packetsRemoved: number; bytesFreed?: number }>;
+
+  // ---- added by spec 002 ----
+  /** A-2: replay every retained packet of a Space through the validators. Returns how many changed status. */
+  rebuildSpace(space: SpaceId): Promise<{ reapplied: number; rejected: number }>;
+  /** A-4: plugin message channel; never stored by the core. */
+  channel(name: string): { send(peerKey: string, payload: Uint8Array, opts?: { space?: string }): Promise<void>; broadcast(payload: Uint8Array, opts?: { space?: string }): Promise<number>; onMessage(h: (peerKey: string, payload: Uint8Array) => void): () => void; setRoutes(spaces: string[]): void };
+  peers(): Array<{ key: string; transport: string; peerId: string; label?: string }>;
 
   // ---- introspection ----
   /** Canonical hash of the visible and tombstoned state of a Space. Used by convergence tests. */
