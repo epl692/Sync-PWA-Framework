@@ -7,7 +7,7 @@ The authority state of a Space is computed only from `$sys.*` control events. Ev
 | Type | Fields | Who may author |
 |---|---|---|
 | `$sys.genesis` | `space`, `owner: {user, device}`, `name?` | The creating device. Exactly one per Space; the lowest-clock valid one wins, and the Space ID is derived from it (below) |
-| `$sys.member` | `action: add\|role\|remove`, `user`, `role?`, `inviteId?`, `cutoff?` | Owner (see rules) |
+| `$sys.member` | `action: add\|role\|remove`, `user`, `role?`, `inviteId?`, `cutoff?` | Owner (see rules), or any member for `remove` of **themselves** (leaving) |
 | `$sys.device` | `user`, `device`, `signPub`, `agreePub`, `binding: {kind, proof}`, `name?` | A device already bound to the same `user`, or an Owner adding a joiner |
 | `$sys.device-revoke` | `device`, `cutoff` | A device of the same user, or an Owner |
 | `$sys.invite` | `inviteId`, `role`, `expiresAt`, `maxUses`, `secretHash`, `approval` | Owner |
@@ -34,13 +34,14 @@ for e in sort(controlEvents, by clock):           # total order: HLC string, dev
 
 ## Rules enforced inside the fold
 
-1. **Owner required** for `member`, `invite`, `invite-revoke`, `epoch` (Space scope), and keygrants to others.
+1. **Owner required** for `member` (except a member removing **themselves**, below), `invite`, `invite-revoke`, `epoch` (Space scope), and keygrants to others.
+   - **Leaving**: any active member may author `member.remove` for their own user, with `cutoff` for their devices. The last-Owner rule (2) still applies. An Owner device that sees the event MUST rotate the Space key and every share the user was in (the leaver is excluded from the new grants). Until an Owner does, the leaver can still read; this window is the same as for a removal.
 2. **At least one Owner** (FR-003): a `member` event that would remove or demote the last Owner is inert.
 3. **No self-promotion**: an Editor or Viewer cannot make themselves anything. `member.add/role` need an Owner author at that point of the replay.
 4. **Invites**: `member.add` carrying `inviteId` is valid only if the invite exists, is not revoked, `member.clock < expiresAt`, the role equals the invite's role, and the count of earlier valid adds for this `inviteId` is `< maxUses`. Surplus adds are inert.
 5. **Device cutoff**: after `device-revoke` or `member.remove` for device D at clock R with `cutoff[D] = s`, a packet from D is valid only if `clock < R` **and** `seq ≤ s`. Applies to data and control packets alike.
 6. **Shares**: share members must be Space members. A share role is capped by the Space role. Removing a user from the Space removes them from every share (inert share events from non-members).
-7. **Self-service**: any bound device may write `$sys.device` for its own `user` regardless of role. It cannot write other control types.
+7. **Self-service**: any bound device may write `$sys.device` for its own `user`, and `$sys.keygrant` addressed to that user's own devices (only for epochs the author itself holds), regardless of role. It cannot write other control types, except leaving (rule 1).
 8. **Immutability**: any `update` or `delete` of a `$sys.*` object is rejected.
 
 ## Role permissions (body validator)
@@ -49,7 +50,9 @@ for e in sort(controlEvents, by clock):           # total order: HLC string, dev
 |---|---|---|---|
 | Read (holds key) | ✔ | ✔ | ✔ |
 | `create`/`update`/`delete` ordinary objects | ✔ | ✔ | ✘ |
-| Authoring `$sys.member`, `$sys.invite`, `$sys.epoch`, keygrants | ✔ | ✘ | ✘ |
+| Authoring `$sys.member` for others, `$sys.invite`, `$sys.epoch`, keygrants to others | ✔ | ✘ | ✘ |
+| `$sys.member remove` of self (leave) | ✔ (if another Owner exists) | ✔ | ✔ |
+| `$sys.keygrant` for the author's own new device | ✔ | ✔ | ✔ |
 | `$sys.device` for own user | ✔ | ✔ | ✔ |
 | `$sys.share` for an object | ✔ | ✔ | ✘ |
 

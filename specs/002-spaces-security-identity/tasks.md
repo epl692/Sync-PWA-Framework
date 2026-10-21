@@ -46,14 +46,14 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 - [ ] T008 [P] A-3 test: with a `SnapshotSealer` registered, a snapshot over a recording transport contains no plaintext marker; a snapshot with a bad signature is discarded and reported; a receiver without a sealer discards the sealed snapshot and catches up by packets, in `packages/core/tests/integration/amendments/snapshot-sealed.test.ts`
 - [ ] T009 [P] A-4 test: `core.channel('x')` messages reach a peer, are never persisted by the core, and the relay forwards `chan` messages between two clients that share a Space while storing nothing of them, in `packages/core/tests/integration/amendments/channel.test.ts` and `packages/relay-server/tests/chan-forward.test.ts`
 - [ ] T010 [P] A-5 and A-6 test: a `$sys.x` object is absent from `query({})`, present for `query({ type: '$sys.x' })`, and survives `compact()` when pinned, in `packages/core/tests/integration/amendments/hidden-pinned.test.ts`
-- [ ] T011 [P] A-7 test: more than `maxParkedPerAuthor` (default 1000) parked packets from one author drops the oldest and emits a `packet:rejected` event, in `packages/core/tests/unit/parked-limit.test.ts`
+- [ ] T011 [P] A-7 test: more than `maxParkedPerAuthor` (default 1000) parked packets from one author: further packets from that author are not stored, not counted as held and not relayed, a `packet:rejected` event is emitted, and they are re-requested and accepted after the author's key arrives, in `packages/core/tests/unit/parked-limit.test.ts`
 
 ### 2b. Core amendments (implementation)
 
 - [ ] T012 A-1: add `PacketSigner` and `registerSigner()` in `packages/core/src/extension/types.ts` and `packages/core/src/extension/registry.ts`; add the signing step (encode → build envelope → sign → send validators → apply) in `packages/core/src/store/write.ts`
 - [ ] T013 [P] A-5: hide types starting with `$` from queries unless `spec.type` equals that exact type, in `packages/core/src/query/engine.ts`
 - [ ] T014 [P] A-6: add `CompactionPolicy.pin(type)` so pinned types and their packets are excluded from snapshots and never removed, in `packages/core/src/history/history.ts` and `packages/core/src/history/snapshot.ts`
-- [ ] T015 [P] A-7: add optional `peer` to `ValidatorContext` and enforce `limits.maxParkedPerAuthor` (default 1000, drop oldest, report) in `packages/core/src/extension/types.ts` and `packages/core/src/store/apply.ts`
+- [ ] T015 [P] A-7: add optional `peer` to `ValidatorContext` and enforce `limits.maxParkedPerAuthor` (default 1000; packets over the limit are not stored or counted as held, and are reported, so the summary stays honest and they can be re-requested later) in `packages/core/src/extension/types.ts` and `packages/core/src/store/apply.ts`
 - [ ] T016 A-2: implement `rebuildSpace(space)` (clear derived objects of the Space, re-run retained non-rejected packets in clock order through validators, mark now-invalid packets `rejected`) and expose it on `SyncCore` in `packages/core/src/core.ts` and `packages/core/src/store/apply.ts`
 - [ ] T017 A-3: add `SnapshotSealer` and `SnapshotValidator` hooks; when a sealer is present send `sealed` parts per scope plus `signer` and `sig`; discard snapshots that fail validation or cannot be opened, in `packages/core/src/sync/session.ts`, `packages/core/src/sync/messages.ts` and `packages/core/src/history/snapshot.ts`
 - [ ] T018 A-4: add `core.channel(name)` and the `chan` message (`{t, name, space, payload}`), size-limited by `limits.maxMessageBytes`, in `packages/core/src/sync/session.ts` and `packages/core/src/sync/manager.ts`; make `RelayHub` forward `chan` to other peers whose `hello.spaces` include the Space (or `*`), storing nothing, in `packages/relay-server/src/relayHub.ts`
@@ -76,14 +76,14 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 ### 2e. Authority fold and validators (tests first)
 
 - [ ] T028 [P] Fold unit tests in `packages/spaces/tests/unit/authority.test.ts` for every rule in [contracts/authority-rules.md](./contracts/authority-rules.md): Owner required, last-Owner rule, no self-promotion, invite expiry/role/`maxUses`, device `cutoff` (`clock < R` and `seq ≤ cutoff`), shares capped by Space role, self-service `$sys.device`, immutability (`update`/`delete` of `$sys.*` rejected), inert events kept in the log, unknown device defers
-- [ ] T029 [P] Edge-case fold tests in `packages/spaces/tests/unit/authority-conflicts.test.ts`: A removes B at clock 5 and B removes A at clock 6 leaves A as sole Owner; two Owners demote each other (earlier wins); an inert event produces a notification (spec FR-005)
+- [ ] T029 [P] Edge-case fold tests in `packages/spaces/tests/unit/authority-conflicts.test.ts`: A removes B at clock 5 and B removes A at clock 6 leaves A as sole Owner; two Owners demote each other (earlier wins); the fold returns the list of inert events with the reason each was ignored (spec FR-005; notification delivery is tested in T070)
 - [ ] T030 [P] Property test in `packages/spaces/tests/property/authority-order.test.ts`: shuffling delivery of the same control events across 3 to 5 peers gives an identical authority state hash (≥ 10,000 runs, `CONVERGENCE_RUNS` / `CONVERGENCE_SEED`)
 - [ ] T031 [P] Validator tests in `packages/spaces/tests/unit/validators.test.ts`: envelope validator (bad signature rejects; unknown device key defers; revoked or beyond cutoff rejects; Viewer cannot write), body validator (role vs operation, Owner-only `$sys.*`, share role), snapshot validator (signer must be a current Owner or Editor), and verification order from crypto-envelope.md
 
 ### 2f. Authority fold and validators (implementation)
 
 - [ ] T032 [P] Define versioned `$sys.*` schemas (`genesis`, `member`, `device`, `device-revoke`, `invite`, `invite-revoke`, `epoch`, `keygrant`, `share`, `share-member`) with validation in `packages/spaces/src/authority/types.ts`. `maxDevicesPerUser = 10`, `maxInviteDays = 30`
-- [ ] T033 Implement the deterministic fold (sorted by clock, inert on failure, derived `SpaceId`) in `packages/spaces/src/authority/fold.ts` (depends on T032)
+- [ ] T033 Implement the deterministic fold (sorted by clock, inert on failure, derived `SpaceId`; returns the list of inert events with the reason each was ignored) in `packages/spaces/src/authority/fold.ts` (depends on T032)
 - [ ] T034 Implement the authority state cache with incremental recompute from the earliest changed clock, persisted in `authority-cache`, in `packages/spaces/src/authority/state.ts` (depends on T024, T033)
 - [ ] T035 Implement the envelope validator, body validator and snapshot validator in `packages/spaces/src/validators/envelopeValidator.ts`, `packages/spaces/src/validators/bodyValidator.ts` and `packages/spaces/src/validators/snapshotValidator.ts`. Include a signature verdict cache (LRU, `verifiedCacheEntries = 50000`, rebuilt not trusted across versions) (depends on T026, T034)
 
@@ -112,10 +112,10 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Implementation for User Story 1
 
-- [ ] T043 [US1] Implement `installSpaces()` registering codecs, signer, validators, sealer, compaction pin and the identity channel; throw if installed twice on one core, in `packages/spaces/src/service/install.ts` (depends on T012 to T018, T026, T027, T035)
-- [ ] T044 [US1] Implement `create()`, `list()`, `session()` and `signUp()` using `ProviderHost` and the device record, in `packages/spaces/src/service/spaces.ts`. `SpaceId` derived per authority-rules.md
-- [ ] T045 [US1] Implement the `SecurityEvent` emitter and wire `packet:waiting-for-key`, `security:unsupported` in `packages/spaces/src/service/events.ts`
-- [ ] T046 [US1] Wire the sealed snapshot path to the codec (one sealed blob per scope per part) in `packages/spaces/src/codec/snapshotSealer.ts`; run T041 and the A-3 test against the real sealer
+- [ ] T043 [US1] Implement the snapshot sealer (one sealed blob per scope per part) in `packages/spaces/src/codec/snapshotSealer.ts`; it is registered by T044, and T041 and the A-3 test run against it
+- [ ] T044 [US1] Implement `installSpaces()` registering codecs, signer, validators, sealer, compaction pin and the identity channel; throw if installed twice on one core, in `packages/spaces/src/service/install.ts` (depends on T012 to T018, T026, T027, T035, T043)
+- [ ] T045 [US1] Implement `create()`, `list()`, `session()` and `signUp()` using `ProviderHost` and the device record, in `packages/spaces/src/service/spaces.ts`. `SpaceId` derived per authority-rules.md
+- [ ] T046 [US1] Implement the `SecurityEvent` emitter and wire `packet:waiting-for-key`, `security:unsupported` in `packages/spaces/src/service/events.ts`
 - [ ] T047 [US1] Implement the release gate: a build test in `packages/spaces/tests/unit/release-gate.test.ts` that fails if `createSyncCore` can start in a release build with the plaintext codec as default, and export `requireSecureCodec()` from `packages/spaces/src/index.ts`
 
 **Checkpoint**: US1 works alone. MVP.
@@ -154,7 +154,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 - [ ] T054 [P] [US3] Unit tests for the artifact, secret hash and `HMAC-SHA-256(secret, signPub ‖ nonce)` proof in `packages/identity-invite/tests/unit/invite.test.ts`: URL fragment encoding, expiry, secret never written to the Space log, only `SHA-256(secret)`
 - [ ] T055 [P] [US3] Contract test running `identityProviderContract` against the default provider in `packages/identity-invite/tests/contract/provider.test.ts`
-- [ ] T056 [P] [US3] Handshake integration test in `packages/identity-invite/tests/integration/join.test.ts`: approval required by default and automatic when chosen; `join-deny` for expired, used-up, revoked, bad proof or declined; interrupted handshake writes nothing and retries cleanly; a joiner who is already a member gets an idempotent grant; the SAS matches on both sides
+- [ ] T056 [P] [US3] Handshake integration test in `packages/identity-invite/tests/integration/join.test.ts`: approval required by default and automatic when chosen; `join-deny` for expired, used-up, revoked, bad proof or declined; interrupted handshake writes nothing and retries cleanly; a replayed `join-request` (same `inviteId` and `nonce`) is refused and writes nothing; a joiner who is already a member gets an idempotent grant; the SAS matches on both sides
 - [ ] T057 [P] [US3] Edge-case test in `packages/identity-invite/tests/integration/invite-race.test.ts`: two joiners race for a single-use invite, the earlier clock stays a member, the other becomes inert and an Owner rotates
 - [ ] T058 [P] [US3] Playwright tests `tests/e2e/invite-online.spec.ts` (relay) and `tests/e2e/invite-offline-webrtc.spec.ts` (network blocked, WebRTC manual signaling, timed under 60 s for SC-004), each checking the joiner reads existing history (all epochs) and writes per role
 
@@ -179,15 +179,15 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 5
 
-- [ ] T065 [P] [US5] Integration test in `packages/spaces/tests/integration/remove-member.test.ts`: after removal the Space key rotates and 100% of new packets are undecryptable on the removed device; packets with `clock` after removal or `seq` above `cutoff` are rejected and counted; the last Owner cannot leave or be demoted
+- [ ] T065 [P] [US5] Integration test in `packages/spaces/tests/integration/remove-member.test.ts`: after removal the Space key rotates and 100% of new packets are undecryptable on the removed device; packets with `clock` after removal or `seq` above `cutoff` are rejected and counted; the last Owner cannot leave or be demoted; an Editor or Viewer can leave by authoring `member.remove` for themselves, and an Owner device then rotates the Space key and the user's shares
 - [ ] T066 [P] [US5] Rotation tests in `packages/spaces/tests/integration/rotation.test.ts`: concurrent rotations by two Owners leave both keys usable for decryption by `keyId`; the lowest-clock `$sys.epoch` is current; a member offline across several rotations decrypts everything after catching up on grants (FR-010); a grant to a device removed elsewhere is superseded by the next rotation; the 2^31 packet auto-rotation guard fires
 - [ ] T067 [P] [US5] Unit test in `packages/spaces/tests/unit/cutoff.test.ts`: the removal event records `cutoff[deviceId]` equal to the highest `seq` of that device the remover holds
 
 ### Implementation for User Story 5
 
 - [ ] T068 [US5] Implement rotation (new `$sys.epoch`, one `$sys.keygrant` per active recipient device, `keyId` selection, auto-rotate triggers `member-removed`, `device-revoked`, `invite-surplus`, `manual`) in `packages/spaces/src/rotation/rotate.ts`
-- [ ] T069 [US5] Implement `setRole()`, `remove()` and `leave()` with cutoff recording and the last-Owner guard in `packages/spaces/src/service/members.ts`
-- [ ] T070 [US5] Notify the author of an inert event (spec FR-005) via a new `SecurityEvent` kind `member:change-ignored` in `packages/spaces/src/service/events.ts` and `specs/002-spaces-security-identity/contracts/spaces-api.ts`
+- [ ] T069 [US5] Implement `setRole()`, `remove()` and `leave()` (any member may remove themselves; an Owner device rotates on seeing it) with cutoff recording and the last-Owner guard in `packages/spaces/src/service/members.ts`
+- [ ] T070 [US5] Notify the author of an inert event (spec FR-005) via a new `SecurityEvent` kind `member:change-ignored` in `packages/spaces/src/service/events.ts` and `specs/002-spaces-security-identity/contracts/spaces-api.ts`; test first in `packages/spaces/tests/integration/inert-notify.test.ts` (the author device of an ignored event receives the event with its reason, and no other device does)
 - [ ] T071 [US5] Implement `members()` with devices and active status, and the `key:rotated` and `member:changed` events, in `packages/spaces/src/service/members.ts`
 
 ---
@@ -200,7 +200,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 4
 
-- [ ] T072 [P] [US4] Integration test in `packages/identity-invite/tests/integration/link-device.test.ts`: the new device has its own key, receives every Space and share the user is in with all entitled epochs, and its packets are attributed to the same user and verified with its own key
+- [ ] T072 [P] [US4] Integration test in `packages/identity-invite/tests/integration/link-device.test.ts`: the new device has its own key, receives every Space and share the user is in with all entitled epochs, and its packets are attributed to the same user and verified with its own key; the same holds when the user is only a Viewer in a Space (self-service `$sys.device` and own-device `$sys.keygrant`)
 - [ ] T073 [P] [US4] Integration test in `packages/spaces/tests/integration/revoke-device.test.ts`: revoking from another linked device rejects later packets (`seq` above cutoff or `clock` after), rotates every Space and share the user was in, and an Owner can remove a whole user whose only device was lost (spec Edge Case)
 - [ ] T074 [P] [US4] Test `maxDevicesPerUser = 10` is enforced and a self-service `$sys.device` is allowed regardless of role, in `packages/spaces/tests/unit/device-limits.test.ts`
 
@@ -265,7 +265,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 - **Setup (Phase 1)**: none
 - **Foundational (Phase 2)**: needs Setup. Blocks all stories. Inside it: 2a/2b (amendments) first and independent of 2c to 2g; 2c to 2d need T023 first; 2e to 2f need the codec (T026) and keystore (T024); 2g needs only the contract types
-- **US1 (Phase 3)** and **US2 (Phase 4)**: need Phase 2. US2 needs US1's `installSpaces` (T043)
+- **US1 (Phase 3)** and **US2 (Phase 4)**: need Phase 2. US2 needs US1's `installSpaces` (T044)
 - **US3 (Phase 5)**: needs US1 and US2, and T018 (channel) plus T037 (contract suite)
 - **US5 (Phase 6)**: needs US1 and US2. Reuses grants (T063) from US3
 - **US4 (Phase 7)**: needs US5 (rotation) and US3 (handshake file)

@@ -157,7 +157,7 @@ An App Developer replaces invite/QR identity with a different provider (e.g. an 
 
 **Encryption & signing**
 
-- **FR-006**: Packet payloads MUST be encrypted on the authoring device before leaving it; only routing metadata (packet ID, Space ID, key epoch, author device ID, clock) MAY be visible to transports.
+- **FR-006**: Packet payloads MUST be encrypted on the authoring device before leaving it; only routing metadata MAY be visible to transports: packet ID (author device ID and sequence number), Space ID, clock, codec identifier, and the key scope (Space or override share ID), key epoch and key ID. The recipient device of a key grant is also visible. Object IDs, types, field names, values, roles and member lists MUST NOT be.
 - **FR-007**: Every packet MUST be signed by the author's device key; peers MUST verify signature and role before applying or relaying.
 - **FR-008**: Removing a member or revoking a device MUST rotate affected keys; later packets MUST be unreadable to the removed party.
 - **FR-009**: Peers MUST reject packets from a revoked device or removed member whose clock is after the revocation, and packets the revoking device had not yet received from it when it revoked (a sequence-number cutoff recorded in the removal), because a revoked device's clock cannot be trusted. Rejected changes MUST be counted and reported to the user.

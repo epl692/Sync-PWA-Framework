@@ -29,7 +29,7 @@ Common to all `$sys.*`: `op = create` only; random `obj` ID; author signature; b
 | `counters` | `scope:epoch:keyId` | `{ packetsEncrypted }` | Nonce-safety guard (auto-rotate at 2^31) |
 | `authority-cache` | `space` | `{ state, throughClock, eventCount }` | Rebuildable from the log |
 | `verified` | `packetId` | `{ verdict, at }` | Signature verdict cache, bounded LRU. Rebuilt, never trusted from older versions (cleared on version bump) |
-| `invites-local` | `inviteId` | `{ secret }` | Only on the creating device |
+| `invites-local` | `inviteId` | `{ secret, seenNonces[] }` | Only on the creating device; `seenNonces` blocks replayed join requests until the invite expires |
 
 ## Messages (not stored)
 
@@ -52,7 +52,7 @@ KeyEpoch 1─* KeyGrant (one per recipient Device)
 ```
 (absent) ──add [Owner author, invite valid]──► active/role
 active/role ──role [Owner author, keeps ≥1 Owner]──► active/role'
-active/* ──remove [Owner author or self, keeps ≥1 Owner]──► removed (devices cut off at cutoff seq)
+active/* ──remove [Owner author, or the member themselves (leave); keeps ≥1 Owner]──► removed (devices cut off at cutoff seq)
 removed ──add [Owner author, new invite]──► active/role
 (any event failing its test) ──► inert (kept in log, no effect)
 ```

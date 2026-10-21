@@ -135,7 +135,7 @@ tests/e2e/                   # Playwright: invite-online, invite-offline-webrtc,
 | Withheld packets below a cutoff can be released later | Indistinguishable from slow honest delivery; bounded by what was really authored (R-08) |
 | Removals older than the retention window are final | Stated limit; configurable retention (R-10) |
 | Owner grants new epoch to a device already removed elsewhere (offline) | Rotates again on learning; removed members keep what they had (spec assumption) |
-| Spam of deferred packets from unknown authors | `maxParkedPerAuthor`, drop oldest, report (A-7) |
+| Spam of deferred packets from unknown authors | `maxParkedPerAuthor`: packets over the limit are not stored or counted as held, and are reported (A-7) |
 | Relay learns recipient device IDs of grants and share grouping | Allowed metadata (FR-006); documented in R-04, R-09 |
 
 ## Complexity Tracking

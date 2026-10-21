@@ -30,6 +30,7 @@ All are sealed to the receiver: `sealed = ECIES(receiverAgreePub, payload)` usin
 
 ## Owner-side rules (inviter or any Owner device)
 
+0. **Replay**: keep a set of seen `(inviteId, nonce)` pairs (in `invites-local`, kept until the invite expires). A `join-request` with a seen pair is refused with no reply and no write. Each request must also carry a `nonce` of 16 random bytes.
 1. Look up the invite in the authority state: exists, not revoked, not expired (`now < expiresAt`), role matches, uses left (count of valid `member.add` for `inviteId` < `maxUses`). Else `join-deny`.
 2. Check `proof` against the stored `secretHash` using the secret held locally. A device that does not hold the secret (not the creator) cannot check `proof`; the invite artifact therefore also names the **creating Owner device**; other Owner devices forward the request to it, or approve based on the invite alone when `approval = 'required'` (human check by SAS).
 3. If `approval = 'required'`, show the approval UI and send `join-pending`. Timeout 5 minutes by default.

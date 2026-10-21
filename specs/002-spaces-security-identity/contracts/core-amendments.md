@@ -10,7 +10,7 @@ Spec 001 is implemented. The items below are additive changes to `@sync/core` th
 | **A-4** | Plugin message channel `core.channel(name)` and relay forwarding | Join/link handshakes are not packets (the joiner is not a member) and must work through the relay | New unknown-`t` messages are already ignored by 001 peers ("Unknown `t` values are ignored"). Relay forwards channel messages to other peers that share the declared Space |
 | **A-5** | Queries hide `$`-prefixed types unless asked by exact type | Control objects must not appear in app queries | Behavior change only for types starting with `$`, which 001 never produced |
 | **A-6** | `CompactionPolicy.pin(type)` | `$sys.*` events and keygrants must never be compacted (fold must be reproducible) | Optional; default pins nothing |
-| **A-7** | Validator context carries `peer?: PeerId` and a `parkedLimit` | DoS bound on deferred packets from unknown authors | Added optional fields; limit default `maxParkedPerAuthor = 1000` |
+| **A-7** | Validator context carries `peer?: PeerId` and a `parkedLimit` | DoS bound on deferred packets from unknown authors | Added optional fields; limit default `maxParkedPerAuthor = 1000`. Over the limit, new packets from that author are **not stored and not counted as held** (so the summary stays honest and they are re-requested once the author's key arrives); they are reported, not dropped silently |
 
 ## A-1 PacketSigner
 
