@@ -252,9 +252,9 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 - [X] T085 [P] Edge-case tests in `packages/spaces/tests/integration/edge-cases.test.ts` for every spec Edge Case (quickstart S10): mutual removal, simultaneous single-use invite, backdated clock beyond cutoff, offline across rotations, photographed QR (needs approval), lost device with no other device
 - [X] T086 [P] Benchmarks in `packages/spaces/bench/rotation.bench.ts` and `packages/spaces/bench/verify.bench.ts` against the 001 reference profile: rotation for 100 devices < 2 s, ≥ 2,000 verifications/s, measured against absolute bounds (see research R-18; the relative "30% slower than plaintext" goal was dropped as meaningless in memory) (quickstart S11)
 - [X] T087 [P] Add `packages/spaces/tests/vectors/` README and a test that regenerates nothing but reproduces the stored vectors byte for byte
-- [ ] T088 Update `specs/002-spaces-security-identity/research.md` R-07 and `plan.md` to say the author of an inert membership event is notified (spec FR-005), and align `contracts/authority-rules.md`
-- [ ] T089 [P] Write the compatibility note for signing, encryption and the snapshot wire change in `specs/002-spaces-security-identity/contracts/crypto-envelope.md` (verify it matches the implementation) and record deviations
-- [ ] T090 Security review of `packages/spaces` and `packages/identity-invite` (key handling, invite secrets, constant-time proof compare, replay of `join-request`), and fix findings
+- [X] T088 Update `specs/002-spaces-security-identity/research.md` R-07 and `plan.md` to say the author of an inert membership event is notified (spec FR-005), and align `contracts/authority-rules.md`
+- [X] T089 [P] Write the compatibility note for signing, encryption and the snapshot wire change in `specs/002-spaces-security-identity/contracts/crypto-envelope.md` (verify it matches the implementation) and record deviations
+- [X] T090 Security review of `packages/spaces` and `packages/identity-invite` (key handling, invite secrets, constant-time proof compare, replay of `join-request`), and fix findings
 - [ ] T091 Run quickstart S0 to S11 end to end; record results in `specs/002-spaces-security-identity/validation.md`; confirm manual check S9 on two real devices
 
 ---

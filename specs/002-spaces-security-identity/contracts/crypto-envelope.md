@@ -41,12 +41,12 @@ A grant is an ordinary create-only control object, **encrypted like every other 
 ## Verification order (receiving side)
 
 1. Dedup by ID (core, before everything).
-2. Envelope validator: `sig` present and valid → author device active in Space (or inside its cutoff) → role can write (Owner/Editor) or the object is a self-service type (`$sys.device` for own user).
+2. Envelope validator: `sig` present and valid → author device known (else *defer*) → author device active in the Space or inside its cutoff (else *reject*; for a **control event** this check is skipped and the fold decides, research R-07) → role can write (Owner/Editor) or the event is a self-service type (`$sys.device` for own user, `$sys.keygrant` to own devices, leaving). The genesis packet creates the first Owner and is exempt from the standing check. Signatures of a batch are checked concurrently ahead of time (core amendment A-10); the verdict is the same either way.
 3. Decode with the codec (picks the key by `keyId`; `missing-key` parks the packet).
 4. Body validator: operation allowed for the author's role in the **scope** (Space or share); `$sys.*` types only as the authority rules allow.
 5. Apply (core).
 
-Any `reject` stops the chain, the packet is not applied and **not relayed**.
+Any `reject` stops the chain, the packet is not applied and **not relayed**. A `defer` (unknown author or share, signature suite or header format from the future) stores and relays the packet without applying it; it is retried when the missing information arrives.
 
 ## Compatibility
 

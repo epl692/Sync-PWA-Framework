@@ -4,12 +4,13 @@ Offline-first, object-based sync for web apps. Every item is a **Syncable Object
 change is an immutable **Data Packet**; devices converge automatically, over any **Transport** (a WebSocket relay,
 direct WebRTC between two browsers, or one you write).
 
-This repository currently contains the **Sync Core** (spec `001-sync-core`). Spaces, security, identity, modules
-and blob sync are specs 002 to 004.
+This repository contains the **Sync Core** (spec `001-sync-core`) and **Spaces, Security & Identity** (spec
+`002-spaces-security-identity`): shared, end-to-end encrypted Spaces, signed packets that every peer verifies,
+key rotation, private objects inside a Space, and invite-by-link/QR. Modules and blob sync are specs 003 and 004.
 
-> **Not releasable on its own.** Packet payloads are not yet encrypted or signed; that is spec 002
-> (Constitution Principle V). The plaintext codec used in tests and demos lives in `@sync/testkit` and is never
-> imported by `@sync/core`. A test guards this.
+> **Release builds use `openSecureCore`** (from `@sync/spaces`), which registers only the encrypting codec.
+> The plaintext codec used in tests and demos lives in `@sync/testkit` and is never imported by `@sync/core` or
+> `@sync/spaces`; `assertSecureCore(core)` and a bundle test guard this.
 
 ## Packages
 
@@ -19,7 +20,9 @@ and blob sync are specs 002 to 004.
 | `@sync/transport-websocket` | Client transport for a relay server. Reconnects with backoff. |
 | `@sync/transport-webrtc` | Browser-to-browser data channel, paired by QR code or pasted code. No server. |
 | `@sync/relay-server` | Reference relay: stores and forwards opaque packets, in memory. A convenience, not required. |
-| `@sync/testkit` | Contract suites (Transport, Storage), test helpers, random convergence scenarios. Dev only. |
+| `@sync/spaces` | Spaces and roles, end-to-end encryption, signing, key rotation, override shares, the Identity Provider contract. Web Crypto only, no runtime dependencies. |
+| `@sync/identity-invite` | The default Identity Provider: invite links and QR codes, device linking. |
+| `@sync/testkit` | Contract suites (Transport, Storage, Identity Provider), test helpers, random convergence scenarios. Dev only. |
 
 ## Quick use
 
@@ -42,6 +45,30 @@ await core.undo(note.id);                                                  // co
 
 See `specs/001-sync-core/contracts/public-api.ts` for the full API.
 
+### Encrypted Spaces
+
+```ts
+import { openSecureCore } from '@sync/spaces';
+import { createInviteProvider, qrToSvg } from '@sync/identity-invite';
+
+const { core, spaces } = await openSecureCore({
+  provider: createInviteProvider(),
+  approveJoin: (req) => askTheUser(req),      // req.sas: five words both screens show
+  approveLink: (device, sas) => askTheUser({ device, sas }),
+  core: { storage: await createIndexedDbStorage({ name: 'my-app' }) },
+});
+core.addTransport(createWebSocketTransport({ url: 'wss://example.com/sync' }));
+
+await spaces.signUp('Maya');
+const family = await spaces.create('Family');                  // Maya is its Owner; everything in it is encrypted
+await core.create(family.id, 'note', { title: 'groceries' });  // same API as before
+const invite = await spaces.invite(family.id, { role: 'editor', expiresAt: Date.now() + 86_400_000, maxUses: 1 });
+showQr(qrToSvg(invite.qrPayload));                             // or share invite.url; the secret is in the #fragment
+// on the other device:  await spaces.accept(scannedOrPastedText)
+```
+
+Writing your own identity provider (for example an organization login): `docs/writing-an-identity-provider.md`.
+
 ## Develop
 
 Needs Node 20+.
@@ -56,7 +83,7 @@ npm run dev -w @sync/transport-webrtc   # pairing demo on http://localhost:5174
 npm run bench -w @sync/core             # compaction of 100k packets
 ```
 
-Validation scenarios are in `specs/001-sync-core/quickstart.md`; results in `specs/001-sync-core/validation.md`.
+Validation scenarios are in `specs/001-sync-core/quickstart.md` and `specs/002-spaces-security-identity/quickstart.md`; results in the matching `validation.md`. Browser tests in a sandbox without `playwright install`: set `PW_CHROMIUM_PATH` to an installed Chromium.
 
 ## Writing a transport
 

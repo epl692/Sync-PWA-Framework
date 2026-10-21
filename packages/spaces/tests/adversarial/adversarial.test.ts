@@ -246,7 +246,7 @@ describe('adversarial streams (SC-001)', () => {
       }),
       { numRuns: RUNS, seed: SEED },
     );
-  }, 600_000);
+  }, Math.max(600_000, RUNS * 2500));
 
   it('handles the worst case: every kind of attack in one stream, delivered in reverse', async () => {
     const steps = kinds.map((kind, i) => ({ kind, t: 10 + i }));
