@@ -25,6 +25,7 @@ This spec plugs into spec 001 by supplying the **encrypting payload codec** and 
 - Q: Permission model? → A: Fixed Owner/Editor/Viewer roles only.
 - Q: Can a new member read data written before they joined? → A: Yes, joiners can read all existing history in the Space.
 - Q: Can Space Owners outside an override share read or edit it? → A: No; only the share's own members can.
+- Q: Are a removed member's unsynced offline changes kept? → A: No; changes the removing Owner hadn't received are discarded and the count reported.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -100,7 +101,7 @@ An Owner removes a member. The removed member can no longer read anything new wr
 **Acceptance Scenarios**:
 
 1. **Given** a member is removed, **When** removal is applied, **Then** the Space key is rotated and the new key is shared only with remaining members.
-2. **Given** a removed member's packet, **When** its clock is after the removal, **Then** peers reject it.
+2. **Given** a removed member's packet, **When** its clock is after the removal or it was not received by the remover before removal, **Then** peers reject it.
 3. **Given** a Space, **When** the last Owner tries to leave or be demoted, **Then** it is refused unless another Owner exists.
 
 ---
@@ -156,7 +157,7 @@ An App Developer replaces invite/QR identity with a different provider (e.g. an 
 - **FR-006**: Packet payloads MUST be encrypted on the authoring device before leaving it; only routing metadata (packet ID, Space ID, key epoch, author device ID, clock) MAY be visible to transports.
 - **FR-007**: Every packet MUST be signed by the author's device key; peers MUST verify signature and role before applying or relaying.
 - **FR-008**: Removing a member or revoking a device MUST rotate affected keys; later packets MUST be unreadable to the removed party.
-- **FR-009**: Peers MUST reject packets from a revoked device or removed member whose clock is after the revocation.
+- **FR-009**: Peers MUST reject packets from a revoked device or removed member whose clock is after the revocation, and packets the revoking device had not yet received from it when it revoked (a sequence-number cutoff recorded in the removal), because a revoked device's clock cannot be trusted. Rejected changes MUST be counted and reported to the user.
 - **FR-010**: Members MUST be able to obtain all key epochs they are entitled to after being offline. A newly joined member is entitled to every existing key epoch of the Space, so it can read all history written before it joined.
 
 **Override shares**
