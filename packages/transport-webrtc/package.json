@@ -1,6 +1,7 @@
 {
   "name": "@sync/transport-webrtc",
   "version": "0.0.0",
+  "license": "MIT",
   "description": "WebRTC data-channel transport with manual signaling",
   "type": "module",
   "main": "./src/index.ts",

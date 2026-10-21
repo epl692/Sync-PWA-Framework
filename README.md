@@ -68,3 +68,7 @@ transportContract('my transport', { create: async () => ({ transport, remote, te
 ```
 
 Passing it means your transport works in any app with no core changes. See `packages/testkit/README.md`.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

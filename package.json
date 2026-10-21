@@ -2,9 +2,14 @@
   "name": "sync-pwa-framework",
   "private": true,
   "version": "0.0.0",
+  "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=20" },
-  "workspaces": ["packages/*"],
+  "engines": {
+    "node": ">=20"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
