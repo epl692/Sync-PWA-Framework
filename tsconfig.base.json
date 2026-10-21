@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@sync/core": ["packages/core/src/index.ts"],
+      "@sync/testkit": ["packages/testkit/src/index.ts"],
+      "@sync/transport-websocket": ["packages/transport-websocket/src/index.ts"],
+      "@sync/transport-webrtc": ["packages/transport-webrtc/src/index.ts"],
+      "@sync/relay-server": ["packages/relay-server/src/index.ts"]
+    }
+  }
+}

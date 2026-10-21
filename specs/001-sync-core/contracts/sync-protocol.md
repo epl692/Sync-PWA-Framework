@@ -39,3 +39,14 @@ All messages are canonical JSON objects with a `t` discriminator.
 ## Resumption guarantee
 
 If a session drops after any prefix of `packets` batches, restarting steps 1 to 3 results in the peers exchanging only the packets not yet held. No packet is required to be re-sent unless it never arrived.
+
+## Implementation notes (verified against the 001 implementation)
+
+Additions and clarifications found while implementing; none change the envelope.
+
+- **Wildcard Space.** `hello.spaces` may contain `"*"`, meaning "any Space you declare". Relays and hubs that hold opaque data for everyone use it; the other side then shares all of its own Spaces.
+- **Announcing a new Space.** When a device first writes in a Space it did not announce, it re-sends `hello`; the peer replies with `summary` for newly shared Spaces.
+- **Relay off.** With relay disabled for a Space, a device sends only packets it authored itself (live, by summary catch-up, and for `want`), and does not send snapshots.
+- **Snapshots.** `snapshot` is chunked (`part` of `of`, 100 objects per part). A receiver installs it only when every part has arrived, joins the objects into its state, adds `covers` to what it holds, and keeps the union so it can pass the snapshot on. The sender sends a snapshot only when what the peer lacks was compacted away, then the newer packets.
+- **Live forwarding** starts after the peer's `summary` arrives; before that, the catch-up push reads the log and includes the packet.
+- **Limits.** A message larger than `limits.maxMessageBytes` is dropped; the connection stays open.

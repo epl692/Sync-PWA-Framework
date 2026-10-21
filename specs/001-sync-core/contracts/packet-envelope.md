@@ -45,3 +45,13 @@ Rationale: an older peer must never discard or rewrite data it does not understa
 2. For a given `author`, `seq` is unique and strictly increasing in authoring order.
 3. `clock` parses, and its `deviceId` suffix equals `author`.
 4. Envelope bytes are never modified after creation.
+
+## Implementation notes (verified against the 001 implementation)
+
+Reviewed the Compatibility table against the code and tests (`envelope.test.ts`, `parked.test.ts`, `edge-cases.test.ts`):
+
+- Newer `v`, unknown `codec`, and unreadable bodies are stored verbatim, counted as held, relayed byte for byte, and applied after `revalidate()` once readable. Matches the table.
+- A body that a *known* codec reports as `malformed` is **rejected**, not parked: it can never become valid.
+- A packet of an unknown `type` or higher `schemaVersion` is applied generically; unknown fields are kept.
+- `id`, `seq` and the clock's device suffix are validated for `v` 1. For newer versions only `id`, `author`, `seq` and `space` must parse.
+- No mismatches with the contract were found.

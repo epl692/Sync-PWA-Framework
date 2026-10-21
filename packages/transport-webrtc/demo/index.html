@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WebRTC pairing demo</title>
+  <style>
+    body { font: 16px/1.4 system-ui, sans-serif; max-width: 42rem; margin: 1rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.3rem; }
+    section { border: 1px solid #8884; border-radius: 8px; padding: .75rem 1rem; margin: 1rem 0; }
+    textarea { width: 100%; min-height: 4rem; font: 12px monospace; }
+    canvas { max-width: 100%; }
+    button { padding: .4rem .8rem; margin: .2rem .2rem .2rem 0; }
+    .status { font-weight: 600; }
+    .warn { color: #a60; font-size: .85rem; }
+    video { max-width: 100%; display: none; }
+  </style>
+</head>
+<body>
+  <h1>WebRTC pairing demo</h1>
+  <p class="warn">Development demo. It uses the plaintext test codec, which must never ship (Constitution Principle V).</p>
+  <p>Status: <span id="status" class="status">starting</span> &middot; Space: <code id="space"></code></p>
+
+  <section>
+    <h2>1. Device A: create a pairing code</h2>
+    <button id="create">Create pairing code</button>
+    <canvas id="offer-qr"></canvas>
+    <textarea id="offer-text" readonly placeholder="the offer code appears here"></textarea>
+  </section>
+
+  <section>
+    <h2>2. Device B: enter A's code</h2>
+    <textarea id="offer-in" placeholder="paste A's offer code, or scan it"></textarea>
+    <button id="scan-offer">Scan with camera</button>
+    <button id="accept">Accept and create answer</button>
+    <canvas id="answer-qr"></canvas>
+    <textarea id="answer-text" readonly placeholder="the answer code appears here"></textarea>
+  </section>
+
+  <section>
+    <h2>3. Device A: enter B's answer</h2>
+    <textarea id="answer-in" placeholder="paste B's answer code, or scan it"></textarea>
+    <button id="scan-answer">Scan with camera</button>
+    <button id="connect">Connect</button>
+    <video id="video" playsinline></video>
+  </section>
+
+  <section>
+    <h2>Shared notes</h2>
+    <input id="note" placeholder="type a note" />
+    <button id="add">Add</button>
+    <ul id="notes"></ul>
+  </section>
+
+  <p id="error" class="warn"></p>
+  <script type="module" src="/demo.js"></script>
+</body>
+</html>

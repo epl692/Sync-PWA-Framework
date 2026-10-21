@@ -1,0 +1,25 @@
+{
+  "name": "@sync/transport-webrtc",
+  "version": "0.0.0",
+  "description": "WebRTC data-channel transport with manual signaling",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sync/core": "*"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:contract": "vitest run contract",
+    "test:property": "vitest run tests/property",
+    "bench": "vitest bench --run",
+    "dev": "node dev.mjs"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6",
+    "qrcode": "^1.5.4"
+  }
+}
