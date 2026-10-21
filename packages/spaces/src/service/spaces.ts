@@ -782,6 +782,7 @@ export class SpacesService implements Spaces {
     }
     if (cur) {
       if (cur === role) return;
+      if (auth.currentRole(user) === 'viewer' && role !== 'viewer') throw new NotAuthorizedError('a Space viewer can be at most a viewer in a share');
       if (cur === 'owner' && role !== 'owner' && auth.shareOwnerCount(shareId) <= 1) throw new NotAuthorizedError('a share needs at least one Owner');
       await this.write(space, SYS.shareMember, { shareId, action: 'role', user, role });
       return;

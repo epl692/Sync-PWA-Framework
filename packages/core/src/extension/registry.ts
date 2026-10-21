@@ -55,6 +55,19 @@ export class Extensions {
     return this.defaultId ? this.codecs.get(this.defaultId) : undefined;
   }
 
+  /** Let validators warm up on a batch (for example verify signatures concurrently). Never fails the batch. */
+  async prepare(batch: ReadonlyArray<{ envelope: DataPacketEnvelope; raw: Uint8Array }>): Promise<void> {
+    await Promise.all(
+      this.validators.map(async (v) => {
+        try {
+          await v.prepare?.(batch);
+        } catch {
+          // a cache that could not be filled is simply not used
+        }
+      }),
+    );
+  }
+
   /** The first reject wins, then the first defer, otherwise accept. */
   async validate(
     phase: ValidationPhase,

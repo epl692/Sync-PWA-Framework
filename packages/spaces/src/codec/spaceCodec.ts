@@ -86,7 +86,11 @@ function isBody(o: unknown): o is PacketBody {
 export class SpaceCodec implements PayloadCodec {
   readonly id = SPACE_CODEC_ID;
 
-  constructor(private readonly keys: KeyAccess) {}
+  /** `nonce` is for known-answer tests only; production always draws 96 fresh random bits. */
+  constructor(
+    private readonly keys: KeyAccess,
+    private readonly opts: { nonce?: () => Uint8Array } = {},
+  ) {}
 
   async encode(body: PacketBody, ctx: CodecContext): Promise<Uint8Array> {
     if (!ctx.envelope) throw new Error('aes-gcm-space/1 needs the envelope context');
@@ -95,7 +99,7 @@ export class SpaceCodec implements PayloadCodec {
     if (!wk) throw new NoWriteKeyError(scope);
     if ((await this.keys.used(scope, wk.keyId)) > MAX_ENCRYPTIONS_PER_KEY) throw new Error('key exhausted: rotate before writing again');
     const header = buildHeader(scope, wk.epoch, wk.keyId);
-    const nonce = randomBytes(NONCE_BYTES);
+    const nonce = this.opts.nonce ? this.opts.nonce() : randomBytes(NONCE_BYTES);
     const aad = concat(envelopeAad(ctx.envelope, ctx.space, ctx.author), header);
     const ct = await aesSeal(wk.key, nonce, utf8.encode(JSON.stringify(body)), aad);
     return concat(header, nonce, ct);

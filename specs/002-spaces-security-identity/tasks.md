@@ -200,14 +200,14 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 4
 
-- [ ] T072 [P] [US4] Integration test in `packages/identity-invite/tests/integration/link-device.test.ts`: the new device has its own key, receives every Space and share the user is in with all entitled epochs, and its packets are attributed to the same user and verified with its own key; the same holds when the user is only a Viewer in a Space (self-service `$sys.device` and own-device `$sys.keygrant`)
-- [ ] T073 [P] [US4] Integration test in `packages/spaces/tests/integration/revoke-device.test.ts`: revoking from another linked device rejects later packets (`seq` above cutoff or `clock` after), rotates every Space and share the user was in, and an Owner can remove a whole user whose only device was lost (spec Edge Case)
-- [ ] T074 [P] [US4] Test `maxDevicesPerUser = 10` is enforced and a self-service `$sys.device` is allowed regardless of role, in `packages/spaces/tests/unit/device-limits.test.ts`
+- [X] T072 [P] [US4] Integration test in `packages/identity-invite/tests/integration/link-device.test.ts`: the new device has its own key, receives every Space and share the user is in with all entitled epochs, and its packets are attributed to the same user and verified with its own key; the same holds when the user is only a Viewer in a Space (self-service `$sys.device` and own-device `$sys.keygrant`)
+- [X] T073 [P] [US4] Integration test in `packages/spaces/tests/integration/revoke-device.test.ts`: revoking from another linked device rejects later packets (`seq` above cutoff or `clock` after), rotates every Space and share the user was in, and an Owner can remove a whole user whose only device was lost (spec Edge Case)
+- [X] T074 [P] [US4] Test `maxDevicesPerUser = 10` is enforced and a self-service `$sys.device` is allowed regardless of role, in `packages/spaces/tests/unit/device-limits.test.ts`
 
 ### Implementation for User Story 4
 
-- [ ] T075 [US4] Implement `beginLink`/`completeLink` (`link-offer`, `link-accept`) in `packages/identity-invite/src/handshake.ts`
-- [ ] T076 [US4] Implement `linkDevice()`, `joinAsDevice()` and `revokeDevice()` (write `$sys.device` into every Space of the user, grant all entitled epochs, write `$sys.device-revoke` with cutoff, rotate) in `packages/spaces/src/service/devices.ts`
+- [X] T075 [US4] Implement `beginLink`/`completeLink` (`link-offer`, `link-accept`) in `packages/identity-invite/src/handshake.ts`
+- [X] T076 [US4] Implement `linkDevice()`, `joinAsDevice()` and `revokeDevice()` (write `$sys.device` into every Space of the user, grant all entitled epochs, write `$sys.device-revoke` with cutoff, rotate) in `packages/spaces/src/service/devices.ts`
 
 ---
 
@@ -219,14 +219,14 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 6
 
-- [ ] T077 [P] [US6] Integration test in `packages/spaces/tests/integration/override-share.test.ts`: a share has its own members, roles and key; outsiders store and relay but get `missing-key`; share roles are capped by Space roles; a non-Space-member cannot be added; a Space Owner outside the share cannot read or edit; removing a user from the Space removes them from every share and rotates each
-- [ ] T078 [P] [US6] Test in `packages/spaces/tests/integration/share-snapshot.test.ts`: snapshot parts for a share are sent only to share members and are sealed with the share key
+- [X] T077 [P] [US6] Integration test in `packages/spaces/tests/integration/override-share.test.ts`: a share has its own members, roles and key; outsiders store and relay but get `missing-key`; share roles are capped by Space roles; a non-Space-member cannot be added; a Space Owner outside the share cannot read or edit; removing a user from the Space removes them from every share and rotates each
+- [X] T078 [P] [US6] Test in `packages/spaces/tests/integration/share-snapshot.test.ts`: snapshot parts for a share are sent only to share members and are sealed with the share key
 
 ### Implementation for User Story 6
 
-- [ ] T079 [US6] Implement share binding (`obj → shareId` resolution, `scopeId` in the codec header, scoped role check in the body validator) in `packages/spaces/src/shares/binding.ts` and `packages/spaces/src/validators/bodyValidator.ts`
-- [ ] T080 [US6] Implement `share()`, `shareOf()`, `setShareRole()` with per-share rotation in `packages/spaces/src/shares/shares.ts` and `packages/spaces/src/rotation/rotate.ts`
-- [ ] T081 [US6] Restrict snapshot sending of share scopes to share members in `packages/spaces/src/codec/snapshotSealer.ts`
+- [X] T079 [US6] Implement share binding (`obj → shareId` resolution, `scopeId` in the codec header, scoped role check in the body validator) in `packages/spaces/src/shares/binding.ts` and `packages/spaces/src/validators/bodyValidator.ts`
+- [X] T080 [US6] Implement `share()`, `shareOf()`, `setShareRole()` with per-share rotation in `packages/spaces/src/shares/shares.ts` and `packages/spaces/src/rotation/rotate.ts`
+- [X] T081 [US6] Restrict snapshot sending of share scopes to share members in `packages/spaces/src/codec/snapshotSealer.ts`
 
 ---
 
@@ -238,20 +238,20 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 7
 
-- [ ] T082 [P] [US7] Run `identityProviderContract` against the stub provider in `packages/testkit/tests/stubProvider.contract.test.ts`
-- [ ] T083 [P] [US7] Run the US1, US2 and US5 integration tests with the stub provider injected in `packages/spaces/tests/integration/stub-provider-swap.test.ts`, with no changes to non-provider code
+- [X] T082 [P] [US7] Run `identityProviderContract` against the stub provider in `packages/testkit/tests/stubProvider.contract.test.ts`
+- [X] T083 [P] [US7] Run the US1, US2 and US5 integration tests with the stub provider injected in `packages/spaces/tests/integration/stub-provider-swap.test.ts`, with no changes to non-provider code
 
 ### Implementation for User Story 7
 
-- [ ] T084 [US7] Fix any provider-specific assumptions found by T083 in `packages/spaces/src/service/` so only the `IdentityProvider` interface is used, and add `docs/writing-an-identity-provider.md` (contract, pure `verifyBinding` rule, how to run the suite)
+- [X] T084 [US7] Fix any provider-specific assumptions found by T083 in `packages/spaces/src/service/` so only the `IdentityProvider` interface is used, and add `docs/writing-an-identity-provider.md` (contract, pure `verifyBinding` rule, how to run the suite)
 
 ---
 
 ## Phase 10: Polish & Cross-Cutting Concerns
 
-- [ ] T085 [P] Edge-case tests in `packages/spaces/tests/integration/edge-cases.test.ts` for every spec Edge Case (quickstart S10): mutual removal, simultaneous single-use invite, backdated clock beyond cutoff, offline across rotations, photographed QR (needs approval), lost device with no other device
-- [ ] T086 [P] Benchmarks in `packages/spaces/bench/rotation.bench.ts` and `packages/spaces/bench/verify.bench.ts` against the 001 reference profile: rotation for 100 devices < 2 s, ≥ 2,000 verifications/s, 10,000-packet sync ≤ 30% slower than the plaintext codec (quickstart S11)
-- [ ] T087 [P] Add `packages/spaces/tests/vectors/` README and a test that regenerates nothing but reproduces the stored vectors byte for byte
+- [X] T085 [P] Edge-case tests in `packages/spaces/tests/integration/edge-cases.test.ts` for every spec Edge Case (quickstart S10): mutual removal, simultaneous single-use invite, backdated clock beyond cutoff, offline across rotations, photographed QR (needs approval), lost device with no other device
+- [X] T086 [P] Benchmarks in `packages/spaces/bench/rotation.bench.ts` and `packages/spaces/bench/verify.bench.ts` against the 001 reference profile: rotation for 100 devices < 2 s, ≥ 2,000 verifications/s, 10,000-packet sync ≤ 30% slower than the plaintext codec (quickstart S11)
+- [X] T087 [P] Add `packages/spaces/tests/vectors/` README and a test that regenerates nothing but reproduces the stored vectors byte for byte
 - [ ] T088 Update `specs/002-spaces-security-identity/research.md` R-07 and `plan.md` to say the author of an inert membership event is notified (spec FR-005), and align `contracts/authority-rules.md`
 - [ ] T089 [P] Write the compatibility note for signing, encryption and the snapshot wire change in `specs/002-spaces-security-identity/contracts/crypto-envelope.md` (verify it matches the implementation) and record deviations
 - [ ] T090 Security review of `packages/spaces` and `packages/identity-invite` (key handling, invite secrets, constant-time proof compare, replay of `join-request`), and fix findings

@@ -28,6 +28,7 @@ import type { AuthorityView } from '../authority/hub';
 import { checkFields } from '../authority/schema';
 import { SYS, SYS_PREFIX, type ControlFields, type Role } from '../authority/types';
 import { SPACE_CODEC_ID, parseHeader } from '../codec/spaceCodec';
+import { b64urlDecodeSafe } from '../crypto/b64';
 import { equalBytes, hex } from '../crypto/bytes';
 import { deviceIdFromSignPub, spaceIdFor } from '../crypto/ids';
 import { SIGNATURE_BYTES, verifySignature } from '../crypto/suite';
@@ -75,6 +76,21 @@ const canWrite = (r: Role | null): boolean => r === 'owner' || r === 'editor';
 
 export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
   const verified = new Map<string, boolean>();
+  /** Decoded signing keys of devices whose ID was already checked against the key (a device's key never changes). */
+  const keyCache = new Map<string, Promise<Uint8Array | undefined>>();
+  const deviceKey = (deviceId: string, signPubB64: string): Promise<Uint8Array | undefined> => {
+    const k = `${deviceId}:${signPubB64}`;
+    let p = keyCache.get(k);
+    if (!p) {
+      if (keyCache.size > 5000) keyCache.clear();
+      p = (async () => {
+        const pub = b64urlDecodeSafe(signPubB64);
+        return pub && (await deviceIdFromSignPub(pub)) === deviceId ? pub : undefined;
+      })();
+      keyCache.set(k, p);
+    }
+    return p;
+  };
   const remember = (k: string, v: boolean) => {
     if (verified.size > 50_000) verified.clear();
     verified.set(k, v);
@@ -90,13 +106,18 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
 
     let pub: Uint8Array | undefined;
     const dev = auth.device(env.author);
-    if (dev) pub = b64urlDecode(dev.signPub);
-    else if (body?.type === SYS.genesis && (!auth.hasGenesis() || auth.genesis()!.event === env.id)) {
+    if (dev) {
+      pub = await deviceKey(env.author, dev.signPub);
+      if (!pub) {
+        remember(cacheKey, false);
+        return reject('bad-signature', 'key does not match the author ID');
+      }
+    } else if (body?.type === SYS.genesis && (!auth.hasGenesis() || auth.genesis()!.event === env.id)) {
       const owner = (body.fields as Partial<ControlFields[typeof SYS.genesis]>).owner;
       if (owner && typeof owner.signPub === 'string') pub = b64urlDecode(owner.signPub);
     }
     if (!pub) return defer('unknown-device');
-    if ((await deviceIdFromSignPub(pub)) !== env.author) {
+    if (!dev && (await deviceIdFromSignPub(pub)) !== env.author) {
       remember(cacheKey, false);
       return reject('bad-signature', 'key does not match the author ID');
     }
@@ -241,9 +262,35 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
     }
   }
 
+  /**
+   * Verify the signatures of a whole batch concurrently and remember the verdicts. Only packets whose author device is
+   * already known are checked here; the rest are checked in `validate`, once the batch has taught us the device.
+   */
+  async function prepare(batch: ReadonlyArray<{ envelope: DataPacketEnvelope; raw: Uint8Array }>): Promise<void> {
+    const bySpace = new Map<string, Authority>();
+    const work: Array<() => Promise<void>> = [];
+    for (const { envelope: env, raw } of batch) {
+      if (env.codec !== SPACE_CODEC_ID || !env.sig || env.sig.byteLength !== SIGNATURE_BYTES) continue;
+      const cacheKey = `${env.id}:${hex(env.sig)}`;
+      if (verified.has(cacheKey)) continue;
+      let auth = bySpace.get(env.space);
+      if (!auth) bySpace.set(env.space, (auth = await deps.authorities.ensure(env.space)));
+      const dev = auth.device(env.author);
+      if (!dev) continue;
+      work.push(async () => {
+        const pub = await deviceKey(env.author, dev.signPub);
+        if (!pub) return remember(cacheKey, false);
+        remember(cacheKey, await verifySignature(pub, env.sig!, signingInput(raw)));
+      });
+    }
+    const WIDTH = 64;
+    for (let i = 0; i < work.length; i += WIDTH) await Promise.all(work.slice(i, i + WIDTH).map((f) => f()));
+  }
+
   return {
     id: 'spaces/authority',
     phases: ['send', 'apply'],
+    prepare,
     async validate(phase, env, body, ctx) {
       const r = await validate(phase, env, body, ctx);
       if (r.verdict === 'reject' && deps.report && !deps.quiet?.()) deps.report({ code: r.reason.split(':')[0] as RejectCode, id: env.id, space: env.space });

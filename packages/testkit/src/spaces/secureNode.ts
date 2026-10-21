@@ -11,6 +11,7 @@ export interface SecureNodeOptions {
   clock?: FakeClock;
   provider?: () => IdentityProvider;
   approveJoin?: (req: import('@sync/spaces').JoinRequestView) => boolean | Promise<boolean>;
+  approveLink?: (device: import('@sync/spaces').DevicePublic, sas: string) => boolean | Promise<boolean>;
   rotationGraceMs?: number;
   storage?: StorageAdapter;
   keyDb?: KeyDb;
@@ -39,6 +40,7 @@ export async function createSecureNode(opts: SecureNodeOptions = {}): Promise<Se
       provider: (opts.provider ?? createStubIdentityProvider)(),
       now: clock.now,
       approveJoin: opts.approveJoin ?? (() => true),
+      approveLink: opts.approveLink,
       rotationGraceMs: opts.rotationGraceMs ?? 20,
       core: { storage, now: clock.now, autoCompact: false, ...(opts.coreConfig ?? {}) },
     });

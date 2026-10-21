@@ -290,6 +290,15 @@ export function createInviteProvider(opts: InviteProviderOptions = {}): Identity
             await sendSealed(peerKey, device.agreePub, { kind: 'link-accept', nonce, data, binding: { kind: binding.kind, proof: b64urlEncode(binding.proof) } }, 'link-reply', '*');
             resolve({ device: device.deviceId });
           } catch (e) {
+            // tell the new device at once, instead of leaving it to time out
+            const peerDevice = (() => {
+              try {
+                return unwireDevice(offer.device);
+              } catch {
+                return undefined;
+              }
+            })();
+            if (peerDevice) await sendSealed(peerKey, peerDevice.agreePub, { kind: 'link-deny', nonce, reason: (e as Error).message }, 'link-reply', '*').catch(() => undefined);
             reject(e);
           }
         });
@@ -308,6 +317,7 @@ export function createInviteProvider(opts: InviteProviderOptions = {}): Identity
       const sealed = await sealTo(b64urlDecode(c.ap), json({ kind: 'link-offer', nonce: c.n, device: wireDevice(meta(d)) }), 'link-offer');
       await host.channel.broadcast(sealed);
       const reply = await waitFor;
+      if (reply.kind === 'link-deny') throw new Error(`the existing device refused the link: ${reply.reason}`);
       const binding: DeviceBinding = { kind: reply.binding.kind, proof: b64urlDecode(reply.binding.proof) };
       if (!(await verifyDeviceBinding(c.user, meta(d), binding))) throw new Error('the existing device sent evidence that does not verify');
       await host.store.put(BINDING_KEY, binding.proof);

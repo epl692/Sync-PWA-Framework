@@ -41,6 +41,11 @@ export interface ValidatorContext {
 export interface PacketValidator {
   readonly id: string;
   readonly phases: readonly ValidationPhase[];
+  /**
+   * Optional: called with a whole batch of decoded envelopes before any of them is validated, so slow checks (signature
+   * verification) can run concurrently. Whatever it learns is only a cache: `validate` must give the same answer without it.
+   */
+  prepare?(batch: ReadonlyArray<{ envelope: DataPacketEnvelope; raw: Uint8Array }>): Promise<void>;
   validate(
     phase: ValidationPhase,
     envelope: DataPacketEnvelope,

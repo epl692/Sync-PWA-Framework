@@ -116,19 +116,19 @@ export class Applier {
   async ingestBatch(raws: readonly Uint8Array[], source: string): Promise<IngestResult[]> {
     return this.serial(() =>
       this.d.queries.batch(async () => {
-        const out: IngestResult[] = [];
+        const decodedAll: Array<DecodedEnvelope | IngestResult> = [];
         for (const raw of raws) {
-          let decoded: DecodedEnvelope;
           try {
-            decoded = decodeEnvelope(raw, this.d.cfg.limits.maxEnvelopeBytes);
+            decodedAll.push(decodeEnvelope(raw, this.d.cfg.limits.maxEnvelopeBytes));
           } catch (e) {
             const reason = e instanceof EnvelopeError ? `${e.code}: ${e.message}` : String(e);
             this.d.events.emit({ kind: 'packet:rejected', id: '', reason });
-            out.push({ status: 'rejected', reason });
-            continue;
+            decodedAll.push({ status: 'rejected', reason });
           }
-          out.push(await this.applyDecoded(decoded, source));
         }
+        await this.d.ext.prepare(decodedAll.filter((x): x is DecodedEnvelope => 'env' in x).map((x) => ({ envelope: x.env, raw: x.raw })));
+        const out: IngestResult[] = [];
+        for (const item of decodedAll) out.push('env' in item ? await this.applyDecoded(item, source) : item);
         return out;
       }),
     );
