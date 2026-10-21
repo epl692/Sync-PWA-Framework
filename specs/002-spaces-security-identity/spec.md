@@ -26,6 +26,7 @@ This spec plugs into spec 001 by supplying the **encrypting payload codec** and 
 - Q: Can a new member read data written before they joined? → A: Yes, joiners can read all existing history in the Space.
 - Q: Can Space Owners outside an override share read or edit it? → A: No; only the share's own members can.
 - Q: Are a removed member's unsynced offline changes kept? → A: No; changes the removing Owner hadn't received are discarded and the count reported.
+- Q: Must an Owner approve each invite acceptance? → A: Approval required by default; the Owner can choose automatic per invite.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -72,7 +73,7 @@ An Owner invites a new member by link or QR code, choosing their role. It works 
 
 **Acceptance Scenarios**:
 
-1. **Given** an Owner, **When** they create an invite, **Then** it grants a specific role in a specific Space and has an expiry and a use limit.
+1. **Given** an Owner, **When** they create an invite, **Then** it grants a specific role in a specific Space and has an expiry, a use limit, and an approval setting (required by default).
 2. **Given** a valid invite and no internet, **When** a nearby device accepts it over a local transport, **Then** it receives all of the Space's key epochs (so it can read existing history) and its device key is registered as a member.
 3. **Given** an expired or used-up invite, **When** someone tries to accept it, **Then** it is refused.
 
@@ -169,7 +170,7 @@ An App Developer replaces invite/QR identity with a different provider (e.g. an 
 **Identity**
 
 - **FR-013**: Identity MUST be provided through a pluggable Identity Provider contract (create user, link device, revoke device, create/accept invite) with a contract test suite.
-- **FR-014**: The default provider MUST support invite links and QR codes with role, expiry, and use limit, including fully offline acceptance over a local transport.
+- **FR-014**: The default provider MUST support invite links and QR codes with role, expiry, and use limit, including fully offline acceptance over a local transport. Each invite MUST require Owner approval of the joining device by default, and the Owner MAY choose automatic acceptance per invite. The approval screen MUST show a short code both devices display, so a copied or photographed invite can be spotted.
 - **FR-015**: A user MUST be able to link multiple devices, each with its own device key, under one user identity, and revoke any of them from another linked device.
 
 ### Key Entities
