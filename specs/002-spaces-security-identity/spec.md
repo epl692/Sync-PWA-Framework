@@ -26,6 +26,7 @@ This spec plugs into spec 001 by supplying the **encrypting payload codec** and 
 - Q: Can a new member read data written before they joined? → A: Yes, joiners can read all existing history in the Space.
 - Q: Can Space Owners outside an override share read or edit it? → A: No; only the share's own members can.
 - Q: Are a removed member's unsynced offline changes kept? → A: No; changes the removing Owner hadn't received are discarded and the count reported.
+- Q: When Owners make conflicting offline membership changes, which wins? → A: The earlier change wins; the later is kept with no effect and its author is notified.
 - Q: Does offline join use Bluetooth? → A: No; it uses a local-network (WebRTC) link in all modern browsers.
 - Q: Must an Owner approve each invite acceptance? → A: Approval required by default; the Owner can choose automatic per invite.
 
@@ -152,7 +153,7 @@ An App Developer replaces invite/QR identity with a different provider (e.g. an 
 - **FR-002**: v1 MUST use three fixed roles: Owner (manage members, roles, keys, and all objects), Editor (create, update, delete objects), Viewer (read only). Custom roles are out of scope.
 - **FR-003**: A Space MUST always have at least one Owner.
 - **FR-004**: Membership and role changes MUST themselves be signed packets in the Space, verified like any other packet.
-- **FR-005**: Concurrent conflicting membership changes MUST resolve deterministically on all peers. [Assumption: per-member last-writer-wins, with removal winning ties; revisit in /plan.]
+- **FR-005**: Concurrent conflicting membership changes MUST resolve deterministically on all peers. Membership changes are applied oldest first by clock; a change takes effect only if its author is an Owner at that point and it keeps at least one Owner. A change that fails this test stays in the log with no effect, and its author MUST be notified.
 
 **Encryption & signing**
 
