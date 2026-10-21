@@ -13,7 +13,7 @@ All messages are canonical JSON objects with a `t` discriminator.
 | `want` | both | `space`, `ranges: {author: [[lo,hi],...]}`, `max?` | Ask for specific missing packet ranges |
 | `packets` | both | `space`, `items: Envelope[]` (≤ batch limits) | Deliver packets. Each is raw envelope bytes embedded as base64url |
 | `snapshot` | both | `space`, `covers`, `objects` (chunked via `part`/`of`) | Bootstrap a peer whose gap is compacted away |
-| `ack` | both | `space`, `ids?: string[]` or `held` delta | Confirm receipt so the sender can clear its outbox |
+| `ack` | both | `space`, `ids: string[]` | Confirm receipt so the sender can clear its outbox |
 | `error` | both | `code`, `message`, `fatal` | Report protocol problems |
 | `ping`/`pong` | both | none | Liveness. Transports may use their own |
 
@@ -33,6 +33,7 @@ All messages are canonical JSON objects with a `t` discriminator.
 - A node MUST NOT send a packet back to the peer it came from, and MUST skip peers whose summary already includes the packet.
 - Messages larger than a transport's `maxMessageBytes` are the transport's job to frame. The core never exceeds `batchBytes`.
 - Unknown `t` values are ignored (forward compatibility), logged once.
+- A message larger than `limits.maxMessageBytes` is dropped and reported; the connection stays open.
 - Messages for a Space not in both `hello.spaces` are ignored.
 
 ## Resumption guarantee

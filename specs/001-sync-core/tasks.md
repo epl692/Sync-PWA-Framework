@@ -26,7 +26,7 @@ description: "Task list for Sync Core (001-sync-core)"
 **Purpose**: Workspace, tooling, and guardrails
 
 - [ ] T001 Create root `package.json` (npm workspaces `packages/*`, Node >=20) and `tsconfig.base.json` with `strict: true`, target ES2022, in `B:\Sync-PWA-Framework`
-- [ ] T002 [P] Scaffold the five packages with `package.json` and `tsconfig.json`: `packages/core` (`@sync/core`), `packages/testkit` (`@sync/testkit`), `packages/transport-websocket`, `packages/transport-webrtc`, `packages/relay-server`. `@sync/core` MUST declare no runtime `dependencies`
+- [ ] T002 [P] Scaffold the five packages with `package.json` and `tsconfig.json`: `packages/core` (`@sync/core`), `packages/testkit` (`@sync/testkit`), `packages/transport-websocket`, `packages/transport-webrtc`, `packages/relay-server`. `@sync/core` MUST declare no runtime `dependencies`; `@sync/testkit` imports only types from `@sync/core`
 - [ ] T003 [P] Configure ESLint and Prettier in `eslint.config.js` and `.prettierrc`
 - [ ] T004 [P] Configure Vitest workspace in `vitest.workspace.ts`; add dev deps `vitest`, `fast-check`, `fake-indexeddb`
 - [ ] T005 [P] Configure Playwright (Chromium) in `playwright.config.ts` with `tests/e2e/` as test dir
@@ -47,15 +47,17 @@ description: "Task list for Sync Core (001-sync-core)"
 - [ ] T009 [P] Unit tests for canonical JSON (sorted keys, base64url bytes, rejects `NaN`/`Infinity`, stable bytes) in `packages/core/tests/unit/canonical.test.ts`
 - [ ] T010 [P] Unit tests for HLC: tick monotonic, string order equals clock order, device ID tiebreak, fixed-width format `wwwwwwwwwwww-cccc-<deviceId>` in `packages/core/tests/unit/hlc.test.ts`
 - [ ] T011 [P] Unit tests for envelope invariants: `id === author + ":" + seq`, clock suffix equals author, unknown extra fields preserved, original bytes kept in `packages/core/tests/unit/envelope.test.ts`
+- [ ] T011a [P] Unit tests for inbound limits (FR-021): oversized envelope, more than 256 fields, delete body with fields, and `seq` jump above `limits.seqGapWarn` accepted with a warning event, each rejecting only that packet, in `packages/core/tests/unit/limits.test.ts`
 - [ ] T012 [P] Unit tests for interval sets (add, merge adjacent, diff, contains, compaction-covered ranges) in `packages/core/tests/unit/intervals.test.ts`
 - [ ] T013 [P] Storage contract suite `storageContract(factory)` (atomic multi-store transaction, rollback on throw, scan by index and range, `StorageQuotaError` leaves state unchanged) in `packages/testkit/src/storageContract.ts`, with a runner for the memory adapter in `packages/core/tests/contract/storage-memory.test.ts` and for IndexedDB (fake-indexeddb) in `packages/core/tests/contract/storage-indexeddb.test.ts`
 
 ### Implementation
 
 - [ ] T014 [P] Implement canonical JSON encode/decode in `packages/core/src/packet/canonical.ts`
-- [ ] T015 [P] Implement the HLC in `packages/core/src/clock/hlc.ts`
+- [ ] T015 [P] Implement the HLC in `packages/core/src/clock/hlc.ts`, including the drift bound: a remote clock updates the local HLC only up to `now + maxDriftMs` and the packet is still applied with its own clock (FR-008)
 - [ ] T016 [P] Implement ID generation (128-bit random base32 device IDs and object IDs) in `packages/core/src/packet/ids.ts`
 - [ ] T017 Implement envelope type, build, parse and validate per [contracts/packet-envelope.md](./contracts/packet-envelope.md) in `packages/core/src/packet/envelope.ts` (depends on T014, T016)
+- [ ] T017a Enforce `limits` from [data-model.md](./data-model.md) (envelope size 256 KiB, 256 fields per packet, `delete` bodies carry no fields) by rejecting that packet only, in `packages/core/src/packet/envelope.ts` and `packages/core/src/store/apply.ts` (depends on T017, T011a)
 - [ ] T018 [P] Implement interval-set utilities in `packages/core/src/sync/intervals.ts`
 - [ ] T019 [P] Add `StorageAdapter`, `StorageTx`, `StoreName` and `StorageQuotaError` from [contracts/storage.ts](./contracts/storage.ts) in `packages/core/src/storage/types.ts`
 - [ ] T020 [P] Implement the in-memory adapter in `packages/core/src/storage/memory.ts`
@@ -78,20 +80,21 @@ description: "Task list for Sync Core (001-sync-core)"
 ### Tests for User Story 1
 
 - [ ] T026 [P] [US1] Integration test for offline CRUD and restart (scenarios 1 to 3; reopen on same storage; outbox holds one packet per change) in `packages/core/tests/integration/offline.test.ts`
-- [ ] T027 [P] [US1] Unit tests for `applyPacket`: idempotent re-apply, per-field LWW with device-ID tiebreak, create-after-update stub, `{"$unset":true}` removes a field, delete sets sticky tombstone and `deleteClock` in `packages/core/tests/unit/apply.test.ts`
-- [ ] T028 [P] [US1] Unit tests for reactive queries (by ID, by type, by `where`; initial emit; emits on change; no emit when a duplicate packet changes nothing; microtask coalescing) in `packages/core/tests/unit/query.test.ts`
-- [ ] T029 [P] [US1] Latency test: local write to live-query emit under 50 ms (SC-002) in `packages/core/tests/unit/query-latency.test.ts`
+- [ ] T027 [P] [US1] Unit tests for `applyPacket`: idempotent re-apply, per-field LWW with device-ID tiebreak, create-after-update stub, `{"$unset":true}` removes a field, delete sets sticky tombstone and `deleteClock`, a local write over a field whose stored clock is ahead of the local HLC gets a clock greater than it (causal bump) in `packages/core/tests/unit/apply.test.ts`
+- [ ] T028 [P] [US1] Unit tests for reactive queries (by ID, by type, by `where`; initial emit; emits on change; no emit when a duplicate packet changes nothing; microtask coalescing; async iterator) in `packages/core/tests/unit/query.test.ts`
+- [ ] T029 [P] [US1] Latency test: local write to live-query emit under 50 ms (SC-002) on the 4x CPU-throttled reference profile in plan.md, in `packages/core/tests/unit/query-latency.test.ts`
 - [ ] T030 [P] [US1] Unit test that `seq` and the packet are persisted in one transaction (simulated crash leaves no seq gap or orphan) in `packages/core/tests/unit/seq-atomic.test.ts`
 - [ ] T031 [P] [US1] Unit test for quota handling: `StorageQuotaError` surfaces as a typed local write error with no data loss, and `storage:pressure` fires, in `packages/core/tests/unit/quota.test.ts`
 - [ ] T032 [P] [US1] E2E test: offline create, edit, delete, reload in Chromium with real IndexedDB in `tests/e2e/offline-reload.spec.ts`
+- [ ] T032a [P] [US1] Unit test for FR-020: with no codec registered, `create`, `update` and `remove` reject with `NoCodecError` and store nothing, in `packages/core/tests/unit/no-codec.test.ts`
 
 ### Implementation for User Story 1
 
 - [ ] T033 [US1] Implement object persistence and the visibility rule `visible = !deleted || (type.resurrects && maxFieldClock > deleteClock)` in `packages/core/src/store/objects.ts`
 - [ ] T034 [US1] Implement `applyPacket` exactly as the pseudo-code in [data-model.md](./data-model.md): dedup by held id before decode, validators, codec decode, merge, record held/summary and store packet and object in one transaction, in `packages/core/src/store/apply.ts` (depends on T033, T017, T018, T022)
 - [ ] T035 [US1] Implement the outbox (`OutboxEntry` `{ packetId, space, createdAt, confirmedBy }`) in `packages/core/src/store/outbox.ts`
-- [ ] T036 [US1] Implement the local write path (tick HLC, per-field clock `max(hlc, next(existingFieldClock))`, `seq` from `meta`, encode, send-phase validators, `applyPacket`, outbox add) in `packages/core/src/store/write.ts` (depends on T034, T035, T015)
-- [ ] T037 [US1] Implement reactive queries and the changed-`(type,id)` index with microtask-coalesced emission in `packages/core/src/query/engine.ts`
+- [ ] T036 [US1] Implement the local write path (tick HLC, per-field clock `max(hlc, next(existingFieldClock))`, `seq` from `meta`, encode, send-phase validators, `applyPacket`, outbox add; throw `NoCodecError` if no codec is registered, FR-020) in `packages/core/src/store/write.ts` (depends on T034, T035, T015)
+- [ ] T037 [US1] Implement reactive queries and the changed-`(type,id)` index with microtask-coalesced emission and async-iterator support in `packages/core/src/query/engine.ts`
 - [ ] T038 [US1] Implement canonical `stateHash(space)` (hash of canonical objects sorted by id, including tombstones) in `packages/core/src/store/hash.ts`
 - [ ] T039 [US1] Implement quota monitoring (`persist()`, periodic `estimate()`, `storage:pressure` event, typed write errors) in `packages/core/src/storage/quota.ts`
 - [ ] T040 [US1] Implement `createSyncCore` wiring (`create`, `update`, `remove`, `get`, `query`, `stateHash`, `on`, `close`, device ID bootstrap) and the package entry point in `packages/core/src/core.ts` and `packages/core/src/index.ts` (depends on T036, T037, T038, T039)
@@ -114,7 +117,7 @@ description: "Task list for Sync Core (001-sync-core)"
 - [ ] T044 [P] [US2] Integration test for large initial sync (batches of 500 packets or 1 MB, progress events, UI yields) and for a corrupt or truncated packet rejected alone, in `packages/core/tests/integration/initial-sync.test.ts`
 - [ ] T045 [P] [US2] Run `transportContract` against the WebSocket transport in `packages/transport-websocket/tests/contract.test.ts`
 - [ ] T046 [P] [US2] Unit tests for `RelayHub` (stores and forwards without decoding bodies, answers summaries, never needs a key) in `packages/relay-server/tests/relayHub.test.ts`
-- [ ] T047 [P] [US2] E2E two-browser realtime test through the relay server, asserting remote edit visible within 1 s at p95 (SC-003), in `tests/e2e/two-browser-realtime.spec.ts`
+- [ ] T047 [P] [US2] E2E two-browser realtime test through the relay server, asserting remote edit visible within 1 s at p95 (SC-003) on the reference network profile in plan.md, in `tests/e2e/two-browser-realtime.spec.ts`
 
 ### Implementation for User Story 2
 
@@ -123,9 +126,10 @@ description: "Task list for Sync Core (001-sync-core)"
 - [ ] T050 [US2] Implement protocol message types and canonical encode/decode (`hello`, `summary`, `want`, `packets`, `snapshot`, `ack`, `error`, `ping`/`pong`) in `packages/core/src/sync/messages.ts`
 - [ ] T051 [US2] Implement summary build and diff in `packages/core/src/sync/summary.ts` (depends on T018)
 - [ ] T052 [US2] Implement the per-peer session state machine (`hello`, summary exchange, want and packets in bounded batches with yields, live streaming, no echo to the source, skip packets the peer's summary already holds) in `packages/core/src/sync/session.ts` (depends on T050, T051, T034)
+- [ ] T052a [US2] Enforce `limits.maxMessageBytes` (4 MiB) in the session: drop and report the oversized message, keep the connection, in `packages/core/src/sync/session.ts` (depends on T052)
 - [ ] T053 [US2] Implement `TransportManager` (add/remove transport, peer lifecycle, `ack` clears outbox at `confirmThreshold`, `sync:progress` and `transport:state` events) in `packages/core/src/sync/manager.ts` (depends on T052, T035)
 - [ ] T054 [US2] Expose `addTransport`, `removeTransport`, `transports` on the core in `packages/core/src/core.ts` (depends on T053)
-- [ ] T055 [P] [US2] Implement `RelayHub` (opaque store-and-forward keyed by Space, serves summaries and missing packets) in `packages/relay-server/src/relayHub.ts`
+- [ ] T055 [P] [US2] Implement `RelayHub` (opaque store-and-forward keyed by Space, serves summaries and missing packets; held in memory only, a restart loses nothing because clients resume by summary) in `packages/relay-server/src/relayHub.ts`
 - [ ] T056 [P] [US2] Implement the `ws` server wrapper and the `npm run relay-server` entry (port 8787) in `packages/relay-server/src/server.ts`
 - [ ] T057 [US2] Implement the WebSocket client transport (reconnect with backoff, `supported()` check, state events) in `packages/transport-websocket/src/index.ts`
 
@@ -142,18 +146,16 @@ description: "Task list for Sync Core (001-sync-core)"
 ### Test infrastructure and tests for User Story 3
 
 - [ ] T058 [US3] Implement the random scenario generator (ops over several devices, partitions, shuffled and duplicated delivery, per-device clock skew of up to hours, seed logging, `CONVERGENCE_SEED` replay) in `packages/testkit/src/scenarios.ts`
-- [ ] T059 [P] [US3] Property test: at least `CONVERGENCE_RUNS` (default 500, 10,000 on release) runs end with identical `stateHash` on all peers (SC-004) in `packages/core/tests/property/convergence.test.ts`
-- [ ] T060 [P] [US3] Unit tests for the drift bound (a remote clock beyond `now + maxDrift` is applied with its own clock but never advances the local HLC past the bound) and the causal bump (a later local edit overrides a skewed value it has seen) in `packages/core/tests/unit/clock-skew.test.ts`
+- [ ] T059 [P] [US3] Property test: at least `CONVERGENCE_RUNS` (default 500, 10,000 on release) runs end with identical `stateHash` on all peers (SC-004) in `packages/core/tests/property/convergence.test.ts`. Done when 10,000 runs pass
+- [ ] T060 [P] [US3] Unit tests for the drift bound (a remote clock beyond `now + maxDrift` is applied with its own clock but never advances the local HLC past the bound) and an end-to-end skew case (a later local edit that has seen a skewed value overrides it) in `packages/core/tests/unit/clock-skew.test.ts`
 - [ ] T061 [P] [US3] Unit tests for delete vs concurrent edit: object stays deleted in both orders (FR-012); a resurrect-enabled type becomes visible when `maxFieldClock > deleteClock`, in `packages/core/tests/unit/delete.test.ts`
 - [ ] T062 [P] [US3] Unit tests for parked packets: unknown codec, unknown envelope `v`, unknown type, validator `defer`; each is stored, counted held, relayed, applied after `revalidate()` (FR-009) in `packages/core/tests/unit/parked.test.ts`
-- [ ] T063 [P] [US3] Integration test for partition and reconnect (scenarios 1 to 4: different fields kept, same field LWW, any order, delete beats edit) in `packages/core/tests/integration/partition.test.ts`
+- [ ] T063 [US3] Integration test (runs after T052 to T053, needs the US2 session) for partition and reconnect over the real sync session (scenarios 1 to 4: different fields kept, same field LWW, any order, delete beats edit) in `packages/core/tests/integration/partition.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T064 [US3] Enforce the drift bound on remote clocks (FR-008) in `packages/core/src/clock/hlc.ts` and the receive path in `packages/core/src/store/apply.ts`
 - [ ] T065 [US3] Make object `type`/`space` follow the lowest-clock packet and `schemaVersion` the highest, and add the type option hook `resurrects` for the read-time rule, in `packages/core/src/store/objects.ts` and `packages/core/src/store/apply.ts`
 - [ ] T066 [US3] Implement parked-packet storage (`status: "parked"` with reasons `undecodable-codec`, `unknown-version`, `validator-deferred`), relay of parked packets, `packet:parked` events, and `revalidate()` in `packages/core/src/store/parked.ts` and `packages/core/src/extension/registry.ts`
-- [ ] T067 [US3] Fix any divergence found by T059 in the apply and merge code (iterate until 10,000 runs pass) in `packages/core/src/store/apply.ts`
 
 **Checkpoint**: Convergence is proven by property tests. All P1 stories are complete.
 
@@ -182,7 +184,7 @@ description: "Task list for Sync Core (001-sync-core)"
 - [ ] T077 [P] [US4] Implement pairing code encode/decode (`PairingPayload` per [contracts/webrtc-pairing.ts](./contracts/webrtc-pairing.ts): `CompressionStream` deflate, base64url, `nonce`, `expiresAt` default now + 10 min, single-use tracking) in `packages/transport-webrtc/src/pairingCode.ts`
 - [ ] T078 [US4] Implement the WebRTC transport (`createOffer`, `acceptOffer`, `acceptAnswer`, `cancelPairing`; non-trickle ICE; data channel; framing; optional `iceServers`; `connectTimeoutMs` default 30 s; `unreachable` error; state `needs-pairing`) in `packages/transport-webrtc/src/index.ts` (depends on T076, T077)
 - [ ] T079 [P] [US4] Build the demo page with QR display, scanner and paste box (`npm run dev -w @sync/transport-webrtc`) in `packages/transport-webrtc/demo/index.html`
-- [ ] T080 [US4] Add protocol compatibility handling: negotiate down on `hello.protocol`, and store and relay envelopes with unknown `v` or `codec` untouched, in `packages/core/src/sync/session.ts`
+- [ ] T080 [US4] Add protocol version negotiation (negotiate down on `hello.protocol`; fatal error when ranges do not overlap) in `packages/core/src/sync/session.ts`
 - [ ] T081 [US4] Document how to run `transportContract` for third-party transports in `packages/testkit/README.md`
 
 **Checkpoint**: Two unlike transports run together; the contract suite gates new ones.
@@ -221,9 +223,9 @@ description: "Task list for Sync Core (001-sync-core)"
 - [ ] T093 [P] E2E quota test in `tests/e2e/quota.spec.ts`
 - [ ] T094 [P] Write package READMEs and a top-level `README.md` covering setup, the core API, and the dev-only plaintext codec warning
 - [ ] T095 Review [contracts/packet-envelope.md](./contracts/packet-envelope.md) compatibility table against the implementation and record any mismatch as a compatibility note
-- [ ] T096 Performance pass: confirm SC-002 (under 50 ms) on a throttled CPU profile and tune batching; confirm SC-003 in the E2E run
+- [ ] T096 Performance pass: confirm SC-002 (under 50 ms) on the reference profile in plan.md (4x CPU slowdown) and tune batching; confirm SC-003 in the E2E run
 - [ ] T097 Verify static hosting: build a sample bundle of core and the WebSocket and WebRTC transports as plain static files and load it from a static server (Principle VII)
-- [ ] T098 Run the full [quickstart.md](./quickstart.md) (S1 to S8) and record results; confirm S3 at 10,000 runs
+- [ ] T098 Run the full [quickstart.md](./quickstart.md) (S1 to S8) and record results; confirm S3 at 10,000 runs, and confirm spec 002 is merged before any release build (Principle V)
 
 ---
 
@@ -235,7 +237,7 @@ description: "Task list for Sync Core (001-sync-core)"
 - **Foundational (Phase 2)**: needs Phase 1. Blocks all stories
 - **US1 (Phase 3)**: needs Phase 2. Delivers the MVP
 - **US2 (Phase 4)**: needs US1 (applies packets, uses the outbox and the summary)
-- **US3 (Phase 5)**: needs US1. It can use the in-memory transport from T049, so it can run in parallel with US2 once T049 exists
+- **US3 (Phase 5)**: needs US1. T058 to T062, T065 and T066 need only the in-memory transport from T049, so they can run in parallel with US2. T063 needs the US2 session and manager (T052, T053)
 - **US4 (Phase 6)**: needs US2 (session, manager, contract suite, WebSocket transport)
 - **US5 (Phase 7)**: needs US1 and US3 (merge is the snapshot join). The `snapshot` message (T090) needs US2
 - **Polish (Phase 8)**: needs the stories you intend to ship
@@ -251,7 +253,7 @@ description: "Task list for Sync Core (001-sync-core)"
 - Setup tasks T002 to T008 after T001
 - Foundational tests T009 to T013 together; implementations T014 to T016, T018 to T020, T022 to T024 together
 - Within a story, all `[P]` test tasks run together
-- US2 and US3 can run in parallel after US1 and T049 (different files except `apply.ts`, so coordinate T064 to T067 with US2 work)
+- US2 and US3 can run in parallel after US1 and T049 (different files except `apply.ts`, so coordinate T065 to T066 with US2 work)
 - T055 and T056 (relay server) and T057 (WebSocket transport) can run in parallel
 
 ---

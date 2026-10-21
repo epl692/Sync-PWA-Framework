@@ -25,7 +25,7 @@ npm run e2e -- offline-reload
 ## S2. Realtime between two devices (Story 2, SC-003)
 
 ```bash
-npm run relay-server            # ws://localhost:8787, opaque store-and-forward
+npm run relay-server            # ws://localhost:8787, opaque store-and-forward, in memory only (clients resend after a restart)
 npm run e2e -- two-browser-realtime
 ```
 

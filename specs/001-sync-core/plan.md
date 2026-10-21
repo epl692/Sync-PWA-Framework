@@ -30,13 +30,15 @@ Technical approach (details in [research.md](./research.md)):
 
 **Storage**: IndexedDB (via an internal thin promise wrapper, no `idb` dependency) behind `StorageAdapter`. In-memory adapter for tests and Node.
 
-**Testing**: Vitest (unit, contract, integration). fast-check for convergence property tests (SC-004). Playwright (Chromium) for service-worker, quota and real-IndexedDB checks. WebRTC is tested with a mock `RTCPeerConnection` pair for unit and contract runs, and with two real Chromium pages in Playwright (loopback, manual-signaling flow). A manual two-device LAN check is in the quickstart.
+**Testing**: Vitest (unit, contract, integration). fast-check for convergence property tests (SC-004). Playwright (Chromium) for quota and real-IndexedDB checks. WebRTC is tested with a mock `RTCPeerConnection` pair for unit and contract runs, and with two real Chromium pages in Playwright (loopback, manual-signaling flow). A manual two-device LAN check is in the quickstart.
 
 **Target Platform**: Evergreen browsers (Chrome, Edge, Safari including iOS, Firefox) for core, WebSocket and WebRTC. Node 20 for the relay server.
 
 **Project Type**: Library monorepo (npm workspaces): core, two transports (WebSocket, WebRTC), relay server, test kit.
 
 **Performance Goals**: Local write to live-query emit < 50 ms (SC-002). Remote edit visible < 1 s p95 (SC-003). Compaction of 100k packets shrinks storage ≥ 80% (SC-006). Randomized convergence ≥ 10,000 runs (SC-004).
+
+**Reference test profile** (used by T029, T047, T096): 4x CPU slowdown for "mid-range phone", and 50 ms network round trip with 1% packet loss for "normal network".
 
 **Constraints**: Offline-capable by default. No runtime dependencies in core. Core makes no assumption about transport or cipher. Main thread must never block on sync (work is batched and yields).
 

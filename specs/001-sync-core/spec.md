@@ -27,6 +27,9 @@ During development of this spec alone, a plaintext test codec and no-op validato
 - Q: Which v1 reference transports? → A: WebSocket server + Web Bluetooth. *(superseded below)*
 - Q: Web Bluetooth can't connect two browsers (browsers can only act as Bluetooth clients). How should the second reference transport work? → A: Drop Bluetooth from v1; the second reference transport is browser-to-browser WebRTC. Bluetooth remains a possible future transport behind the same contract.
 - Q: How do two browsers introduce themselves before a WebRTC connection? → A: Manual signaling (QR code or pasted code); no server required.
+- Q: Whose change does undo reverse? → A: The current device's most recent change to that object, via a new compensating packet.
+- Q: Is the reference relay server durable? → A: No. It holds packets in memory; clients resume by summary after a restart.
+- Q: What size limits apply to packets and messages from peers? → A: Configurable limits with defaults (256 KiB envelope, 256 fields per packet, 4 MiB message); over-limit input is rejected.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -138,13 +141,15 @@ The packet log supports undo and catching up peers. After a retention window, ol
 
 **Data Packets**
 
-- **FR-004**: Every create, update, and delete MUST be an immutable Data Packet with: unique ID, author device ID, Space ID, object ID, operation, clock timestamp, payload (changed fields), and signature slot.
+- **FR-004**: Every create, update, and delete MUST be an immutable Data Packet with: unique ID, author device ID, Space ID, object ID, operation, clock timestamp, payload (changed fields), and signature slot. These logical fields may be split between a clear envelope (routing and ordering) and an encoded body; the signature covers both.
 - **FR-005**: Local and remote changes MUST be applied through the same packet-apply path, including validators.
 - **FR-006**: Packet application MUST be idempotent and order-independent.
 - **FR-007**: Concurrent field changes MUST resolve by per-field last-writer-wins, ordered by a hybrid logical clock with a deterministic tiebreaker (device ID).
 - **FR-008**: Clocks from packets too far in the future (configurable bound) MUST NOT advance the local clock beyond that bound.
 - **FR-009**: Packets for unknown types or newer format versions MUST be stored and relayed, not discarded.
 - **FR-010**: The Framework MUST provide packet validator and payload codec extension points used on both send and apply.
+- **FR-020**: If no payload codec is registered, local writes MUST fail with a clear error. The Framework never sends or stores unencoded data.
+- **FR-021**: The Framework MUST reject, without affecting other packets, any packet or message that exceeds the configured size limits, is malformed, or is a delete carrying fields.
 
 **Deletes**
 
@@ -178,8 +183,8 @@ The packet log supports undo and catching up peers. After a retention window, ol
 ### Measurable Outcomes
 
 - **SC-001**: 100% of CRUD operations succeed with all transports disconnected and survive app restart.
-- **SC-002**: Local edits appear in live queries in under 50 ms on a mid-range phone.
-- **SC-003**: A remote edit appears on another online device within 1 second (p95) on a normal network.
+- **SC-002**: Local edits appear in live queries in under 50 ms on a mid-range phone (approximated in tests by the reference profile: 4x CPU slowdown).
+- **SC-003**: A remote edit appears on another online device within 1 second (p95) on the reference network profile (50 ms round trip, 1% packet loss).
 - **SC-004**: In randomized partition tests (≥10,000 runs, random edits and delivery orders, skewed clocks), 100% of runs end with identical state hashes on all peers.
 - **SC-005**: A new transport that passes the contract suite works without modifying core code.
 - **SC-006**: After compaction, local storage for a Space with 100k historical packets drops by at least 80% with no state change.
@@ -189,4 +194,5 @@ The packet log supports undo and catching up peers. After a retention window, ol
 - Default retention window: 30 days.
 - Relay is on by default.
 - WebRTC works in all current major browsers, including iOS Safari. Direct connections may fail behind restrictive networks, so WebSocket remains the fallback. Manual pairing works fully offline on the same local network. Connecting across different networks may need a relay (STUN/TURN) that v1 does not provide by default.
-- The reference relay server is a convenience for testing and small deployments, not a required backend.
+- The reference relay server is a convenience for testing and small deployments, not a required backend. It holds packets in memory only; after a restart, clients resend what it lacks.
+- Undo reverses the current device's most recent change to an object within the retention window. Undoing an update restores the previous field values; undoing a create deletes the object; undoing a delete is available only for types that opt into "edit resurrects" (spec 003), otherwise it reports "not undoable". Undo always adds a new packet, so a later edit from another device wins by normal last-writer-wins.

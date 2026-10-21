@@ -40,7 +40,7 @@ export interface SyncableObject {
   type: string;
   space: SpaceId;
   schemaVersion: number;
-  /** Plain values for app use. Clocks are internal, available via `inspect()`. */
+  /** Plain values for app use. Per-field clocks are internal. */
   fields: Record<string, JSONValue>;
 }
 
@@ -68,6 +68,12 @@ export interface Config {
   relay?: boolean | Record<SpaceId, boolean>; // default true
   batch?: { packets?: number; bytes?: number };
   confirmThreshold?: number;  // default 1
+  limits?: {
+    maxEnvelopeBytes?: number;   // default 256 KiB
+    maxFieldsPerPacket?: number; // default 256
+    maxMessageBytes?: number;    // default 4 MiB
+    seqGapWarn?: number;         // default 1,000,000
+  };
   now?: () => number;         // injectable for tests
 }
 
@@ -94,7 +100,7 @@ export interface SyncCore extends ExtensionRegistry {
   transports(): ReadonlyArray<{ id: string; state: string }>;
 
   // ---- history (FR-018, FR-019) ----
-  /** Undo the author's last packet on this object within the retention window. Rejects with NotUndoable if not possible. */
+  /** Undo this device's most recent change to the object within the retention window, via a new compensating packet. Rejects with NotUndoable if not possible (e.g. undo of a delete on a type that does not resurrect). */
   undo(id: ObjectId): Promise<void>;
   history(id: ObjectId): Promise<ReadonlyArray<{ packetId: string; clock: string; op: string; fields: string[] }>>;
   compact(opts?: { space?: SpaceId; olderThanMs?: number }): Promise<{ packetsRemoved: number; bytesFreed?: number }>;

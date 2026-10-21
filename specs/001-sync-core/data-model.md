@@ -137,12 +137,23 @@ idle → connecting → handshake(hello) → summary exchange → streaming(want
 | Rule | Source |
 |---|---|
 | Envelope must parse, `id == author:seq`, `clock` well-formed, else reject | FR-004 |
-| `seq` must not exceed the author's known max by more than a sanity bound before gaps are reported | R-05 |
 | Clock bound: remote clock never advances local HLC beyond `now + maxDrift` | FR-008 |
 | Unknown codec, version or type: park, store, relay | FR-009 |
 | Delete packets carry no fields | FR-011 |
 | Tombstones are never purged inside the retention window | FR-011 |
+| Envelope larger than `limits.maxEnvelopeBytes`, or more than `limits.maxFieldsPerPacket` fields: reject that packet only | FR-021 |
+| A `delete` body with a non-empty `fields` map: reject that packet only | FR-021 |
+| A `seq` jump larger than `limits.seqGapWarn` from the author's known maximum: accept, but emit a `sync:progress` warning (relay can leave gaps legitimately) | R-05 |
 
 ## Defaults (configurable)
 
 `retentionWindowDays = 30`, `maxDriftMs = 300000`, `relay = true`, `batchPackets = 500`, `batchBytes = 1 MB`, `confirmThreshold = 1`.
+
+## Limits (configurable, `Config.limits`)
+
+| Limit | Default | Behavior when exceeded |
+|---|---|---|
+| `maxEnvelopeBytes` | 256 KiB | Reject that packet, report `packet:rejected` |
+| `maxFieldsPerPacket` | 256 | Reject that packet |
+| `maxMessageBytes` | 4 MiB | Drop that message from the peer (not the connection) |
+| `seqGapWarn` | 1,000,000 | Accept, emit a warning event |
