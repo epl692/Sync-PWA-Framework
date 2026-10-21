@@ -152,20 +152,20 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 3
 
-- [ ] T054 [P] [US3] Unit tests for the artifact, secret hash and `HMAC-SHA-256(secret, signPub ‖ nonce)` proof in `packages/identity-invite/tests/unit/invite.test.ts`: URL fragment encoding, expiry, secret never written to the Space log, only `SHA-256(secret)`
-- [ ] T055 [P] [US3] Contract test running `identityProviderContract` against the default provider in `packages/identity-invite/tests/contract/provider.test.ts`
-- [ ] T056 [P] [US3] Handshake integration test in `packages/identity-invite/tests/integration/join.test.ts`: approval required by default and automatic when chosen; `join-deny` for expired, used-up, revoked, bad proof or declined; interrupted handshake writes nothing and retries cleanly; a replayed `join-request` (same `inviteId` and `nonce`) is refused and writes nothing; a joiner who is already a member gets an idempotent grant; the SAS matches on both sides
-- [ ] T057 [P] [US3] Edge-case test in `packages/identity-invite/tests/integration/invite-race.test.ts`: two joiners race for a single-use invite, the earlier clock stays a member, the other becomes inert and an Owner rotates
+- [X] T054 [P] [US3] Unit tests for the artifact, secret hash and `HMAC-SHA-256(secret, signPub ‖ nonce)` proof in `packages/identity-invite/tests/unit/invite.test.ts`: URL fragment encoding, expiry, secret never written to the Space log, only `SHA-256(secret)`
+- [X] T055 [P] [US3] Contract test running `identityProviderContract` against the default provider in `packages/identity-invite/tests/contract/provider.test.ts`
+- [X] T056 [P] [US3] Handshake integration test in `packages/identity-invite/tests/integration/join.test.ts`: approval required by default and automatic when chosen; `join-deny` for expired, used-up, revoked, bad proof or declined; interrupted handshake writes nothing and retries cleanly; a replayed `join-request` (same `inviteId` and `nonce`) is refused and writes nothing; a joiner who is already a member gets an idempotent grant; the SAS matches on both sides
+- [X] T057 [P] [US3] Edge-case test in `packages/identity-invite/tests/integration/invite-race.test.ts`: two joiners race for a single-use invite, the earlier clock stays a member, the other becomes inert and an Owner rotates
 - [ ] T058 [P] [US3] Playwright tests `tests/e2e/invite-online.spec.ts` (relay) and `tests/e2e/invite-offline-webrtc.spec.ts` (network blocked, WebRTC manual signaling, timed under 60 s for SC-004), each checking the joiner reads existing history (all epochs) and writes per role
 
 ### Implementation for User Story 3
 
-- [ ] T059 [US3] Implement the default provider with `peer-chain/1` bindings (pure sync `verifyBinding`, `issueBinding`, `createUser`) in `packages/identity-invite/src/provider.ts`
-- [ ] T060 [P] [US3] Implement artifact encode/decode, secret hash and proof in `packages/identity-invite/src/invite.ts`
-- [ ] T061 [US3] Implement the `identity/1` handshake (`join-request`, `join-pending`, `join-grant`, `join-deny`) with ECIES sealing and 5-minute approval timeout in `packages/identity-invite/src/handshake.ts` (depends on T018, T059, T060)
-- [ ] T062 [P] [US3] Implement QR render with `qrcode-generator` and `BarcodeDetector` scanning with a paste-link fallback in `packages/identity-invite/src/qr.ts`
-- [ ] T063 [US3] Implement key grant writing (`$sys.keygrant` for every held epoch, `joinHistory = 'all'` default) in `packages/spaces/src/rotation/grants.ts`
-- [ ] T064 [US3] Implement `invite()`, `revokeInvite()`, `accept()` and the `join:request` approval event, writing `$sys.invite`, `$sys.invite-revoke`, `$sys.device` and `$sys.member add` in `packages/spaces/src/service/invites.ts`
+- [X] T059 [US3] Implement the default provider with `peer-chain/1` bindings (pure sync `verifyBinding`, `issueBinding`, `createUser`) in `packages/identity-invite/src/provider.ts`
+- [X] T060 [P] [US3] Implement artifact encode/decode, secret hash and proof in `packages/identity-invite/src/invite.ts`
+- [X] T061 [US3] Implement the `identity/1` handshake (`join-request`, `join-pending`, `join-grant`, `join-deny`) with ECIES sealing and 5-minute approval timeout in `packages/identity-invite/src/handshake.ts` (depends on T018, T059, T060)
+- [X] T062 [P] [US3] Implement QR render with `qrcode-generator` and `BarcodeDetector` scanning with a paste-link fallback in `packages/identity-invite/src/qr.ts`
+- [X] T063 [US3] Implement key grant writing (`$sys.keygrant` for every held epoch, `joinHistory = 'all'` default) in `packages/spaces/src/rotation/grants.ts`
+- [X] T064 [US3] Implement `invite()`, `revokeInvite()`, `accept()` and the `join:request` approval event, writing `$sys.invite`, `$sys.invite-revoke`, `$sys.device` and `$sys.member add` in `packages/spaces/src/service/invites.ts`
 
 **Checkpoint**: US3 works with US1 and US2.
 

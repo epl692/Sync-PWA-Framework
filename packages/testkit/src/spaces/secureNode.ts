@@ -12,7 +12,6 @@ export interface SecureNodeOptions {
   provider?: () => IdentityProvider;
   approveJoin?: (req: import('@sync/spaces').JoinRequestView) => boolean | Promise<boolean>;
   rotationGraceMs?: number;
-  joinHistory?: 'all' | 'from-join';
   storage?: StorageAdapter;
   keyDb?: KeyDb;
   signUp?: boolean | string;
@@ -41,7 +40,6 @@ export async function createSecureNode(opts: SecureNodeOptions = {}): Promise<Se
       now: clock.now,
       approveJoin: opts.approveJoin ?? (() => true),
       rotationGraceMs: opts.rotationGraceMs ?? 20,
-      joinHistory: opts.joinHistory,
       core: { storage, now: clock.now, autoCompact: false, ...(opts.coreConfig ?? {}) },
     });
     const node: SecureNode = {

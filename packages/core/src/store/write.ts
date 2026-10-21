@@ -127,6 +127,7 @@ export class LocalWriter {
       try {
         const result = await d.applier.applyDecoded({ env, raw, unsupportedVersion: false }, 'local', { body, nextState });
         if (result.status === 'rejected') throw new PacketRejectedError(result.reason);
+        if (result.status !== 'applied') throw new PacketRejectedError(`not applied (${result.status}${'reason' in result ? `: ${result.reason}` : ''})`);
       } catch (e) {
         if (e instanceof StorageQuotaError) await d.quota.reportExceeded();
         throw e;

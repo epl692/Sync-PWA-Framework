@@ -118,8 +118,12 @@ export interface ProviderHost {
   random(bytes: number): Uint8Array;
   /** Local-only storage for invite secrets and replay nonces (never synced). */
   secrets: { get(inviteId: string): Promise<InviteSecret | undefined>; put(inviteId: string, v: InviteSecret): Promise<void> };
+  /** Small persistent local key-value store for the provider's own state (for example its device binding). Never synced. */
+  store: { get(key: string): Promise<Uint8Array | undefined>; put(key: string, value: Uint8Array): Promise<void> };
   /** Ask the signed-in human to approve a join request. Resolves false on decline or timeout. */
   approve(req: JoinRequestView): Promise<boolean>;
+  /** Ask whether a new device may be linked to this user (shown with a short authentication string). */
+  approveLink(device: DevicePublic, sas: string): Promise<boolean>;
 
   // Owner side
   registerInvite(spec: { space: string; inviteId: string; role: Role; expiresAt: number; maxUses: number; secretHash: Uint8Array; approval: 'required' | 'auto' }): Promise<void>;
@@ -172,7 +176,7 @@ export interface IdentityProvider {
   createInvite(session: UserSession, spec: InviteSpec): Promise<InviteArtifact>;
   revokeInvite(session: UserSession, space: string, inviteId: string): Promise<void>;
   /** Joiner side: consume an artifact (link or scanned QR) and run the handshake. Rejects with JoinDeniedError. */
-  acceptInvite(session: UserSession, artifact: string, opts?: { timeoutMs?: number }): Promise<{ space: string; role: Role }>;
+  acceptInvite(session: UserSession, artifact: string, opts?: { timeoutMs?: number; onSas?: (sas: string) => void }): Promise<{ space: string; role: Role }>;
 
   /** Provider-side effects of revoking a device (for example telling an org directory). May be a no-op. */
   onDeviceRevoked?(user: string, device: string): Promise<void>;

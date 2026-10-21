@@ -35,10 +35,10 @@ export interface SpacesOptions {
   provider: IdentityProvider;
   /** Where device and epoch keys live. A KeyDb, or a database name for IndexedDB (default "sync-keys"). */
   keyDb?: KeyDb | string;
-  /** What a new member may read: every existing epoch (default) or only the current one. */
-  joinHistory?: 'all' | 'from-join';
   /** Decide a join request that needs approval. Default: refuse (the `join:request` event is still emitted). */
   approveJoin?: (req: JoinRequestView) => boolean | Promise<boolean>;
+  /** Decide whether a new device may be linked to this user. Default: allow (the user started the link on this device). */
+  approveLink?: (device: import('../identity/provider').DevicePublic, sas: string) => boolean | Promise<boolean>;
   /** How long a second Owner device waits before rotating for a removal someone else is handling. Default 2000. */
   rotationGraceMs?: number;
   /** Injected clock for tests. */
@@ -60,7 +60,8 @@ export interface Spaces {
 
   invite(space: string, spec: Omit<InviteSpec, 'space'>): Promise<InviteArtifact>;
   revokeInvite(space: string, inviteId: string): Promise<void>;
-  accept(artifact: string): Promise<{ space: string; role: Role }>;
+  /** Accept an invite link or scanned QR text. `onSas` shows the joiner the short code the Owner will also see. */
+  accept(artifact: string, opts?: { timeoutMs?: number; onSas?: (sas: string) => void }): Promise<{ space: string; role: Role }>;
 
   linkDevice(): Promise<{ code: string; done: Promise<{ device: string }> }>;
   joinAsDevice(code: string): Promise<UserSession>;

@@ -57,7 +57,6 @@ export class SpacesService implements Spaces {
   private readonly hub: AuthorityHub;
   private readonly events = new Emitter<SecurityEvent>();
   private readonly now: () => number;
-  private readonly joinHistory: 'all' | 'from-join';
   private readonly graceMs: number;
   private readonly rejected = new Map<string, number>();
   private readonly flippable = new Map<string, number>();
@@ -73,7 +72,6 @@ export class SpacesService implements Spaces {
     this.keystore = d.keystore;
     this.provider = d.provider;
     this.now = d.now ?? (() => Date.now());
-    this.joinHistory = d.joinHistory ?? 'all';
     this.graceMs = d.rotationGraceMs ?? 2000;
     this.hub = new AuthorityHub(d.core);
   }
@@ -423,7 +421,7 @@ export class SpacesService implements Spaces {
     if (!this.scopesNeedingRotation(auth, space).length) return;
     const t = setTimeout(() => {
       this.pendingRotations.delete(space);
-      this.enqueue(() => this.rotateIfNeeded(space, 'member-removed'));
+      this.enqueue(() => this.rotateIfNeeded(space));
     }, this.graceMs);
     (t as { unref?: () => void }).unref?.();
     this.pendingRotations.set(space, t);
@@ -444,9 +442,18 @@ export class SpacesService implements Spaces {
     });
   }
 
-  private async rotateIfNeeded(space: string, reason: 'member-removed' | 'device-revoked' | 'invite-surplus'): Promise<void> {
+  private async rotateIfNeeded(space: string, reason?: 'member-removed' | 'device-revoked' | 'invite-surplus'): Promise<void> {
     const auth = await this.hub.ensure(space);
-    for (const scope of this.scopesNeedingRotation(auth, space)) await this.rotate(space, scope, reason);
+    for (const scope of this.scopesNeedingRotation(auth, space)) await this.rotate(space, scope, reason ?? this.whyRotate(auth, scope));
+  }
+
+  /** What made this scope's key stale, for the event: the latest shrinking event. */
+  private whyRotate(auth: Authority, scope: string): 'member-removed' | 'device-revoked' | 'invite-surplus' {
+    const shrink = auth.lastShrinkClock(scope);
+    if (auth.state.inert.some((i) => i.type === SYS.member && i.reason === 'invite-used-up' && i.clock === shrink)) return 'invite-surplus';
+    const dev = [...auth.state.devices.values()].find((d) => d.revoked?.clock === shrink);
+    if (dev && !auth.state.users.get(dev.user)?.history.some((h) => h.clock === shrink)) return 'device-revoked';
+    return 'member-removed';
   }
 
   private spaceOfScope(scope: string): string | undefined {
@@ -503,8 +510,8 @@ export class SpacesService implements Spaces {
     await this.provider.revokeInvite(this.session()!, space, inviteId);
   }
 
-  accept(artifact: string) {
-    return this.provider.acceptInvite(this.session() ?? this.noSession(), artifact);
+  accept(artifact: string, opts?: { timeoutMs?: number; onSas?: (sas: string) => void }) {
+    return this.provider.acceptInvite(this.session() ?? this.noSession(), artifact, opts);
   }
 
   private noSession(): never {
@@ -548,6 +555,8 @@ export class SpacesService implements Spaces {
       now: () => self.now(),
       random: (n) => randomBytes(n),
       secrets: { get: (id) => self.keystore.getInvite(id), put: (id, v) => self.keystore.putInvite(id, v) },
+      store: { get: (k) => self.keystore.getLocal(k), put: (k, v) => self.keystore.putLocal(k, v) },
+      approveLink: async (device, sas) => (await self.d.approveLink?.(device, sas)) ?? true,
       approve: async (req: JoinRequestView) => {
         self.events.emit({ kind: 'join:request', req });
         return (await self.d.approveJoin?.(req)) ?? false;
@@ -579,12 +588,21 @@ export class SpacesService implements Spaces {
         return { ok: true, space, role: inv.role, approval: inv.approval, expiresAt: inv.expiresAt, secretHash: b64urlDecode(inv.secretHash), usesLeft: inv.maxUses - inv.uses.length };
       },
 
-      admit: (space, inviteId, joiner) => self.admit(space, inviteId, joiner),
+      admit: (space, inviteId, joiner) => self.serialAdmit(() => self.admit(space, inviteId, joiner)),
       completeJoin: (data) => self.completeJoin(data),
       currentSession: () => self.session(),
       linkNewDevice: (device, binding) => self.linkNewDevice(device, binding),
       completeLink: (data) => self.completeLink(data),
     };
+  }
+
+  private admitTail: Promise<unknown> = Promise.resolve();
+
+  /** Joins are admitted one at a time, so two joiners racing for a single-use invite cannot both pass the use check. */
+  private serialAdmit<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.admitTail.then(fn, fn);
+    this.admitTail = run.catch(() => undefined);
+    return run;
   }
 
   /** Owner side of a join: record the device and the membership, and wrap the keys for the joiner. */
@@ -614,14 +632,18 @@ export class SpacesService implements Spaces {
       await this.write(space, SYS.member, { action: 'add', user: joiner.user, role: inv.role, inviteId, ...(joiner.displayName ? { displayName: joiner.displayName } : {}) });
     }
     const role = (await this.hub.ensure(space)).currentRole(joiner.user) ?? inv.role;
-    return { space, role, grants: await this.grantsFor(space, space, joiner.device, this.joinHistory) };
+    return { space, role, grants: await this.grantsFor(space, space, joiner.device) };
   }
 
-  /** The keys of one scope, wrapped for one device. */
-  private async grantsFor(_space: string, scope: string, device: DevicePublic, history: 'all' | 'from-join' = 'all'): Promise<GrantBody[]> {
+  /**
+   * Every key of one scope, wrapped for one device (FR-010: a new member is entitled to all existing epochs). This is
+   * not optional: the Space's own control history is encrypted under the older keys, so a device without them could
+   * not even learn who the members are.
+   */
+  private async grantsFor(_space: string, scope: string, device: DevicePublic): Promise<GrantBody[]> {
     const held = await this.keystore.epochs(scope);
     if (!held.length) return [];
-    const chosen = history === 'all' ? held : held.filter((h) => h.epoch === Math.max(...held.map((x) => x.epoch)));
+    const chosen = held;
     const items: Array<{ epoch: number; keyId: string; raw: Uint8Array }> = [];
     for (const h of chosen) {
       const raw = await this.keystore.rawKey(scope, h.keyId);
@@ -666,7 +688,7 @@ export class SpacesService implements Spaces {
       }
       const grants: GrantBody[] = [];
       const scopes = [space, ...[...auth.state.shares.keys()].filter((s) => auth.shareCurrentRole(s, session.user))];
-      for (const scope of scopes) grants.push(...(await this.grantsFor(space, scope, device, 'all')));
+      for (const scope of scopes) grants.push(...(await this.grantsFor(space, scope, device)));
       spaces.push({ space, role, grants });
     }
     return { user: session.user, displayName: session.displayName, spaces };
@@ -770,7 +792,7 @@ export class SpacesService implements Spaces {
     if (spaceRole === 'viewer' && role !== 'viewer') throw new NotAuthorizedError('a Space viewer can be at most a viewer in a share');
     await this.write(space, SYS.shareMember, { shareId, action: 'add', user, role });
     for (const d of this.hub.authority(space).activeDevices(user)) {
-      for (const g of await this.grantsFor(space, shareId, { deviceId: d.id, signPub: b64urlDecode(d.signPub), agreePub: b64urlDecode(d.agreePub) }, 'all')) await this.write(space, SYS.keygrant, g);
+      for (const g of await this.grantsFor(space, shareId, { deviceId: d.id, signPub: b64urlDecode(d.signPub), agreePub: b64urlDecode(d.agreePub) })) await this.write(space, SYS.keygrant, g);
     }
   }
 }

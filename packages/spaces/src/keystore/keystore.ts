@@ -184,6 +184,16 @@ export class Keystore {
     return this.db.get<InviteSecret>('invites-local', inviteId);
   }
 
+  // ---- a small local key-value store for the Identity Provider (never synced) ----
+
+  async getLocal(key: string): Promise<Uint8Array | undefined> {
+    return (await this.db.get<{ value: Uint8Array }>('invites-local', `kv:${key}`))?.value;
+  }
+
+  putLocal(key: string, value: Uint8Array): Promise<void> {
+    return this.db.put('invites-local', `kv:${key}`, { value });
+  }
+
   // ---- Spaces this install belongs to (so a newly joined, still-empty Space keeps syncing after a restart) ----
 
   async addSpace(space: string): Promise<void> {

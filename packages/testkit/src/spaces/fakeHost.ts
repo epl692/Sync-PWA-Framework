@@ -95,6 +95,7 @@ export class FakeHost {
   readonly touched = { now: 0, random: 0, channel: 0 };
   readonly invites = new Map<string, InviteRec>();
   readonly secretStore = new Map<string, InviteSecret>();
+  readonly kv = new Map<string, Uint8Array>();
   session: UserSession | undefined;
   approveWith: (req: JoinRequestView) => boolean | Promise<boolean> = () => true;
   clockMs = 1_700_000_000_000;
@@ -120,7 +121,12 @@ export class FakeHost {
         get: async (id) => self.secretStore.get(id),
         put: async (id, v) => void self.secretStore.set(id, v),
       },
+      store: {
+        get: async (k) => self.kv.get(k),
+        put: async (k, v) => void self.kv.set(k, v),
+      },
       approve: async (req) => (self.calls.approve.push(req), self.approveWith(req)),
+      approveLink: async () => true,
       registerInvite: async (spec) => {
         self.calls.registerInvite.push(spec);
         self.invites.set(spec.inviteId, { ...spec, revoked: false, uses: 0 });
