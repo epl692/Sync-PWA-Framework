@@ -218,7 +218,7 @@ describe('control events', () => {
     const { Authority } = await import('../../src/authority/authority');
     const auth = new Authority(world.space);
     const validator = createSpacesValidator({ authorities: { ensure: async () => auth }, verifyBinding: async () => true });
-    const good = await world.control(fresh, SYS.genesis, { owner: { user: fresh.id, device: fresh.id, ...pub(fresh) }, nonce: b64urlEncode(world.nonce) }, 1);
+    const good = await world.control(fresh, SYS.genesis, { owner: { user: fresh.id, device: fresh.id, ...pub(fresh), binding: { kind: 'test', proof: '' } }, nonce: b64urlEncode(world.nonce) }, 1);
     const run = async (p: typeof good) => {
       const d = await world.codec.decode(p.env.body, { space: p.env.space, author: p.env.author, envelope: { v: 1, id: p.env.id, seq: p.env.seq, clock: p.env.clock, codec: SPACE_CODEC_ID } });
       return validator.validate('apply', p.env, d.ok ? d.body : undefined, { now: () => T0, raw: p.raw, source: 'peer' }) as Promise<ValidationResult>;

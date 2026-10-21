@@ -1,1 +1,11 @@
-export {};
+export * from './identity/provider';
+export { SPACE_CODEC_ID } from './codec/spaceCodec';
+export { Authority } from './authority/authority';
+export { SYS } from './authority/types';
+export { memoryKeyDb, indexedDbKeyDb, type KeyDb } from './keystore/keydb';
+export { Keystore } from './keystore/keystore';
+export { detectSupport } from './crypto/support';
+export * from './crypto/suite';
+export * from './crypto/bytes';
+export { deviceIdFromSignPub, spaceIdFor, keyIdOf } from './crypto/ids';
+export { wrapKeys, unwrapKeys } from './crypto/wrap';

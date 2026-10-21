@@ -43,7 +43,7 @@ export interface DeviceKeysWire {
 }
 
 export type ControlFields = {
-  [SYS.genesis]: { owner: { user: string; device: string } & DeviceKeysWire; nonce: string; name?: string };
+  [SYS.genesis]: { owner: { user: string; device: string; binding: Binding } & DeviceKeysWire; nonce: string; name?: string };
   [SYS.member]: { action: 'add' | 'role' | 'remove'; user: string; role?: Role; inviteId?: string; cutoff?: Record<string, number>; displayName?: string };
   [SYS.device]: { user: string; device: string; binding: Binding; name?: string } & DeviceKeysWire;
   [SYS.deviceRevoke]: { device: string; cutoff: number };

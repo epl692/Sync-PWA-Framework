@@ -307,7 +307,7 @@ export class Authority {
     const st = this.st;
     const f = ev.fields;
     if (st.genesis) return 'duplicate-genesis';
-    if (!f?.owner || f.owner.device !== ev.author || f.owner.user !== f.owner.device) return 'bad-genesis';
+    if (!f?.owner || f.owner.device !== ev.author) return 'bad-genesis';
     st.genesis = { user: f.owner.user, device: f.owner.device, clock: ev.clock, name: f.name };
     st.users.set(f.owner.user, { id: f.owner.user, history: [{ clock: ev.clock, role: 'owner', event: ev.id }], devices: [f.owner.device] });
     st.devices.set(f.owner.device, {
@@ -315,7 +315,7 @@ export class Authority {
       user: f.owner.user,
       signPub: f.owner.signPub,
       agreePub: f.owner.agreePub,
-      binding: { kind: 'genesis', proof: '' },
+      binding: f.owner.binding ?? { kind: 'genesis', proof: '' },
       since: ev.clock,
     });
     return undefined;

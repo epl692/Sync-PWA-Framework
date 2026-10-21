@@ -89,9 +89,9 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### 2g. Identity Provider contract and test kit
 
-- [ ] T036 [P] Contract suite tests of the suite itself in `packages/testkit/tests/identityProviderContract.test.ts`: it fails for a deliberately broken provider (impure `verifyBinding`, accepts an expired invite, accepts a binding for the wrong user)
-- [ ] T037 Copy the contract types to `packages/spaces/src/identity/provider.ts` from [contracts/identity-provider.ts](./contracts/identity-provider.ts) and implement `identityProviderContract()` in `packages/testkit/src/spaces/identityProviderContract.ts` (user creation, pure and sync `verifyBinding`, link round trip, invite expiry and use limit, revoke)
-- [ ] T038 [P] Implement `stubIdentityProvider` (binding kind `stub-token/1`, no handshake network use) in `packages/testkit/src/spaces/stubIdentityProvider.ts`
+- [X] T036 [P] Contract suite tests of the suite itself in `packages/testkit/tests/identityProviderContract.test.ts`: it fails for a deliberately broken provider (impure `verifyBinding`, accepts an expired invite, accepts a binding for the wrong user)
+- [X] T037 Copy the contract types to `packages/spaces/src/identity/provider.ts` from [contracts/identity-provider.ts](./contracts/identity-provider.ts) and implement `identityProviderContract()` in `packages/testkit/src/spaces/identityProviderContract.ts` (user creation, pure and sync `verifyBinding`, link round trip, invite expiry and use limit, revoke)
+- [X] T038 [P] Implement `stubIdentityProvider` (binding kind `stub-token/1`, no handshake network use) in `packages/testkit/src/spaces/stubIdentityProvider.ts`
 - [ ] T039 [P] Implement testkit helpers: adversarial packet-stream generator (forged signature, non-member, Viewer write, revoked author, backdated clock, tampered header, replay), plaintext marker scanner, and fake keystore in `packages/testkit/src/spaces/adversarial.ts`, `packages/testkit/src/spaces/plaintextScan.ts` and `packages/testkit/src/spaces/fakeKeystore.ts`
 
 **Checkpoint**: amendments pass with 001 unchanged; codec, fold and validators pass their tests.

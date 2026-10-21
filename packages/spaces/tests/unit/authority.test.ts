@@ -22,7 +22,7 @@ describe('genesis', () => {
     a.add(device('A', 1, 'B', 'B')); // before any genesis
     a.add(genesis('A', 2));
     a.add(genesis('X', 3));
-    a.add(ev(SYS.genesis, 'Y', 4, { owner: { user: 'Z', device: 'Z', ...key('Z') }, nonce: 'n' })); // author != owner.device
+    a.add(ev(SYS.genesis, 'Y', 4, { owner: { user: 'Z', device: 'Z', ...key('Z'), binding }, nonce: 'n' })); // author != owner.device
     expect(inertReasons(a)).toEqual(['device:no-genesis', 'genesis:duplicate-genesis', 'genesis:duplicate-genesis']);
     expect(a.members().map((m) => m.user)).toEqual(['A']);
   });

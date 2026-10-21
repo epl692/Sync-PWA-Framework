@@ -23,6 +23,7 @@ export function checkFields(type: string, f: unknown): string | undefined {
     case SYS.genesis: {
       const o = f.owner;
       if (!isObj(o) || !isId(o.user) || !isId(o.device) || !isB64(o.signPub, 32) || !isB64(o.agreePub, 32)) return 'bad owner';
+      if (!isObj(o.binding) || !isStr(o.binding.kind) || typeof o.binding.proof !== 'string') return 'bad owner binding';
       if (!isB64(f.nonce)) return 'bad nonce';
       return f.name !== undefined && !isStr(f.name) ? 'bad name' : undefined;
     }

@@ -114,8 +114,8 @@ export async function basicWorld() {
   await world.init(A);
   const auth = new Authority(world.space);
   const add = (e: { event: ControlEvent }) => auth.add(e.event);
-  add(await world.control(A, SYS.genesis, { owner: { user: A.id, device: A.id, ...pub(A) }, nonce: b64urlEncode(world.nonce) }, 1));
   const binding = { kind: 'test', proof: '' };
+  add(await world.control(A, SYS.genesis, { owner: { user: A.id, device: A.id, ...pub(A), binding }, nonce: b64urlEncode(world.nonce) }, 1));
   add(await world.control(A, SYS.device, { user: B.id, device: B.id, ...pub(B), binding }, 2));
   add(await world.control(A, SYS.member, { action: 'add', user: B.id, role: 'editor' as Role }, 3));
   add(await world.control(A, SYS.device, { user: C.id, device: C.id, ...pub(C), binding }, 4));

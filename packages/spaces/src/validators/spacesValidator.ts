@@ -174,12 +174,13 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
 
     switch (body.type) {
       case SYS.genesis: {
-        const o = f.owner as { user: string; device: string; signPub: string; agreePub: string };
-        if (o.device !== env.author || o.user !== o.device) return reject('bad-genesis', 'owner is not the author');
+        const o = f.owner as { user: string; device: string; signPub: string; agreePub: string; binding: { kind: string; proof: string } };
+        if (o.device !== env.author) return reject('bad-genesis', 'owner is not the author');
         const pub = b64urlDecode(o.signPub);
         if ((await deviceIdFromSignPub(pub)) !== o.device) return reject('bad-genesis', 'device ID does not hash the key');
         if ((await spaceIdFor(pub, b64urlDecode(f.nonce))) !== env.space) return reject('bad-genesis', 'Space ID is not derived from this key');
-        return ACCEPT;
+        const ok = await deps.verifyBinding(o.user, { id: o.device, signPub: pub, agreePub: b64urlDecode(o.agreePub) }, { kind: o.binding.kind, proof: b64urlDecode(o.binding.proof) }, []);
+        return ok ? ACCEPT : reject('bad-binding');
       }
       case SYS.member:
         return f.action === 'remove' && f.user === user ? ACCEPT : owner ? ACCEPT : reject('role', 'Owner required');

@@ -10,7 +10,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@sync/core": "*"
+    "@sync/core": "*",
+    "@sync/spaces": "*"
   },
   "scripts": {
     "test": "vitest run",

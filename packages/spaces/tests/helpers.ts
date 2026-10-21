@@ -22,7 +22,7 @@ export function ev<T extends SysType>(type: T, author: string, t: number, fields
 export const key = (d: string) => ({ signPub: `sign-${d}`, agreePub: `agree-${d}` });
 export const binding = { kind: 'test', proof: '' };
 
-export const genesis = (dev = 'A', t = 1) => ev(SYS.genesis, dev, t, { owner: { user: dev, device: dev, ...key(dev) }, nonce: 'n' });
+export const genesis = (dev = 'A', t = 1) => ev(SYS.genesis, dev, t, { owner: { user: dev, device: dev, ...key(dev), binding }, nonce: 'n' });
 export const device = (author: string, t: number, user: string, dev: string) => ev(SYS.device, author, t, { user, device: dev, ...key(dev), binding });
 export const addMember = (author: string, t: number, user: string, role: Role, extra: { inviteId?: string } = {}) =>
   ev(SYS.member, author, t, { action: 'add', user, role, ...extra });

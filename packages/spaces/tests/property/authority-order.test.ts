@@ -33,7 +33,7 @@ function build(specs: Spec[]): ControlEvent[] {
     seqs.set(author, seq);
     return { id: `${author}:${seq}`, type: type as never, clock: formatClock(WALL + t, 0, author), author, seq, fields: fields as never };
   };
-  const out: ControlEvent[] = [mk(SYS.genesis, 'A', 1, { owner: { user: 'A', device: 'A', ...key('A') }, nonce: 'n' })];
+  const out: ControlEvent[] = [mk(SYS.genesis, 'A', 1, { owner: { user: 'A', device: 'A', ...key('A'), binding }, nonce: 'n' })];
   // everyone gets a device and a base role from A so there is something to fight over
   USERS.slice(1).forEach((u, i) => {
     out.push(mk(SYS.device, 'A', 2 + i, { user: u, device: u, ...key(u), binding }));
