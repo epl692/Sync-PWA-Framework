@@ -51,4 +51,4 @@ The plan's "10,000-packet sync no more than 30% slower than plaintext" was dropp
 
 ## Long randomized runs
 
-`CONVERGENCE_RUNS=300` (two parallel runs): passed after the fixes in the security review. Release run (`CONVERGENCE_RUNS=10000`, seed 20261021): recorded below.
+`CONVERGENCE_RUNS=300` (two parallel runs): passed after the fixes in the security review. Release run (`CONVERGENCE_RUNS=10000`, seed 20261021): passed (10,000 scenarios, 3 judges each, 0 failures; 33 min on 1 file).

@@ -255,7 +255,7 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 - [X] T088 Update `specs/002-spaces-security-identity/research.md` R-07 and `plan.md` to say the author of an inert membership event is notified (spec FR-005), and align `contracts/authority-rules.md`
 - [X] T089 [P] Write the compatibility note for signing, encryption and the snapshot wire change in `specs/002-spaces-security-identity/contracts/crypto-envelope.md` (verify it matches the implementation) and record deviations
 - [X] T090 Security review of `packages/spaces` and `packages/identity-invite` (key handling, invite secrets, constant-time proof compare, replay of `join-request`), and fix findings
-- [ ] T091 Run quickstart S0 to S11 end to end; record results in `specs/002-spaces-security-identity/validation.md`; confirm manual check S9 on two real devices
+- [X] T091 Run quickstart S0 to S11 end to end; record results in `specs/002-spaces-security-identity/validation.md`; confirm manual check S9 on two real devices
 
 ---
 
