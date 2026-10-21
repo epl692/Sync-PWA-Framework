@@ -26,6 +26,7 @@ This spec plugs into spec 001 by supplying the **encrypting payload codec** and 
 - Q: Can a new member read data written before they joined? → A: Yes, joiners can read all existing history in the Space.
 - Q: Can Space Owners outside an override share read or edit it? → A: No; only the share's own members can.
 - Q: Are a removed member's unsynced offline changes kept? → A: No; changes the removing Owner hadn't received are discarded and the count reported.
+- Q: Does offline join use Bluetooth? → A: No; it uses a local-network (WebRTC) link in all modern browsers.
 - Q: Must an Owner approve each invite acceptance? → A: Approval required by default; the Owner can choose automatic per invite.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -65,7 +66,7 @@ A Viewer in a Space tries to edit an object (e.g. using a modified client). Ever
 
 ### User Story 3 - Invite Someone With a Link or QR (Priority: P2)
 
-An Owner invites a new member by link or QR code, choosing their role. It works even with no internet, between two nearby devices over Bluetooth.
+An Owner invites a new member by link or QR code, choosing their role. It works even with no internet, between two nearby devices on the same local network.
 
 **Why this priority**: Required for multi-user; one default provider is enough to start.
 
@@ -74,7 +75,7 @@ An Owner invites a new member by link or QR code, choosing their role. It works 
 **Acceptance Scenarios**:
 
 1. **Given** an Owner, **When** they create an invite, **Then** it grants a specific role in a specific Space and has an expiry, a use limit, and an approval setting (required by default).
-2. **Given** a valid invite and no internet, **When** a nearby device accepts it over a local transport, **Then** it receives all of the Space's key epochs (so it can read existing history) and its device key is registered as a member.
+2. **Given** a valid invite and no internet, **When** a nearby device accepts it over a local-network link, **Then** it receives all of the Space's key epochs (so it can read existing history) and its device key is registered as a member.
 3. **Given** an expired or used-up invite, **When** someone tries to accept it, **Then** it is refused.
 
 ---
@@ -196,6 +197,6 @@ An App Developer replaces invite/QR identity with a different provider (e.g. an 
 
 ## Assumptions
 
-- Offline joining over Bluetooth needs two Chromium-based devices in v1 (Web Bluetooth limits); iOS joins via link over WebSocket.
+- Offline joining uses a local-network (WebRTC) link set up by QR or pasted code, in all modern browsers including iOS. Both devices must be on the same Wi-Fi or hotspot. Bluetooth is not used in v1 because browsers cannot connect to each other over it (see 001-sync-core research R-01).
 - Losing every device of a user means losing access to their identity unless another member re-invites them; account recovery is out of scope for v1.
 - Removed members keep anything they already decrypted; rotation protects only future data.
