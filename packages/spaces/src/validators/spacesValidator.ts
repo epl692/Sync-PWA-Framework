@@ -29,7 +29,7 @@ import { checkFields } from '../authority/schema';
 import { SYS, SYS_PREFIX, type ControlFields, type Role } from '../authority/types';
 import { SPACE_CODEC_ID, parseHeader } from '../codec/spaceCodec';
 import { b64urlDecodeSafe } from '../crypto/b64';
-import { equalBytes, hex } from '../crypto/bytes';
+import { hex } from '../crypto/bytes';
 import { deviceIdFromSignPub, spaceIdFor } from '../crypto/ids';
 import { SIGNATURE_BYTES, verifySignature } from '../crypto/suite';
 
@@ -203,7 +203,7 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
 
     if (body.type.startsWith(SYS_PREFIX)) {
       if (!inSpaceScope) return reject('wrong-scope', 'control events live in the Space scope');
-      return validateControl(env, body, auth, user, role, genesisBootstrap);
+      return validateControl(env, body, auth, user, role);
     }
 
     // 4. role and scope binding for ordinary objects
@@ -226,7 +226,6 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
     auth: Authority,
     user: string,
     role: Role | null,
-    genesisBootstrap: boolean,
   ): Promise<ValidationResult> {
     if (body.op !== 'create') return reject('immutable-control');
     const bad = checkFields(body.type, body.fields);
@@ -314,8 +313,6 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
           : reject('role', 'share Owner required');
       }
       default:
-        void genesisBootstrap;
-        void equalBytes;
         return ACCEPT; // an unknown $sys type from a newer version: keep and relay, never fold
     }
   }

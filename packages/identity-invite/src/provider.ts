@@ -7,9 +7,7 @@
 import { b64urlDecode, b64urlEncode, base32 } from '@sync/core';
 import {
   JoinDeniedError,
-  concat,
   deviceIdFromSignPub,
-  sha256,
   utf8,
   type DeviceBinding,
   type DevicePublic,
@@ -282,7 +280,7 @@ export function createInviteProvider(opts: InviteProviderOptions = {}): Identity
 
     // ---- invites ----
 
-    async createInvite(session, spec: InviteSpec): Promise<InviteArtifact> {
+    async createInvite(_session, spec: InviteSpec): Promise<InviteArtifact> {
       const now = host.now();
       if (!Number.isInteger(spec.maxUses) || spec.maxUses < 1)
         throw new Error('an invite needs maxUses of at least 1');
@@ -313,7 +311,6 @@ export function createInviteProvider(opts: InviteProviderOptions = {}): Identity
         sp: b64urlEncode(d.signPub),
         ap: b64urlEncode(d.agreePub),
       };
-      void session;
       return { inviteId, expiresAt: spec.expiresAt, ...encodeArtifact(art, opts.baseUrl ?? defaultBase()) };
     },
 
@@ -326,7 +323,6 @@ export function createInviteProvider(opts: InviteProviderOptions = {}): Identity
       if (!a) throw new JoinDeniedError('unknown');
       if (host.now() >= a.e) throw new JoinDeniedError('expired');
       const device = me();
-      const inviterSign = b64urlDecode(a.sp);
       const inviterAgree = b64urlDecode(a.ap);
       const nonce = host.random(16);
       const nonceB64 = b64urlEncode(nonce);
@@ -351,7 +347,6 @@ export function createInviteProvider(opts: InviteProviderOptions = {}): Identity
         }),
         'join-request',
       );
-      void inviterSign;
       await host.channel.broadcast(sealed, { space: a.s });
       const reply = await waitFor;
       if (reply.kind === 'join-deny')
@@ -455,6 +450,3 @@ export function createInviteProvider(opts: InviteProviderOptions = {}): Identity
   };
   return self;
 }
-
-void concat;
-void sha256;

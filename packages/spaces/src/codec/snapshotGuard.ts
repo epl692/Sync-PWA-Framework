@@ -4,7 +4,7 @@
  * share-bound objects are pinned out of snapshots, so a forged snapshot cannot touch membership or shares.
  */
 
-import { base32, canonicalBytes, parseJsonBytes, type SnapshotGuard } from '@sync/core';
+import { canonicalBytes, parseJsonBytes, type SnapshotGuard } from '@sync/core';
 import type { AuthorityView } from '../authority/hub';
 import { b64urlDecodeSafe } from '../crypto/b64';
 import { concat, utf8 } from '../crypto/bytes';
@@ -77,5 +77,3 @@ export function createSnapshotGuard(d: {
     },
   };
 }
-
-void base32;

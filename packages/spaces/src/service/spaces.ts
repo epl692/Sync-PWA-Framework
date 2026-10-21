@@ -12,9 +12,9 @@ import { AuthorityHub, type ControlApplied } from '../authority/hub';
 import { SYS, type ControlEvent, type ControlFields, type DeviceRec } from '../authority/types';
 import { createSnapshotGuard } from '../codec/snapshotGuard';
 import { SpaceCodec } from '../codec/spaceCodec';
-import { b64urlDecode, b64urlDecodeSafe, b64urlEncode } from '../crypto/b64';
+import { b64urlDecode, b64urlEncode } from '../crypto/b64';
 import { hex, randomBytes } from '../crypto/bytes';
-import { deviceIdFromSignPub, keyIdOf, spaceIdFor } from '../crypto/ids';
+import { keyIdOf, spaceIdFor } from '../crypto/ids';
 import { createSigner } from '../crypto/signer';
 import { deriveShared, signBytes } from '../crypto/suite';
 import { unwrapKeys, wrapKeys, type GrantBody } from '../crypto/wrap';
@@ -48,7 +48,6 @@ import { createKeyAccess } from './keyAccess';
 
 const BINDING_TAG = Array.from(new TextEncoder().encode('sync-binding/'));
 const FLIP_CODES = new Set<RejectCode>(['role', 'wrong-scope', 'revoked', 'beyond-cutoff']);
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export interface ServiceDeps extends SpacesOptions {
   core: SyncCore;
@@ -956,7 +955,3 @@ export class SpacesService implements Spaces {
     }
   }
 }
-
-void sleep;
-void deviceIdFromSignPub;
-void b64urlDecodeSafe;
