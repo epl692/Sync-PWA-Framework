@@ -26,7 +26,7 @@ export interface SecureNode {
   keyDb: KeyDb;
   clock: FakeClock;
   /** Close and reopen on the same storage and key database, as an app restart would. */
-  reopen(): Promise<SecureNode>;
+  reopen(before?: () => Promise<void>): Promise<SecureNode>;
 }
 
 export async function createSecureNode(opts: SecureNodeOptions = {}): Promise<SecureNode> {
@@ -49,9 +49,10 @@ export async function createSecureNode(opts: SecureNodeOptions = {}): Promise<Se
       storage,
       keyDb,
       clock,
-      reopen: async () => {
+      reopen: async (before) => {
         await spaces.close();
         await core.close();
+        await before?.();
         return open();
       },
     };

@@ -222,6 +222,8 @@ export interface SyncCore extends ExtensionRegistry {
   onApplied(cb: (e: { env: DataPacketEnvelope; body: PacketBody; source: string }) => void): () => void;
   /** A-8: decoded applied packets of a Space (optionally only bodies whose type starts with a prefix), oldest first. */
   scanApplied(space: SpaceId, opts?: { typePrefix?: string }): Promise<Array<{ env: DataPacketEnvelope; body: PacketBody }>>;
+  /** A-8: highest clock and sequence number applied per author in a Space (system objects excluded). */
+  authorStats(space: SpaceId): Promise<Record<string, { clock: string; seq: number }>>;
   /** A-8: which packets this device holds for a Space (per author, inclusive seq intervals). */
   held(space: SpaceId): Promise<Record<string, Array<[number, number]>>>;
   /** Which payload codecs are registered, and which one writes. Lets a release build assert it is not running plaintext. */

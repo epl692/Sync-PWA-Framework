@@ -78,6 +78,9 @@ class CoreImpl implements SyncCore {
   scanApplied(space: SpaceId, opts?: { typePrefix?: string }) {
     return this.parts.history.scanApplied(space, opts);
   }
+  authorStats(space: SpaceId) {
+    return this.parts.history.authorStats(space);
+  }
   async held(space: SpaceId): Promise<Record<string, Array<[number, number]>>> {
     await this.parts.summaries.ensure(space);
     return structuredClone(this.parts.summaries.snapshot(space)) as Record<string, Array<[number, number]>>;

@@ -153,6 +153,19 @@ export class History {
     return out;
   }
 
+  /** A-8: the highest clock and sequence number applied per author in a Space, excluding `$`-prefixed (system) objects. Reads records only, no decoding. */
+  async authorStats(space: SpaceId): Promise<Record<string, { clock: string; seq: number }>> {
+    const out: Record<string, { clock: string; seq: number }> = {};
+    await this.d.storage.transaction(['packets'], 'readonly', async (tx) => {
+      for await (const { value } of tx.scan<PacketRecord>('packets', { index: 'bySpace', range: { gte: space, lt: `${space}\u0000` } })) {
+        if (value.status !== 'applied' || value.type?.startsWith('$')) continue;
+        const cur = out[value.author];
+        out[value.author] = { clock: cur && cur.clock > value.clock ? cur.clock : value.clock, seq: Math.max(cur?.seq ?? 0, value.seq) };
+      }
+    });
+    return out;
+  }
+
   async exportSnapshot(space: SpaceId): Promise<Snapshot | undefined> {
     return this.d.storage.transaction(['snapshots'], 'readonly', (tx) => tx.get<Snapshot>('snapshots', space));
   }

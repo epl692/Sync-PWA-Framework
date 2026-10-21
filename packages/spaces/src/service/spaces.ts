@@ -436,10 +436,7 @@ export class SpacesService implements Spaces {
     const scopes: string[] = [];
     if (auth.currentRole(me) === 'owner') scopes.push(space);
     for (const s of auth.state.shares.values()) if (auth.shareCurrentRole(s.id, me) === 'owner') scopes.push(s.id);
-    return scopes.filter((scope) => {
-      const shrink = auth.lastShrinkClock(scope);
-      return shrink !== '' && shrink > (auth.currentEpoch(scope)?.clock ?? '');
-    });
+    return scopes.filter((scope) => auth.uncoveredShrinks(scope).length > 0);
   }
 
   private async rotateIfNeeded(space: string, reason?: 'member-removed' | 'device-revoked' | 'invite-surplus'): Promise<void> {
@@ -449,10 +446,11 @@ export class SpacesService implements Spaces {
 
   /** What made this scope's key stale, for the event: the latest shrinking event. */
   private whyRotate(auth: Authority, scope: string): 'member-removed' | 'device-revoked' | 'invite-surplus' {
-    const shrink = auth.lastShrinkClock(scope);
-    if (auth.state.inert.some((i) => i.type === SYS.member && i.reason === 'invite-used-up' && i.clock === shrink)) return 'invite-surplus';
-    const dev = [...auth.state.devices.values()].find((d) => d.revoked?.clock === shrink);
-    if (dev && !auth.state.users.get(dev.user)?.history.some((h) => h.clock === shrink)) return 'device-revoked';
+    const latest = auth.uncoveredShrinks(scope).at(-1);
+    if (!latest) return 'member-removed';
+    if (auth.state.inert.some((i) => i.event === latest.id && i.reason === 'invite-used-up')) return 'invite-surplus';
+    const dev = [...auth.state.devices.values()].find((d) => d.revoked?.event === latest.id);
+    if (dev && !auth.state.users.get(dev.user)?.history.some((h) => h.event === latest.id)) return 'device-revoked';
     return 'member-removed';
   }
 
@@ -480,7 +478,8 @@ export class SpacesService implements Spaces {
     const recipients = this.recipientsOf(auth, space, scope).filter((r) => r.id !== me);
 
     // Written while the old key is still the write key, so members who have not seen the new one can read these.
-    await this.write(space, SYS.epoch, { scope, epoch, keyId, ...(cur ? { prevKeyId: cur.keyId } : {}) });
+    const covers = auth.shrinkEvents(scope).map((s) => s.id);
+    await this.write(space, SYS.epoch, { scope, epoch, keyId, ...(cur ? { prevKeyId: cur.keyId } : {}), covers });
     for (const r of recipients) {
       const grant = await wrapKeys(scope, { deviceId: r.id, agreePub: b64urlDecode(r.agreePub) }, [{ epoch, keyId, raw }]);
       await this.write(space, SYS.keygrant, grant);

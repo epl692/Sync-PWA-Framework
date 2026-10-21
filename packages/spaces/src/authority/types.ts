@@ -49,7 +49,7 @@ export type ControlFields = {
   [SYS.deviceRevoke]: { device: string; cutoff: number };
   [SYS.invite]: { inviteId: string; role: Role; expiresAt: number; maxUses: number; secretHash: string; approval: 'required' | 'auto' };
   [SYS.inviteRevoke]: { inviteId: string };
-  [SYS.epoch]: { scope: string; epoch: number; keyId: string; prevKeyId?: string };
+  [SYS.epoch]: { scope: string; epoch: number; keyId: string; prevKeyId?: string; covers?: string[] };
   [SYS.keygrant]: { to: string; scope: string; eph: string; items: Array<{ epoch: number; keyId: string; nonce: string; wrapped: string }> };
   [SYS.share]: { shareId: string; obj: string; members: Array<{ user: string; role: Role }> };
   [SYS.shareMember]: { shareId: string; action: 'add' | 'role' | 'remove'; user: string; role?: Role; cutoff?: Record<string, number> };
@@ -111,6 +111,8 @@ export interface EpochRec {
   epoch: number;
   keyId: string;
   prevKeyId?: string;
+  /** IDs of the shrinking events (removals, revocations) the author had seen, so this epoch accounts for them. */
+  covers?: string[];
   clock: string;
   event: string;
   author: string;

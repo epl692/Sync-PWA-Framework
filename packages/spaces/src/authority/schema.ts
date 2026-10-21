@@ -45,7 +45,7 @@ export function checkFields(type: string, f: unknown): string | undefined {
     case SYS.inviteRevoke:
       return isId(f.inviteId) ? undefined : 'bad invite revoke';
     case SYS.epoch:
-      return isId(f.scope) && isSeq(f.epoch) && isHex16(f.keyId) && (f.prevKeyId === undefined || isHex16(f.prevKeyId)) ? undefined : 'bad epoch';
+      return isId(f.scope) && isSeq(f.epoch) && isHex16(f.keyId) && (f.prevKeyId === undefined || isHex16(f.prevKeyId)) && (f.covers === undefined || (Array.isArray(f.covers) && f.covers.length <= 1000 && f.covers.every((c) => typeof c === 'string' && c.length < 128))) ? undefined : 'bad epoch';
     case SYS.keygrant:
       if (!isId(f.to) || !isId(f.scope) || !isB64(f.eph, 32) || !Array.isArray(f.items) || f.items.length < 1 || f.items.length > 256) return 'bad grant';
       return f.items.every((i) => isObj(i) && isSeq(i.epoch) && isHex16(i.keyId) && isB64(i.nonce, 12) && isB64(i.wrapped)) ? undefined : 'bad grant item';

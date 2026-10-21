@@ -128,13 +128,22 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
       role = 'owner';
     } else {
       const dc = auth.deviceCheck(env.author, env.clock, env.seq, env.id);
-      if (!dc.ok) {
-        if (dc.reason === 'unknown-device') return defer('unknown-device');
-        if (dc.reason === 'not-member') return defer('not-member');
+      if (dc.ok) {
+        user = dc.user;
+        role = dc.role;
+      } else if (dc.reason === 'unknown-device') {
+        return defer('unknown-device');
+      } else if (body?.type.startsWith(SYS_PREFIX) && (dc.reason === 'revoked' || dc.reason === 'beyond-cutoff' || dc.reason === 'not-member')) {
+        // Control events decide the very standing they are judged by (two Owners removing each other while apart is the
+        // classic case), so a verified event from a known device is taken in and the fold makes it inert if it
+        // was not allowed. Rejecting it here would make peers disagree about which of the two events came first.
+        user = auth.device(env.author)!.user;
+        role = auth.roleAt(user, env.clock);
+      } else if (dc.reason === 'not-member') {
+        return defer('not-member');
+      } else {
         return reject(dc.reason);
       }
-      user = dc.user;
-      role = dc.role;
     }
 
     // 3. scope: the Space, or an override share named in the readable header

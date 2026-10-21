@@ -244,40 +244,44 @@ export class Authority {
   }
 
   /**
-   * The clock of the latest event after which someone who may hold this scope's key can no longer be trusted
-   * with future data: a member removed, a device revoked, or a surplus invite join. A scope needs a new epoch
-   * when this is later than its current epoch event (FR-008).
+   * Events after which someone who may hold this scope's key can no longer be trusted with future data: a member
+   * removed, a device revoked, or a surplus invite join (FR-008). A scope needs a new epoch when one of them is
+   * not accounted for by its current epoch.
    */
-  lastShrinkClock(scope: string): string {
+  shrinkEvents(scope: string): Array<{ id: string; clock: string }> {
     const st = this.st;
-    let latest = '';
-    const bump = (c: string) => {
-      if (c > latest) latest = c;
+    const out = new Map<string, string>();
+    const spans = (list: RoleSpan[]) => {
+      for (let i = 1; i < list.length; i++) if (list[i]!.role === null && list[i - 1]!.role !== null) out.set(list[i]!.event, list[i]!.clock);
     };
-    const holders = (users: Iterable<string>) => {
+    const revoked = (users: Iterable<string>) => {
       for (const u of users) {
-        const rec = st.users.get(u);
-        for (const id of rec?.devices ?? []) {
+        for (const id of st.users.get(u)?.devices ?? []) {
           const r = st.devices.get(id)?.revoked;
-          if (r) bump(r.clock);
+          if (r) out.set(r.event, r.clock);
         }
       }
     };
     if (scope === this.space) {
-      for (const u of st.users.values()) {
-        for (let i = 1; i < u.history.length; i++) if (u.history[i]!.role === null && u.history[i - 1]!.role !== null) bump(u.history[i]!.clock);
-      }
-      holders(st.users.keys());
-      for (const i of st.inert) if (i.type === SYS.member && i.reason === 'invite-used-up') bump(i.clock);
+      for (const u of st.users.values()) spans(u.history);
+      revoked(st.users.keys());
+      for (const i of st.inert) if (i.type === SYS.member && i.reason === 'invite-used-up') out.set(i.event, i.clock);
     } else {
       const share = st.shares.get(scope);
-      if (!share) return '';
-      for (const spans of share.members.values()) {
-        for (let i = 1; i < spans.length; i++) if (spans[i]!.role === null && spans[i - 1]!.role !== null) bump(spans[i]!.clock);
-      }
-      holders(share.members.keys());
+      if (!share) return [];
+      for (const list of share.members.values()) spans(list);
+      revoked(share.members.keys());
     }
-    return latest;
+    return [...out.entries()].map(([id, clock]) => ({ id, clock })).sort((a, b) => (a.clock < b.clock ? -1 : 1));
+  }
+
+  /** Shrinking events the scope's current epoch does not account for. An epoch without `covers` accounts for everything before it. */
+  uncoveredShrinks(scope: string): Array<{ id: string; clock: string }> {
+    const cur = this.currentEpoch(scope);
+    const shrinks = this.shrinkEvents(scope);
+    if (!cur) return shrinks;
+    const covered = cur.covers ? new Set(cur.covers) : undefined;
+    return shrinks.filter((s) => (covered ? !covered.has(s.id) : s.clock >= cur.clock));
   }
 
   /** Canonical, order-independent description of the derived state (for convergence tests). */
@@ -476,7 +480,7 @@ export class Authority {
     }
     const list = this.st.epochs.get(f.scope) ?? [];
     if (list.some((e) => e.keyId === f.keyId)) return 'duplicate-key';
-    list.push({ scope: f.scope, epoch: f.epoch, keyId: f.keyId, prevKeyId: f.prevKeyId, clock: ev.clock, event: ev.id, author: ev.author });
+    list.push({ scope: f.scope, epoch: f.epoch, keyId: f.keyId, prevKeyId: f.prevKeyId, covers: f.covers, clock: ev.clock, event: ev.id, author: ev.author });
     this.st.epochs.set(f.scope, list);
     return undefined;
   }

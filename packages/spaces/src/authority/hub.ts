@@ -84,12 +84,22 @@ export class AuthorityHub implements AuthorityView {
 
   private async load(space: string): Promise<Authority> {
     this.pending.set(space, []);
-    const items = await this.core.scanApplied(space, { typePrefix: SYS_PREFIX });
+    const [items, stats] = await Promise.all([this.core.scanApplied(space, { typePrefix: SYS_PREFIX }), this.core.authorStats(space)]);
+    // keep the larger of what was learned live and what the log says (a stale higher value only causes an extra check)
+    for (const [author, st] of Object.entries(stats)) {
+      const k = `${space}\u0000${author}`;
+      const cur = this.maxApplied.get(k);
+      this.maxApplied.set(k, { clock: cur && cur.clock > st.clock ? cur.clock : st.clock, seq: Math.max(cur?.seq ?? 0, st.seq) });
+    }
     const a = this.authority(space);
     a.load(items.map((i) => toControlEvent(i.env, i.body)).filter((e): e is ControlEvent => !!e));
-    for (const ev of this.pending.get(space) ?? []) a.add(ev);
+    const during = this.pending.get(space) ?? [];
+    for (const ev of during) a.add(ev);
     this.pending.delete(space);
     this.loaded.add(space);
+    // Events that arrived while the state was being (re)read were never judged against it, whether or not the scan
+    // already contained them: report them as retroactive so the service re-checks the packets they may affect.
+    for (const ev of during) this.onControl({ space, event: ev, retroactive: true, newInert: [], local: false });
     return a;
   }
 

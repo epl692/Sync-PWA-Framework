@@ -333,3 +333,65 @@ describe('add / load', () => {
     expect(b.eventCount).toBe(events.length);
   });
 });
+
+describe('rotation need (FR-008)', () => {
+  it('a removal needs an epoch that covers it; a concurrent epoch that did not see it does not count', () => {
+    const { auth } = basicSpace();
+    auth.add(epoch('A', 8, SPACE, 0, 'aaaaaaaaaaaaaaaa'));
+    expect(auth.uncoveredShrinks(SPACE)).toEqual([]);
+    const rmB = removeMember('A', 20, 'B', { B: 1 });
+    auth.add(rmB);
+    expect(auth.uncoveredShrinks(SPACE).map((s) => s.id)).toEqual([rmB.id]);
+    // an epoch written with knowledge of that removal covers it
+    auth.add(ev(SYS.epoch, 'A', 21, { scope: SPACE, epoch: 1, keyId: 'bbbbbbbbbbbbbbbb', covers: [rmB.id] }));
+    expect(auth.uncoveredShrinks(SPACE)).toEqual([]);
+    // another Owner removes someone else at the same time and rotates without having seen the first removal
+    auth.add(setRole('A', 22, 'D', 'owner'));
+    const rmC = removeMember('D', 23, 'C', { C: 1 });
+    auth.add(rmC);
+    auth.add(ev(SYS.epoch, 'D', 24, { scope: SPACE, epoch: 1, keyId: 'cccccccccccccccc', covers: [rmC.id] }));
+    // the lowest-clock epoch 1 is the first one, which does not know about C's removal
+    expect(auth.currentEpoch(SPACE)!.keyId).toBe('bbbbbbbbbbbbbbbb');
+    expect(auth.uncoveredShrinks(SPACE).map((s) => s.id)).toEqual([rmC.id]);
+    auth.add(ev(SYS.epoch, 'A', 30, { scope: SPACE, epoch: 2, keyId: 'dddddddddddddddd', covers: [rmB.id, rmC.id] }));
+    expect(auth.uncoveredShrinks(SPACE)).toEqual([]);
+  });
+
+  it('an epoch without a covers list accounts for the events before it (older epochs)', () => {
+    const { auth } = basicSpace();
+    const rm = removeMember('A', 20, 'B', { B: 1 });
+    auth.add(rm);
+    auth.add(epoch('A', 21, SPACE, 1, 'bbbbbbbbbbbbbbbb'));
+    expect(auth.uncoveredShrinks(SPACE)).toEqual([]);
+    auth.add(removeMember('A', 22, 'C', { C: 1 }));
+    expect(auth.uncoveredShrinks(SPACE)).toHaveLength(1);
+  });
+
+  it('revoked devices and surplus invite joins also need rotation', () => {
+    const { auth } = basicSpace();
+    auth.add(epoch('A', 8, SPACE, 0, 'aaaaaaaaaaaaaaaa'));
+    auth.add(device('C', 10, 'C', 'C2'));
+    const rev = ev(SYS.deviceRevoke, 'C', 11, { device: 'C2', cutoff: 0 });
+    auth.add(rev);
+    expect(auth.uncoveredShrinks(SPACE).map((s) => s.id)).toEqual([rev.id]);
+    auth.add(invite('A', 12, 'inv', 'viewer', { maxUses: 1 }));
+    auth.add(device('A', 13, 'E', 'E'));
+    auth.add(addMember('A', 14, 'E', 'viewer', { inviteId: 'inv' }));
+    auth.add(device('A', 15, 'F', 'F'));
+    const surplus = addMember('A', 16, 'F', 'viewer', { inviteId: 'inv' });
+    auth.add(surplus);
+    expect(auth.uncoveredShrinks(SPACE).map((s) => s.id)).toEqual([rev.id, surplus.id]);
+  });
+
+  it('a share needs rotation when a member leaves it, and the Space epoch is not touched', () => {
+    const { auth } = basicSpace();
+    const SHARE = 'SHAREAAAAAAAAAAAAAAAAAAAA';
+    auth.add(ev(SYS.share, 'B', 10, { shareId: SHARE, obj: 'o', members: [{ user: 'B', role: 'owner' }, { user: 'D', role: 'editor' }] }));
+    auth.add(epoch('B', 11, SHARE, 0, 'aaaaaaaaaaaaaaaa'));
+    expect(auth.uncoveredShrinks(SHARE)).toEqual([]);
+    const rm = ev(SYS.shareMember, 'B', 12, { shareId: SHARE, action: 'remove', user: 'D' });
+    auth.add(rm);
+    expect(auth.uncoveredShrinks(SHARE).map((s) => s.id)).toEqual([rm.id]);
+    expect(auth.uncoveredShrinks(SPACE)).toEqual([]);
+  });
+});

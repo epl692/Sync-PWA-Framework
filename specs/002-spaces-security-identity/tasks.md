@@ -179,16 +179,16 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 5
 
-- [ ] T065 [P] [US5] Integration test in `packages/spaces/tests/integration/remove-member.test.ts`: after removal the Space key rotates and 100% of new packets are undecryptable on the removed device; packets with `clock` after removal or `seq` above `cutoff` are rejected and counted; the last Owner cannot leave or be demoted; an Editor or Viewer can leave by authoring `member.remove` for themselves, and an Owner device then rotates the Space key and the user's shares
-- [ ] T066 [P] [US5] Rotation tests in `packages/spaces/tests/integration/rotation.test.ts`: concurrent rotations by two Owners leave both keys usable for decryption by `keyId`; the lowest-clock `$sys.epoch` is current; a member offline across several rotations decrypts everything after catching up on grants (FR-010); a grant to a device removed elsewhere is superseded by the next rotation; the 2^31 packet auto-rotation guard fires
-- [ ] T067 [P] [US5] Unit test in `packages/spaces/tests/unit/cutoff.test.ts`: the removal event records `cutoff[deviceId]` equal to the highest `seq` of that device the remover holds
+- [X] T065 [P] [US5] Integration test in `packages/spaces/tests/integration/remove-member.test.ts`: after removal the Space key rotates and 100% of new packets are undecryptable on the removed device; packets with `clock` after removal or `seq` above `cutoff` are rejected and counted; the last Owner cannot leave or be demoted; an Editor or Viewer can leave by authoring `member.remove` for themselves, and an Owner device then rotates the Space key and the user's shares
+- [X] T066 [P] [US5] Rotation tests in `packages/spaces/tests/integration/rotation.test.ts`: concurrent rotations by two Owners leave both keys usable for decryption by `keyId`; the lowest-clock `$sys.epoch` is current; a member offline across several rotations decrypts everything after catching up on grants (FR-010); a grant to a device removed elsewhere is superseded by the next rotation; the 2^31 packet auto-rotation guard fires
+- [X] T067 [P] [US5] Unit test in `packages/spaces/tests/unit/cutoff.test.ts`: the removal event records `cutoff[deviceId]` equal to the highest `seq` of that device the remover holds
 
 ### Implementation for User Story 5
 
-- [ ] T068 [US5] Implement rotation (new `$sys.epoch`, one `$sys.keygrant` per active recipient device, `keyId` selection, auto-rotate triggers `member-removed`, `device-revoked`, `invite-surplus`, `manual`) in `packages/spaces/src/rotation/rotate.ts`
-- [ ] T069 [US5] Implement `setRole()`, `remove()` and `leave()` (any member may remove themselves; an Owner device rotates on seeing it) with cutoff recording and the last-Owner guard in `packages/spaces/src/service/members.ts`
-- [ ] T070 [US5] Notify the author of an inert event (spec FR-005) via a new `SecurityEvent` kind `member:change-ignored` in `packages/spaces/src/service/events.ts` and `specs/002-spaces-security-identity/contracts/spaces-api.ts`; test first in `packages/spaces/tests/integration/inert-notify.test.ts` (the author device of an ignored event receives the event with its reason, and no other device does)
-- [ ] T071 [US5] Implement `members()` with devices and active status, and the `key:rotated` and `member:changed` events, in `packages/spaces/src/service/members.ts`
+- [X] T068 [US5] Implement rotation (new `$sys.epoch`, one `$sys.keygrant` per active recipient device, `keyId` selection, auto-rotate triggers `member-removed`, `device-revoked`, `invite-surplus`, `manual`) in `packages/spaces/src/rotation/rotate.ts`
+- [X] T069 [US5] Implement `setRole()`, `remove()` and `leave()` (any member may remove themselves; an Owner device rotates on seeing it) with cutoff recording and the last-Owner guard in `packages/spaces/src/service/members.ts`
+- [X] T070 [US5] Notify the author of an inert event (spec FR-005) via a new `SecurityEvent` kind `member:change-ignored` in `packages/spaces/src/service/events.ts` and `specs/002-spaces-security-identity/contracts/spaces-api.ts`; test first in `packages/spaces/tests/integration/inert-notify.test.ts` (the author device of an ignored event receives the event with its reason, and no other device does)
+- [X] T071 [US5] Implement `members()` with devices and active status, and the `key:rotated` and `member:changed` events, in `packages/spaces/src/service/members.ts`
 
 ---
 
