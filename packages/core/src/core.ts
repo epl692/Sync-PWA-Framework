@@ -82,6 +82,9 @@ class CoreImpl implements SyncCore {
     await this.parts.summaries.ensure(space);
     return structuredClone(this.parts.summaries.snapshot(space)) as Record<string, Array<[number, number]>>;
   }
+  codecs() {
+    return this.parts.ext.codecIds();
+  }
   channel(name: string): Channel {
     return this.parts.channels.channel(name);
   }

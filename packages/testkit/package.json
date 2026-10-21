@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@sync/core": "*",
-    "@sync/spaces": "*"
+    "@sync/spaces": "*",
+    "@sync/relay-server": "*"
   },
   "scripts": {
     "test": "vitest run",

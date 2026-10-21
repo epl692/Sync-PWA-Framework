@@ -1,7 +1,7 @@
 /** The local-only `sync-keys` database (research R-16). Never synced, snapshotted or exported. */
 
-export type KeyStoreName = 'device' | 'epoch-keys' | 'counters' | 'invites-local';
-export const KEY_STORES: readonly KeyStoreName[] = ['device', 'epoch-keys', 'counters', 'invites-local'];
+export type KeyStoreName = 'device' | 'epoch-keys' | 'counters' | 'invites-local' | 'spaces';
+export const KEY_STORES: readonly KeyStoreName[] = ['device', 'epoch-keys', 'counters', 'invites-local', 'spaces'];
 
 export interface KeyDb {
   get<T>(store: KeyStoreName, key: string): Promise<T | undefined>;

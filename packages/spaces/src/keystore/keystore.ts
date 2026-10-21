@@ -184,6 +184,16 @@ export class Keystore {
     return this.db.get<InviteSecret>('invites-local', inviteId);
   }
 
+  // ---- Spaces this install belongs to (so a newly joined, still-empty Space keeps syncing after a restart) ----
+
+  async addSpace(space: string): Promise<void> {
+    if (!(await this.db.get('spaces', space))) await this.db.put('spaces', space, { joinedAt: this.now() });
+  }
+
+  async spaces(): Promise<string[]> {
+    return (await this.db.all('spaces')).map((r) => r.key).sort();
+  }
+
   async close(): Promise<void> {
     await this.flush();
     await this.db.close();

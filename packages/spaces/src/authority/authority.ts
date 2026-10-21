@@ -243,6 +243,43 @@ export class Authority {
     return n;
   }
 
+  /**
+   * The clock of the latest event after which someone who may hold this scope's key can no longer be trusted
+   * with future data: a member removed, a device revoked, or a surplus invite join. A scope needs a new epoch
+   * when this is later than its current epoch event (FR-008).
+   */
+  lastShrinkClock(scope: string): string {
+    const st = this.st;
+    let latest = '';
+    const bump = (c: string) => {
+      if (c > latest) latest = c;
+    };
+    const holders = (users: Iterable<string>) => {
+      for (const u of users) {
+        const rec = st.users.get(u);
+        for (const id of rec?.devices ?? []) {
+          const r = st.devices.get(id)?.revoked;
+          if (r) bump(r.clock);
+        }
+      }
+    };
+    if (scope === this.space) {
+      for (const u of st.users.values()) {
+        for (let i = 1; i < u.history.length; i++) if (u.history[i]!.role === null && u.history[i - 1]!.role !== null) bump(u.history[i]!.clock);
+      }
+      holders(st.users.keys());
+      for (const i of st.inert) if (i.type === SYS.member && i.reason === 'invite-used-up') bump(i.clock);
+    } else {
+      const share = st.shares.get(scope);
+      if (!share) return '';
+      for (const spans of share.members.values()) {
+        for (let i = 1; i < spans.length; i++) if (spans[i]!.role === null && spans[i - 1]!.role !== null) bump(spans[i]!.clock);
+      }
+      holders(share.members.keys());
+    }
+    return latest;
+  }
+
   /** Canonical, order-independent description of the derived state (for convergence tests). */
   stateDigest(): string {
     const st = this.st;
@@ -309,7 +346,7 @@ export class Authority {
     if (st.genesis) return 'duplicate-genesis';
     if (!f?.owner || f.owner.device !== ev.author) return 'bad-genesis';
     st.genesis = { user: f.owner.user, device: f.owner.device, clock: ev.clock, name: f.name };
-    st.users.set(f.owner.user, { id: f.owner.user, history: [{ clock: ev.clock, role: 'owner', event: ev.id }], devices: [f.owner.device] });
+    st.users.set(f.owner.user, { id: f.owner.user, displayName: f.owner.displayName, history: [{ clock: ev.clock, role: 'owner', event: ev.id }], devices: [f.owner.device] });
     st.devices.set(f.owner.device, {
       id: f.owner.device,
       user: f.owner.user,

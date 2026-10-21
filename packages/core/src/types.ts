@@ -224,6 +224,8 @@ export interface SyncCore extends ExtensionRegistry {
   scanApplied(space: SpaceId, opts?: { typePrefix?: string }): Promise<Array<{ env: DataPacketEnvelope; body: PacketBody }>>;
   /** A-8: which packets this device holds for a Space (per author, inclusive seq intervals). */
   held(space: SpaceId): Promise<Record<string, Array<[number, number]>>>;
+  /** Which payload codecs are registered, and which one writes. Lets a release build assert it is not running plaintext. */
+  codecs(): { default?: string; ids: string[] };
   /** Currently connected peers across all transports. */
   peers(): PeerSummary[];
 

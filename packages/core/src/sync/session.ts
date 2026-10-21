@@ -63,7 +63,8 @@ export class PeerSession {
 
   /** A-4: send a plugin channel message to this peer. */
   sendChan(name: string, space: string, payload: Uint8Array): Promise<void> {
-    return this.send({ t: 'chan', name, space, payload: b64urlEncode(payload) });
+    // queued behind any pending hello, so a relay knows our Spaces before it routes our message
+    return this.enqueue(() => this.send({ t: 'chan', name, space, payload: b64urlEncode(payload) }));
   }
 
   /** Tell the peer our Space list changed. */
@@ -301,7 +302,6 @@ export class PeerSession {
   private async sendRanges(space: string, ranges: Held): Promise<void> {
     const { packets: maxPackets, bytes: maxBytes } = this.env.cfg.batch;
     const snap = await this.snapshotFor(space, ranges);
-    if (snap) await this.sendSnapshot(space, snap);
     let items: string[] = [];
     let ids: string[] = [];
     let size = 0;
@@ -341,6 +341,9 @@ export class PeerSession {
       }
     }
     await flush();
+    // The snapshot follows the packets: merge is order independent, and a receiver that authenticates snapshots
+    // (spec 002) needs the not-compacted control packets before it can judge who signed the snapshot.
+    if (snap) await this.sendSnapshot(space, snap);
   }
 
   private async onPackets(m: Extract<Msg, { t: 'packets'}>): Promise<void> {

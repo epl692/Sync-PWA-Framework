@@ -47,6 +47,10 @@ export class Extensions {
     return this.codecs.get(id);
   }
 
+  codecIds(): { default?: string; ids: string[] } {
+    return { default: this.defaultId, ids: [...this.codecs.keys()] };
+  }
+
   defaultCodec(): PayloadCodec | undefined {
     return this.defaultId ? this.codecs.get(this.defaultId) : undefined;
   }

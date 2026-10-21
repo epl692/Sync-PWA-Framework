@@ -56,6 +56,8 @@ export interface ValidatorDeps {
   report?(r: { code: RejectCode; id: string; space: string }): void;
   /** Suppress reporting while the service replays a Space. */
   quiet?(): boolean;
+  /** A packet is waiting for a key this device does not hold yet. */
+  waiting?(w: { id: string; space: string; scope: string; epoch: number }): void;
 }
 
 const reject = (code: RejectCode, detail?: string): ValidationResult => ({ verdict: 'reject', reason: detail ? `${code}: ${detail}` : code });
@@ -137,7 +139,11 @@ export function createSpacesValidator(deps: ValidatorDeps): PacketValidator {
     // 3. scope: the Space, or an override share named in the readable header
     const inSpaceScope = header.scope === env.space;
     if (!inSpaceScope && role === 'viewer') return reject('role', 'a Viewer cannot write in a share');
-    if (!body) return ACCEPT; // cannot read it (no key): signature and standing are all we can check
+    if (!body) {
+      // cannot read it (no key): signature and standing are all we can check
+      deps.waiting?.({ id: env.id, space: env.space, scope: header.scope, epoch: header.epoch });
+      return ACCEPT;
+    }
 
     if (body.type.startsWith(SYS_PREFIX)) {
       if (!inSpaceScope) return reject('wrong-scope', 'control events live in the Space scope');

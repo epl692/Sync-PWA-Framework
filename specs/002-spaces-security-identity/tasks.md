@@ -106,17 +106,17 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 1
 
-- [ ] T040 [P] [US1] Integration test in `packages/spaces/tests/integration/create-space.test.ts`: creating a Space makes the creator its Owner, generates the epoch-0 key, writes `$sys.genesis`, `$sys.epoch` and the creator's `$sys.device`, works with no transport, and every outgoing packet uses the current epoch key
-- [ ] T041 [P] [US1] Relay plaintext test in `packages/spaces/tests/integration/e2e-relay.test.ts` (SC-002): marker strings in object types, field names and values never appear in relay storage, packets, snapshot messages or `chan` traffic; only envelope metadata and the codec header are visible
-- [ ] T042 [P] [US1] Unsupported-crypto test in `packages/spaces/tests/unit/unsupported.test.ts`: when Ed25519 or X25519 is missing, `state === 'unsupported'`, an event is emitted, and no Space can be created and no plaintext fallback is used
+- [X] T040 [P] [US1] Integration test in `packages/spaces/tests/integration/create-space.test.ts`: creating a Space makes the creator its Owner, generates the epoch-0 key, writes `$sys.genesis`, `$sys.epoch` and the creator's `$sys.device`, works with no transport, and every outgoing packet uses the current epoch key
+- [X] T041 [P] [US1] Relay plaintext test in `packages/spaces/tests/integration/e2e-relay.test.ts` (SC-002): marker strings in object types, field names and values never appear in relay storage, packets, snapshot messages or `chan` traffic; only envelope metadata and the codec header are visible
+- [X] T042 [P] [US1] Unsupported-crypto test in `packages/spaces/tests/unit/unsupported.test.ts`: when Ed25519 or X25519 is missing, `state === 'unsupported'`, an event is emitted, and no Space can be created and no plaintext fallback is used
 
 ### Implementation for User Story 1
 
-- [ ] T043 [US1] Implement the snapshot sealer (one sealed blob per scope per part) in `packages/spaces/src/codec/snapshotSealer.ts`; it is registered by T044, and T041 and the A-3 test run against it
-- [ ] T044 [US1] Implement `installSpaces()` registering codecs, signer, validators, sealer, compaction pin and the identity channel; throw if installed twice on one core, in `packages/spaces/src/service/install.ts` (depends on T012 to T018, T026, T027, T035, T043)
-- [ ] T045 [US1] Implement `create()`, `list()`, `session()` and `signUp()` using `ProviderHost` and the device record, in `packages/spaces/src/service/spaces.ts`. `SpaceId` derived per authority-rules.md
-- [ ] T046 [US1] Implement the `SecurityEvent` emitter and wire `packet:waiting-for-key`, `security:unsupported` in `packages/spaces/src/service/events.ts`
-- [ ] T047 [US1] Implement the release gate: a build test in `packages/spaces/tests/unit/release-gate.test.ts` that fails if `createSyncCore` can start in a release build with the plaintext codec as default, and export `requireSecureCodec()` from `packages/spaces/src/index.ts`
+- [X] T043 [US1] Implement the snapshot sealer (one sealed blob per scope per part) in `packages/spaces/src/codec/snapshotSealer.ts`; it is registered by T044, and T041 and the A-3 test run against it
+- [X] T044 [US1] Implement `installSpaces()` registering codecs, signer, validators, sealer, compaction pin and the identity channel; throw if installed twice on one core, in `packages/spaces/src/service/install.ts` (depends on T012 to T018, T026, T027, T035, T043)
+- [X] T045 [US1] Implement `create()`, `list()`, `session()` and `signUp()` using `ProviderHost` and the device record, in `packages/spaces/src/service/spaces.ts`. `SpaceId` derived per authority-rules.md
+- [X] T046 [US1] Implement the `SecurityEvent` emitter and wire `packet:waiting-for-key`, `security:unsupported` in `packages/spaces/src/service/events.ts`
+- [X] T047 [US1] Implement the release gate: a build test in `packages/spaces/tests/unit/release-gate.test.ts` that fails if `createSyncCore` can start in a release build with the plaintext codec as default, and export `requireSecureCodec()` from `packages/spaces/src/index.ts`
 
 **Checkpoint**: US1 works alone. MVP.
 
