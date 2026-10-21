@@ -23,6 +23,7 @@ This spec plugs into spec 001 by supplying the **encrypting payload codec** and 
 - Q: Unit of sharing? → A: Spaces, with optional per-object override shares.
 - Q: How do users/devices join? → A: Pluggable identity providers; invite link/QR is the default.
 - Q: Permission model? → A: Fixed Owner/Editor/Viewer roles only.
+- Q: Can a new member read data written before they joined? → A: Yes, joiners can read all existing history in the Space.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -70,7 +71,7 @@ An Owner invites a new member by link or QR code, choosing their role. It works 
 **Acceptance Scenarios**:
 
 1. **Given** an Owner, **When** they create an invite, **Then** it grants a specific role in a specific Space and has an expiry and a use limit.
-2. **Given** a valid invite and no internet, **When** a nearby device accepts it over a local transport, **Then** it receives the Space key and its device key is registered as a member.
+2. **Given** a valid invite and no internet, **When** a nearby device accepts it over a local transport, **Then** it receives all of the Space's key epochs (so it can read existing history) and its device key is registered as a member.
 3. **Given** an expired or used-up invite, **When** someone tries to accept it, **Then** it is refused.
 
 ---
@@ -155,7 +156,7 @@ An App Developer replaces invite/QR identity with a different provider (e.g. an 
 - **FR-007**: Every packet MUST be signed by the author's device key; peers MUST verify signature and role before applying or relaying.
 - **FR-008**: Removing a member or revoking a device MUST rotate affected keys; later packets MUST be unreadable to the removed party.
 - **FR-009**: Peers MUST reject packets from a revoked device or removed member whose clock is after the revocation.
-- **FR-010**: Members MUST be able to obtain all key epochs they are entitled to after being offline.
+- **FR-010**: Members MUST be able to obtain all key epochs they are entitled to after being offline. A newly joined member is entitled to every existing key epoch of the Space, so it can read all history written before it joined.
 
 **Override shares**
 
