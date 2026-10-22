@@ -10,7 +10,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@sync/core": "*"
+    "@sync/core": "*",
+    "@sync/spaces": "*",
+    "@sync/relay-server": "*"
   },
   "scripts": {
     "test": "vitest run",

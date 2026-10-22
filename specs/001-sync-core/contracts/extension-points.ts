@@ -34,6 +34,10 @@ export type ValidationResult =
 
 export interface ValidatorContext {
   now(): number;
+  /** Exact envelope bytes (added by spec 002 A-7), so signatures can be checked over unknown extra fields. */
+  raw?: Uint8Array;
+  /** 'local' or `${transportId}:${peerId}` (spec 002 A-7). */
+  source?: string;
   /** Object state before this packet, when it exists. Only present in the 'apply' phase after decode. */
   existing?: unknown;
 }
@@ -57,6 +61,26 @@ export interface PacketValidator {
 export interface ExtensionRegistry {
   registerCodec(codec: PayloadCodec, opts?: { makeDefault?: boolean }): void;
   registerValidator(validator: PacketValidator): void;
+  registerSigner(signer: PacketSigner): void;
+  registerSnapshotGuard(guard: SnapshotGuard): void;
+  registerCompactionPin(pin: CompactionPin): void;
   /** Re-run deferred/parked packets, for example after a key arrives. */
   revalidate(opts?: { space?: string }): Promise<{ applied: number; stillParked: number }>;
 }
+
+/** Spec 002 A-1: fills envelope.sig for locally authored packets. `bytes` = canonical envelope with sig null. */
+export interface PacketSigner {
+  readonly id: string;
+  sign(bytes: Uint8Array, ctx: { space: string; author: string }): Promise<Uint8Array>;
+}
+
+/** Spec 002 A-3: seals and authenticates snapshot messages. */
+export interface SnapshotGuard {
+  seal(space: string, objects: unknown[]): Promise<Uint8Array>;
+  open(space: string, bytes: Uint8Array): Promise<{ ok: true; objects: unknown[] } | { ok: false; reason: 'missing-key' | 'malformed' }>;
+  sign(space: string, canonical: Uint8Array): Promise<{ signer: string; sig: Uint8Array }>;
+  verify(space: string, signer: string | undefined, canonical: Uint8Array, sig: Uint8Array | undefined): Promise<{ accept: true } | { accept: false; reason: string }>;
+}
+
+/** Spec 002 A-6: matching objects are never folded into snapshots or deleted by compaction. */
+export type CompactionPin = (type: string, obj: string) => boolean;

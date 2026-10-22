@@ -21,7 +21,8 @@
     "e2e": "playwright test",
     "bench": "vitest bench --run",
     "relay-server": "tsx packages/relay-server/src/server.ts",
-    "dev": "echo \"run dev in a specific workspace, e.g. npm run dev -w @sync/transport-webrtc\""
+    "dev": "echo \"run dev in a specific workspace, e.g. npm run dev -w @sync/transport-webrtc\"",
+    "test:adversarial": "vitest run packages/spaces/tests/adversarial"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

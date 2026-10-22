@@ -40,6 +40,8 @@ export class QueryEngine {
     for (const o of candidates) {
       if (spec.type !== undefined && o.type !== spec.type) continue;
       if (spec.space !== undefined && o.space !== spec.space) continue;
+      // A-5: `$`-prefixed types are system objects; only an exact type or id query sees them.
+      if (o.type.startsWith('$') && spec.type !== o.type && spec.id === undefined) continue;
       if (!isVisible(o, this.resurrecting)) continue;
       if (spec.where && !spec.where(toSyncable(o))) continue;
       out.push(o);

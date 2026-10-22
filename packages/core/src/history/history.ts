@@ -12,6 +12,7 @@ import type { StorageAdapter } from '../storage/types';
 import {
   NotUndoableError,
   UNSET,
+  type DataPacketEnvelope,
   type DeviceId,
   type JSONValue,
   type ObjectId,
@@ -68,7 +69,7 @@ export class History {
       const { env } = decodeEnvelope(rec.raw);
       const codec = this.d.ext.codec(env.codec);
       if (!codec) return undefined;
-      const r = await codec.decode(env.body, { space: env.space, author: env.author });
+      const r = await codec.decode(env.body, { space: env.space, author: env.author, envelope: { v: env.v, id: env.id, seq: env.seq, clock: env.clock, codec: env.codec } });
       return r.ok ? r.body : undefined;
     } catch {
       return undefined;
@@ -128,6 +129,43 @@ export class History {
     await d.writer.update(id, restore);
   }
 
+  /**
+   * A-8: decoded applied packets of a Space, oldest clock first. With `typePrefix`, only packets whose body type
+   * starts with it are decoded and returned (packets recorded before `type` was kept are decoded to find out).
+   */
+  async scanApplied(space: SpaceId, opts: { typePrefix?: string } = {}): Promise<Array<{ env: DataPacketEnvelope; body: PacketBody }>> {
+    const rows = await this.d.storage.transaction(['packets'], 'readonly', async (tx) => {
+      const out: PacketRecord[] = [];
+      for await (const { value } of tx.scan<PacketRecord>('packets', { index: 'bySpace', range: { gte: space, lt: `${space}\u0000` } })) {
+        if (value.status !== 'applied') continue;
+        if (opts.typePrefix !== undefined && value.type !== undefined && !value.type.startsWith(opts.typePrefix)) continue;
+        out.push(value);
+      }
+      return out;
+    });
+    rows.sort((a, b) => (a.clock < b.clock ? -1 : a.clock > b.clock ? 1 : a.id < b.id ? -1 : 1));
+    const out: Array<{ env: DataPacketEnvelope; body: PacketBody }> = [];
+    for (const rec of rows) {
+      const body = await this.bodyOf(rec);
+      if (!body || (opts.typePrefix !== undefined && !body.type.startsWith(opts.typePrefix))) continue;
+      out.push({ env: decodeEnvelope(rec.raw).env, body });
+    }
+    return out;
+  }
+
+  /** A-8: the highest clock and sequence number applied per author in a Space, excluding `$`-prefixed (system) objects. Reads records only, no decoding. */
+  async authorStats(space: SpaceId): Promise<Record<string, { clock: string; seq: number }>> {
+    const out: Record<string, { clock: string; seq: number }> = {};
+    await this.d.storage.transaction(['packets'], 'readonly', async (tx) => {
+      for await (const { value } of tx.scan<PacketRecord>('packets', { index: 'bySpace', range: { gte: space, lt: `${space}\u0000` } })) {
+        if (value.status !== 'applied' || value.type?.startsWith('$')) continue;
+        const cur = out[value.author];
+        out[value.author] = { clock: cur && cur.clock > value.clock ? cur.clock : value.clock, seq: Math.max(cur?.seq ?? 0, value.seq) };
+      }
+    });
+    return out;
+  }
+
   async exportSnapshot(space: SpaceId): Promise<Snapshot | undefined> {
     return this.d.storage.transaction(['snapshots'], 'readonly', (tx) => tx.get<Snapshot>('snapshots', space));
   }
@@ -170,6 +208,7 @@ export class History {
     for (const rec of eligible.sort((a, b) => (a.clock < b.clock ? -1 : a.clock > b.clock ? 1 : 0))) {
       const body = await this.bodyOf(rec);
       if (!body) continue; // cannot read it now (e.g. a codec is missing): leave it in the log
+      if (d.ext.isPinned(body.type, body.obj)) continue; // A-6: pinned objects are never folded or deleted
       objects.set(body.obj, mergeInto(objects.get(body.obj), body, { clock: rec.clock, space }).obj);
       covers[rec.author] = addValue(covers[rec.author] ?? [], rec.seq);
       folded.push(rec);

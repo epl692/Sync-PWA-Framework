@@ -2,7 +2,8 @@
 
 import type { StorageAdapter } from './storage/types';
 import type { Transport } from './sync/transport';
-import type { PacketValidator, PayloadCodec } from './extension/types';
+import type { CompactionPin, PacketSigner, PacketValidator, PayloadCodec, SnapshotGuard } from './extension/types';
+import type { Channel, PeerSummary } from './sync/channel';
 import type { Snapshot } from './history/snapshot';
 
 export type ObjectId = string;
@@ -63,6 +64,8 @@ export interface Limits {
   maxFieldsPerPacket: number;
   maxMessageBytes: number;
   seqGapWarn: number;
+  /** Parked packets kept per (Space, author). Excess packets are not stored or counted as held (A-7). */
+  maxParkedPerAuthor: number;
 }
 
 export interface Config {
@@ -117,6 +120,7 @@ export function resolveConfig(c: Config): ResolvedConfig {
       maxFieldsPerPacket: c.limits?.maxFieldsPerPacket ?? 256,
       maxMessageBytes: c.limits?.maxMessageBytes ?? 4 * 1024 * 1024,
       seqGapWarn: c.limits?.seqGapWarn ?? 1_000_000,
+      maxParkedPerAuthor: c.limits?.maxParkedPerAuthor ?? 1000,
     },
     spaces: c.spaces ?? [],
     autoCompact: c.autoCompact ?? true,
@@ -165,6 +169,12 @@ export class ObjectNotFoundError extends Error {
 export interface ExtensionRegistry {
   registerCodec(codec: PayloadCodec, opts?: { makeDefault?: boolean }): void;
   registerValidator(validator: PacketValidator): void;
+  /** A-1: sign locally authored packets. */
+  registerSigner(signer: PacketSigner): void;
+  /** A-3: seal and authenticate snapshot messages. */
+  registerSnapshotGuard(guard: SnapshotGuard): void;
+  /** A-6: keep matching objects out of snapshots and out of compaction. */
+  registerCompactionPin(pin: CompactionPin): void;
   revalidate(opts?: { space?: string }): Promise<{ applied: number; stillParked: number }>;
 }
 
@@ -199,6 +209,27 @@ export interface SyncCore extends ExtensionRegistry {
   /** The Space's compacted state, if any. Peers bootstrap from it. */
   exportSnapshot(space: SpaceId): Promise<Snapshot | undefined>;
   installSnapshot(snapshot: Snapshot): Promise<void>;
+
+  /**
+   * A-2: clear the derived state of a Space and re-run every retained packet through the validators in clock
+   * order. Used when authority changed retroactively. Returns how many packets changed status.
+   */
+  rebuildSpace(space: SpaceId): Promise<{ reapplied: number; rejected: number }>;
+
+  /** A-4: a named message channel for plugins. Messages are never stored by the core. */
+  channel(name: string): Channel;
+  /** A-8: called synchronously after each packet is applied and committed (including parked packets applied later). */
+  onApplied(cb: (e: { env: DataPacketEnvelope; body: PacketBody; source: string }) => void): () => void;
+  /** A-8: decoded applied packets of a Space (optionally only bodies whose type starts with a prefix), oldest first. */
+  scanApplied(space: SpaceId, opts?: { typePrefix?: string }): Promise<Array<{ env: DataPacketEnvelope; body: PacketBody }>>;
+  /** A-8: highest clock and sequence number applied per author in a Space (system objects excluded). */
+  authorStats(space: SpaceId): Promise<Record<string, { clock: string; seq: number }>>;
+  /** A-8: which packets this device holds for a Space (per author, inclusive seq intervals). */
+  held(space: SpaceId): Promise<Record<string, Array<[number, number]>>>;
+  /** Which payload codecs are registered, and which one writes. Lets a release build assert it is not running plaintext. */
+  codecs(): { default?: string; ids: string[] };
+  /** Currently connected peers across all transports. */
+  peers(): PeerSummary[];
 
   stateHash(space: SpaceId): Promise<string>;
   on(cb: (e: CoreEvent) => void): () => void;

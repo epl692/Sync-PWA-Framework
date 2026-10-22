@@ -4,7 +4,9 @@
  */
 
 import type { Emitter } from '../events';
-import { b64urlDecode, b64urlEncode } from '../packet/canonical';
+import type { Extensions } from '../extension/registry';
+import type { ChannelHub } from './channel';
+import { b64urlDecode, b64urlEncode, canonicalBytes } from '../packet/canonical';
 import type { Snapshot } from '../history/snapshot';
 import type { Applier, PacketRecord } from '../store/apply';
 import { isStoredObject } from '../store/objects';
@@ -23,6 +25,8 @@ export interface SyncEnv {
   cfg: ResolvedConfig;
   events: Emitter<CoreEvent>;
   deviceId: string;
+  ext: Extensions;
+  channels: ChannelHub;
   spaces(): Promise<string[]>;
   relayFor(space: string): boolean;
 }
@@ -55,6 +59,12 @@ export class PeerSession {
 
   close(): void {
     this.dead = true;
+  }
+
+  /** A-4: send a plugin channel message to this peer. */
+  sendChan(name: string, space: string, payload: Uint8Array): Promise<void> {
+    // queued behind any pending hello, so a relay knows our Spaces before it routes our message
+    return this.enqueue(() => this.send({ t: 'chan', name, space, payload: b64urlEncode(payload) }));
   }
 
   /** Tell the peer our Space list changed. */
@@ -146,6 +156,13 @@ export class PeerSession {
         return;
       case 'snapshot':
         return this.onSnapshot(m);
+      case 'chan':
+        try {
+          this.env.channels.dispatch(m.name, this.key, b64urlDecode(m.payload));
+        } catch {
+          this.env.events.emit({ kind: 'packet:rejected', id: '', reason: `${this.key}: bad channel payload` });
+        }
+        return;
       default:
         return; // pong
     }
@@ -219,8 +236,16 @@ export class PeerSession {
   private async sendSnapshot(space: string, snap: Snapshot): Promise<void> {
     const perPart = 100;
     const of = Math.max(1, Math.ceil(snap.objects.length / perPart));
+    const guard = this.env.ext.snapshotGuard();
     for (let part = 0; part < of; part++) {
-      await this.send({ t: 'snapshot', space, covers: snap.covers, objects: snap.objects.slice(part * perPart, (part + 1) * perPart), part, of });
+      const objects = snap.objects.slice(part * perPart, (part + 1) * perPart);
+      if (!guard) {
+        await this.send({ t: 'snapshot', space, covers: snap.covers, objects, part, of });
+      } else {
+        const base = { t: 'snapshot' as const, space, covers: snap.covers, part, of, sealed: b64urlEncode(await guard.seal(space, objects)) };
+        const { signer, sig } = await guard.sign(space, canonicalBytes({ ...base, sig: null }));
+        await this.send({ ...base, signer, sig: b64urlEncode(sig) });
+      }
       await yieldNow();
     }
     const held = this.peerHeld.get(space) ?? {};
@@ -235,7 +260,9 @@ export class PeerSession {
       entry = { of: m.of, covers: m.covers, parts: new Map() };
       this.incomingSnapshots.set(m.space, entry);
     }
-    entry.parts.set(m.part, m.objects);
+    const opened = await this.openSnapshotPart(m);
+    if (!opened) return;
+    entry.parts.set(m.part, opened);
     if (entry.parts.size < entry.of) return;
     this.incomingSnapshots.delete(m.space);
     const objects = [...entry.parts.entries()].sort((a, b) => a[0] - b[0]).flatMap(([, objs]) => objs);
@@ -247,11 +274,34 @@ export class PeerSession {
     this.env.events.emit({ kind: 'sync:progress', peer: this.key, space: m.space, received: objects.length, total: objects.length });
   }
 
+  /** Returns the part's objects, or undefined after reporting why the part was discarded (A-3). */
+  private async openSnapshotPart(m: Extract<Msg, { t: 'snapshot' }>): Promise<unknown[] | undefined> {
+    const guard = this.env.ext.snapshotGuard();
+    const discard = (why: string) => {
+      this.env.events.emit({ kind: 'packet:rejected', id: '', reason: `${this.key}: snapshot discarded: ${why}` });
+      return undefined;
+    };
+    if (!guard) return m.sealed !== undefined || !m.objects ? discard('sealed snapshot but no guard is registered') : m.objects;
+    if (m.sealed === undefined || m.sig === undefined) return discard('unsealed or unsigned snapshot');
+    let sig: Uint8Array;
+    let sealed: Uint8Array;
+    try {
+      sig = b64urlDecode(m.sig);
+      sealed = b64urlDecode(m.sealed);
+    } catch {
+      return discard('bad base64url');
+    }
+    const base = { t: 'snapshot', space: m.space, covers: m.covers, part: m.part, of: m.of, sealed: m.sealed, sig: null };
+    const verdict = await guard.verify(m.space, m.signer, canonicalBytes(base), sig);
+    if (!verdict.accept) return discard(verdict.reason);
+    const opened = await guard.open(m.space, sealed);
+    return opened.ok ? opened.objects : discard(opened.reason);
+  }
+
   /** Send the requested packet ranges in bounded batches, yielding between batches. */
   private async sendRanges(space: string, ranges: Held): Promise<void> {
     const { packets: maxPackets, bytes: maxBytes } = this.env.cfg.batch;
     const snap = await this.snapshotFor(space, ranges);
-    if (snap) await this.sendSnapshot(space, snap);
     let items: string[] = [];
     let ids: string[] = [];
     let size = 0;
@@ -280,6 +330,7 @@ export class PeerSession {
           });
           for (const r of recs) {
             if (this.dead) return;
+            if (r.status === 'rejected') continue; // never forward what this device refuses to apply
             const b64 = b64urlEncode(r.raw);
             if (items.length && (items.length >= maxPackets || size + b64.length > maxBytes)) await flush();
             items.push(b64);
@@ -290,6 +341,9 @@ export class PeerSession {
       }
     }
     await flush();
+    // The snapshot follows the packets: merge is order independent, and a receiver that authenticates snapshots
+    // (spec 002) needs the not-compacted control packets before it can judge who signed the snapshot.
+    if (snap) await this.sendSnapshot(space, snap);
   }
 
   private async onPackets(m: Extract<Msg, { t: 'packets'}>): Promise<void> {

@@ -1,0 +1,88 @@
+# Contract: Amendments to Spec 001 Core
+
+Spec 001 is implemented. The items below are additive changes to `@sync/core` that this feature needs. Each is backward compatible (new optional hooks), and each carries a compatibility note as the constitution requires. They are delivered first (Phase A in the plan), with tests, before any spaces code.
+
+| ID | Name | Why | Compatibility |
+|---|---|---|---|
+| **A-1** | `PacketSigner` extension point | The write path builds the envelope with `sig: null` and never signs | Optional. With no signer registered, behavior is unchanged (`sig: null`). Order on send: encode → build envelope → **sign** → send validators → apply |
+| **A-2** | `rebuildSpace(space)` | Authority can change retroactively; merge cannot un-apply | New method. Not called by 001 code paths |
+| **A-3** | Sealed + signed snapshots (`SnapshotGuard`) | Snapshots are plaintext and unsigned (research R-11) | Optional hooks. Without them, snapshots work as in 001 (dev/test only; release gate in the plan requires them) |
+| **A-4** | Plugin message channel `core.channel(name)` and relay forwarding | Join/link handshakes are not packets (the joiner is not a member) and must work through the relay | New unknown-`t` messages are already ignored by 001 peers ("Unknown `t` values are ignored"). Relay forwards channel messages to other peers that share the declared Space |
+| **A-5** | Queries hide `$`-prefixed types unless asked by exact type | Control objects must not appear in app queries | Behavior change only for types starting with `$`, which 001 never produced |
+| **A-6** | `registerCompactionPin((type, obj) => boolean)` | `$sys.*` events and keygrants must never be compacted (fold must be reproducible) | Optional; default pins nothing |
+| **A-8** | `onApplied`, `held`, `scanApplied`, `authorStats`, `codecs` introspection | The Spaces layer follows the log synchronously, reloads control events, and decides when a rebuild is needed | New methods; nothing changes for code that does not call them |
+| **A-9** | `CodecContext.envelope` | A codec can bind ciphertext to the envelope it travels in (authenticated data) | Optional field; always supplied by the core |
+| **A-10** | `PacketValidator.prepare(batch)` | Verify the signatures of a whole batch concurrently | Optional; validators must answer identically without it |
+| **A-7** | Validator context carries `raw` (exact envelope bytes) and `source`; `limits.maxParkedPerAuthor` | DoS bound on deferred packets from unknown authors | Added optional fields; limit default `maxParkedPerAuthor = 1000`. Over the limit, new packets from that author are **not stored and not counted as held** (so the summary stays honest and they are re-requested once the author's key arrives); they are reported, not dropped silently |
+
+## A-1 PacketSigner
+
+```ts
+export interface PacketSigner {
+  readonly id: string;                 // "ed25519/1"
+  sign(envelopeWithNullSig: Uint8Array /* canonical bytes */, ctx: { space: string; author: string }): Promise<Uint8Array>;
+}
+// ExtensionRegistry gains: registerSigner(signer: PacketSigner): void;
+```
+
+The core passes the canonical bytes (001 canonical encoding) and stores the returned 64 bytes in `sig`. The core never interprets `sig`.
+
+## A-2 rebuildSpace
+
+```ts
+rebuildSpace(space: SpaceId): Promise<{ reapplied: number; rejected: number }>;
+```
+
+`reapplied` and `rejected` count packets whose status changed (to applied, or to rejected).
+
+Clears derived state (`objects`; `summary` stays; the Space's snapshot is the starting state) for the Space, then re-runs the apply pipeline over retained packets in clock order. Packets that now fail validation are marked `rejected` in the log (kept, never applied, never relayed). Snapshot-covered ranges are not replayed (see research R-10 limit).
+
+## A-3 Sealed and signed snapshots
+
+```ts
+export interface SnapshotGuard {
+  seal(space: string, objects: unknown[]): Promise<Uint8Array>;
+  open(space: string, bytes: Uint8Array): Promise<{ ok: true; objects: unknown[] } | { ok: false; reason: 'missing-key' | 'malformed' }>;
+  sign(space: string, canonical: Uint8Array): Promise<{ signer: string; sig: Uint8Array }>;
+  verify(space: string, signer: string | undefined, canonical: Uint8Array, sig: Uint8Array | undefined): Promise<{ accept: true } | { accept: false; reason: string }>;
+}
+// SyncCore: registerSnapshotGuard(guard)
+```
+
+Wire change to `snapshot` (additive): `objects` is replaced by `sealed` (base64url) plus `signer` and `sig` when a guard is registered. `sig` covers the canonical message `{t, space, covers, part, of, sealed, sig: null}`. A receiver with a guard discards plain snapshots; one without discards sealed snapshots; both report `packet:rejected` ("snapshot discarded: …") and catch up from packets. No corruption results.
+
+**Share-bound objects are pinned (A-6)**, so snapshots only ever hold Space-scoped objects, and one sealed group per part (sealed with the Space key) is enough. See research R-12.
+
+## A-4 Channel
+
+```ts
+core.channel(name: string): {
+  send(peerKey: string, payload: Uint8Array, opts?: { space?: string }): Promise<void>;
+  broadcast(payload: Uint8Array, opts?: { space?: string }): Promise<number>;
+  onMessage(handler: (peerKey: string, payload: Uint8Array) => void): () => void;
+  /** Spaces this device advertises in `hello` for the relay to route by (opaque space IDs only). */
+  setRoutes(spaces: string[]): void;
+};
+core.peers(): Array<{ key: string; transport: string; peerId: string; label?: string }>;  // key = `${transportId}:${peerId}`
+```
+
+Wire: `{ "t": "chan", "name": "identity/1", "space": "<spaceId or *>", "payload": "<base64url>" }`. The relay (RelayHub) forwards `chan` messages to the other connected peers whose `hello.spaces` include the Space, without storing them. Size limit is `limits.maxMessageBytes`. Channel messages are never persisted by the core.
+
+## Required tests for the amendments (written first)
+
+- A-1: a registered signer's output appears in `sig` for local writes; an unsigned core is unchanged.
+- A-2: after `rebuildSpace`, `stateHash` equals the hash computed by a peer that received the same packets in the order that makes them valid; a retroactively invalid packet is no longer visible.
+- A-3: a snapshot over a recording transport contains no plaintext marker; a snapshot with a bad signature is discarded and reported.
+- A-4: a relay forwards `chan` between two clients and stores nothing of it.
+- A-5/A-6: a `$sys.x` object is absent from `query({})`, present for `query({type: '$sys.x'})`, and survives `compact()`.
+
+## As built: additions and changes since this was first written
+
+- **A-3** is one `SnapshotGuard` (`seal`, `open`, `sign`, `verify`), described above. The snapshot message is sent **after** the packets. Share-bound objects are pinned (A-6), so a snapshot holds only Space-scoped objects.
+- **A-4** `chan` messages are sent through the session's queue, so a relay has seen the sender's `hello` (and its Spaces) before it routes the message.
+- **A-5/A-6**: the pin is `(type, obj) => boolean`.
+- **A-7**: `ValidatorContext` carries `raw` (the exact envelope bytes, so a signature is checked over unknown extra fields) and `source`; `limits.maxParkedPerAuthor` rejects further packets from one author without storing them or counting them as held.
+- **A-8**: `core.onApplied(cb)` fires synchronously after every packet is applied and committed, including a parked packet applied later. `core.held(space)` returns the per-author held intervals. `core.scanApplied(space, {typePrefix})` returns decoded applied packets (records now keep `type`). `core.authorStats(space)` returns the highest applied clock and sequence per author without decoding. `core.codecs()` lists the registered codecs and the default.
+- **A-9**: `CodecContext.envelope = { v, id, seq, clock, codec }`.
+- **A-10**: `ingestBatch` decodes the whole batch, calls `prepare` on every validator, then applies in order.
+- `rebuildSpace` also revisits packets previously marked `rejected`, so a packet refused under an earlier view of authority is accepted again if the view changes. A packet applied locally must come back `applied`: a parked or duplicate result now throws `PacketRejectedError`.

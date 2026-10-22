@@ -27,9 +27,12 @@ import {
   type SpaceId,
   type SyncCore,
   type SyncableObject,
+  type DataPacketEnvelope,
+  type PacketBody,
   type UNSET,
 } from './types';
-import type { PacketValidator, PayloadCodec } from './extension/types';
+import type { CompactionPin, PacketSigner, PacketValidator, PayloadCodec, SnapshotGuard } from './extension/types';
+import { ChannelHub, type Channel, type PeerSummary } from './sync/channel';
 
 class CoreImpl implements SyncCore {
   constructor(
@@ -43,7 +46,9 @@ class CoreImpl implements SyncCore {
       writer: LocalWriter;
       events: Emitter<CoreEvent>;
       manager: TransportManager;
+      channels: ChannelHub;
       history: History;
+      summaries: SummaryCache;
       stopTimers: () => void;
     },
   ) {}
@@ -54,6 +59,40 @@ class CoreImpl implements SyncCore {
   }
   registerValidator(validator: PacketValidator): void {
     this.parts.ext.registerValidator(validator);
+  }
+  registerSigner(signer: PacketSigner): void {
+    this.parts.ext.registerSigner(signer);
+  }
+  registerSnapshotGuard(guard: SnapshotGuard): void {
+    this.parts.ext.registerSnapshotGuard(guard);
+  }
+  registerCompactionPin(pin: CompactionPin): void {
+    this.parts.ext.registerCompactionPin(pin);
+  }
+  rebuildSpace(space: SpaceId): Promise<{ reapplied: number; rejected: number }> {
+    return this.parts.applier.rebuildSpace(space);
+  }
+  onApplied(cb: (e: { env: DataPacketEnvelope; body: PacketBody; source: string }) => void): () => void {
+    return this.parts.applier.applied.on(cb);
+  }
+  scanApplied(space: SpaceId, opts?: { typePrefix?: string }) {
+    return this.parts.history.scanApplied(space, opts);
+  }
+  authorStats(space: SpaceId) {
+    return this.parts.history.authorStats(space);
+  }
+  async held(space: SpaceId): Promise<Record<string, Array<[number, number]>>> {
+    await this.parts.summaries.ensure(space);
+    return structuredClone(this.parts.summaries.snapshot(space)) as Record<string, Array<[number, number]>>;
+  }
+  codecs() {
+    return this.parts.ext.codecIds();
+  }
+  channel(name: string): Channel {
+    return this.parts.channels.channel(name);
+  }
+  peers(): PeerSummary[] {
+    return this.parts.manager.peers();
   }
   revalidate(opts?: { space?: string }): Promise<{ applied: number; stillParked: number }> {
     return this.parts.applier.revalidate(opts);
@@ -178,15 +217,17 @@ export async function createSyncCore(config: Config): Promise<SyncCore> {
     setState: (s) => void (state = s),
   });
   const writer = new LocalWriter({ applier, ext, cfg, hlc, cache, quota, getState: () => state });
+  const channels = new ChannelHub();
   const knownSpaces = async (): Promise<string[]> => {
     const s = new Set<string>(cfg.spaces);
     await cfg.storage.transaction(['summary'], 'readonly', async (tx) => {
       for await (const { key } of tx.scan('summary')) s.add(key);
     });
+    for (const r of channels.routes()) s.add(r);
     return [...s].sort();
   };
   const relayFor = (space: string) => (typeof cfg.relay === 'boolean' ? cfg.relay : (cfg.relay[space] ?? true));
-  const env: SyncEnv = { storage: cfg.storage, summaries, applier, cfg, events, deviceId: state.deviceId, spaces: knownSpaces, relayFor };
+  const env: SyncEnv = { storage: cfg.storage, summaries, applier, cfg, events, deviceId: state.deviceId, ext, channels, spaces: knownSpaces, relayFor };
   const manager = new TransportManager(env);
   manager.markKnown(await knownSpaces());
   applier.accepted.on((a) => manager.onAccepted(a));
@@ -212,5 +253,5 @@ export async function createSyncCore(config: Config): Promise<SyncCore> {
     timers.push(first, every);
   }
   const stopTimers = () => timers.forEach((t) => clearTimeout(t));
-  return new CoreImpl(state.deviceId, { cfg, ext, cache, queries, applier, writer, events, manager, history, stopTimers });
+  return new CoreImpl(state.deviceId, { cfg, ext, cache, queries, applier, writer, events, manager, channels, history, summaries, stopTimers });
 }

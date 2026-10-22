@@ -77,6 +77,11 @@ export class RelayHub {
     this.peers.delete(peerId);
   }
 
+  /** Everything the hub currently stores, for audits (for example the plaintext scan, SC-002). Read-only copies. */
+  inspect(): { spaces: Array<{ space: string; packets: Uint8Array[] }> } {
+    return { spaces: [...this.spaces.entries()].map(([space, s]) => ({ space, packets: [...s.packets.values()].map((p) => p.slice()) })) };
+  }
+
   get stats() {
     return {
       peers: this.peers.size,
@@ -118,6 +123,15 @@ export class RelayHub {
       case 'packets':
         this.onPackets(peerId, peer, m.space, m.items);
         return;
+      case 'chan': {
+        // A-4: plugin messages (invite handshakes). Forwarded, never stored, never decoded.
+        if (!peer.spaces.size) return; // the sender must have said hello
+        for (const [otherId, other] of this.peers) {
+          if (otherId === peerId || other.dead) continue;
+          if (m.space === ANY_SPACE || other.spaces.has(m.space)) this.emit(otherId, m);
+        }
+        return;
+      }
       case 'ping':
         this.emit(peerId, { t: 'pong' });
         return;

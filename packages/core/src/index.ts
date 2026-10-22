@@ -12,6 +12,7 @@ export { createIndexedDbStorage } from './storage/indexeddb';
 export * from './extension/types';
 export { Extensions } from './extension/registry';
 export { createSyncCore } from './core';
+export type { Channel, PeerSummary } from './sync/channel';
 export { joinObjects, isStoredObject } from './store/objects';
 export type { Snapshot } from './history/snapshot';
 export type { HistoryEntry } from './history/history';

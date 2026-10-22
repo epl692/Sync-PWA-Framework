@@ -1,6 +1,7 @@
 /** Owns the transports and one PeerSession per connected peer. */
 
 import type { Accepted } from '../store/apply';
+import type { PeerSummary } from './channel';
 import { PeerSession, type SyncEnv } from './session';
 import type { Transport } from './transport';
 
@@ -14,7 +15,31 @@ export class TransportManager {
   private entries = new Map<string, Entry>();
   private announced = new Set<string>();
 
-  constructor(private readonly env: SyncEnv) {}
+  constructor(private readonly env: SyncEnv) {
+    env.channels.send = (peerKey, name, space, payload) => {
+      const s = this.session(peerKey);
+      if (!s) return Promise.reject(new Error(`peer ${peerKey} is not connected`));
+      return s.sendChan(name, space, payload);
+    };
+    env.channels.broadcast = async (name, space, payload) => {
+      const all = this.sessions();
+      await Promise.all(all.map((s) => s.sendChan(name, space, payload)));
+      return all.length;
+    };
+    env.channels.onRoutesChanged = () => this.sessions().forEach((s) => s.announce());
+  }
+
+  private sessions(): PeerSession[] {
+    return [...this.entries.values()].flatMap((e) => [...e.sessions.values()]);
+  }
+
+  private session(key: string): PeerSession | undefined {
+    return this.sessions().find((s) => s.key === key);
+  }
+
+  peers(): PeerSummary[] {
+    return this.sessions().map((s) => ({ key: s.key, transport: s.key.slice(0, s.key.length - s.peer.id.length - 1), peerId: s.peer.id, label: s.peer.label }));
+  }
 
   add(transport: Transport): void {
     if (this.entries.has(transport.id)) throw new Error(`transport ${transport.id} is already added`);

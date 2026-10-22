@@ -7,3 +7,4 @@ export * from './transportContract';
 export * from './peers';
 export * from './scenarios';
 export * from './mockRtc';
+export * from './spaces';

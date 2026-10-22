@@ -23,6 +23,12 @@ This spec plugs into spec 001 by supplying the **encrypting payload codec** and 
 - Q: Unit of sharing? → A: Spaces, with optional per-object override shares.
 - Q: How do users/devices join? → A: Pluggable identity providers; invite link/QR is the default.
 - Q: Permission model? → A: Fixed Owner/Editor/Viewer roles only.
+- Q: Can a new member read data written before they joined? → A: Yes, joiners can read all existing history in the Space.
+- Q: Can Space Owners outside an override share read or edit it? → A: No; only the share's own members can.
+- Q: Are a removed member's unsynced offline changes kept? → A: No; changes the removing Owner hadn't received are discarded and the count reported.
+- Q: When Owners make conflicting offline membership changes, which wins? → A: The earlier change wins; the later is kept with no effect and its author is notified.
+- Q: Does offline join use Bluetooth? → A: No; it uses a local-network (WebRTC) link in all modern browsers.
+- Q: Must an Owner approve each invite acceptance? → A: Approval required by default; the Owner can choose automatic per invite.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -61,7 +67,7 @@ A Viewer in a Space tries to edit an object (e.g. using a modified client). Ever
 
 ### User Story 3 - Invite Someone With a Link or QR (Priority: P2)
 
-An Owner invites a new member by link or QR code, choosing their role. It works even with no internet, between two nearby devices over Bluetooth.
+An Owner invites a new member by link or QR code, choosing their role. It works even with no internet, between two nearby devices on the same local network.
 
 **Why this priority**: Required for multi-user; one default provider is enough to start.
 
@@ -69,8 +75,8 @@ An Owner invites a new member by link or QR code, choosing their role. It works 
 
 **Acceptance Scenarios**:
 
-1. **Given** an Owner, **When** they create an invite, **Then** it grants a specific role in a specific Space and has an expiry and a use limit.
-2. **Given** a valid invite and no internet, **When** a nearby device accepts it over a local transport, **Then** it receives the Space key and its device key is registered as a member.
+1. **Given** an Owner, **When** they create an invite, **Then** it grants a specific role in a specific Space and has an expiry, a use limit, and an approval setting (required by default).
+2. **Given** a valid invite and no internet, **When** a nearby device accepts it over a local-network link, **Then** it receives all of the Space's key epochs (so it can read existing history) and its device key is registered as a member.
 3. **Given** an expired or used-up invite, **When** someone tries to accept it, **Then** it is refused.
 
 ---
@@ -98,7 +104,7 @@ An Owner removes a member. The removed member can no longer read anything new wr
 **Acceptance Scenarios**:
 
 1. **Given** a member is removed, **When** removal is applied, **Then** the Space key is rotated and the new key is shared only with remaining members.
-2. **Given** a removed member's packet, **When** its clock is after the removal, **Then** peers reject it.
+2. **Given** a removed member's packet, **When** its clock is after the removal or it was not received by the remover before removal, **Then** peers reject it.
 3. **Given** a Space, **When** the last Owner tries to leave or be demoted, **Then** it is refused unless another Owner exists.
 
 ---
@@ -147,25 +153,26 @@ An App Developer replaces invite/QR identity with a different provider (e.g. an 
 - **FR-002**: v1 MUST use three fixed roles: Owner (manage members, roles, keys, and all objects), Editor (create, update, delete objects), Viewer (read only). Custom roles are out of scope.
 - **FR-003**: A Space MUST always have at least one Owner.
 - **FR-004**: Membership and role changes MUST themselves be signed packets in the Space, verified like any other packet.
-- **FR-005**: Concurrent conflicting membership changes MUST resolve deterministically on all peers. [Assumption: per-member last-writer-wins, with removal winning ties; revisit in /plan.]
+- **FR-005**: Concurrent conflicting membership changes MUST resolve deterministically on all peers. Membership changes are applied oldest first by clock; a change takes effect only if its author is an Owner at that point and it keeps at least one Owner. A change that fails this test stays in the log with no effect, and its author MUST be notified.
 
 **Encryption & signing**
 
-- **FR-006**: Packet payloads MUST be encrypted on the authoring device before leaving it; only routing metadata (packet ID, Space ID, key epoch, author device ID, clock) MAY be visible to transports.
+- **FR-006**: Packet payloads MUST be encrypted on the authoring device before leaving it; only routing metadata MAY be visible to transports: packet ID (author device ID and sequence number), Space ID, clock, codec identifier, and the key scope (Space or override share ID), key epoch and key ID. The recipient device of a key grant is also visible. Object IDs, types, field names, values, roles and member lists MUST NOT be.
 - **FR-007**: Every packet MUST be signed by the author's device key; peers MUST verify signature and role before applying or relaying.
 - **FR-008**: Removing a member or revoking a device MUST rotate affected keys; later packets MUST be unreadable to the removed party.
-- **FR-009**: Peers MUST reject packets from a revoked device or removed member whose clock is after the revocation.
-- **FR-010**: Members MUST be able to obtain all key epochs they are entitled to after being offline.
+- **FR-009**: Peers MUST reject packets from a revoked device or removed member whose clock is after the revocation, and packets the revoking device had not yet received from it when it revoked (a sequence-number cutoff recorded in the removal), because a revoked device's clock cannot be trusted. Rejected changes MUST be counted and reported to the user.
+- **FR-010**: Members MUST be able to obtain all key epochs they are entitled to after being offline. A newly joined member is entitled to every existing key epoch of the Space, so it can read all history written before it joined.
 
 **Override shares**
 
 - **FR-011**: The Framework MUST support per-object override shares with their own member list, roles, and key.
+- **FR-011a**: Space Owner status MUST NOT grant access to an override share. Only the share's own members and roles apply. Removing a user from the Space removes them from every override share.
 - **FR-012**: Space members outside an override share MUST still store and relay its packets without being able to decrypt them.
 
 **Identity**
 
 - **FR-013**: Identity MUST be provided through a pluggable Identity Provider contract (create user, link device, revoke device, create/accept invite) with a contract test suite.
-- **FR-014**: The default provider MUST support invite links and QR codes with role, expiry, and use limit, including fully offline acceptance over a local transport.
+- **FR-014**: The default provider MUST support invite links and QR codes with role, expiry, and use limit, including fully offline acceptance over a local transport. Each invite MUST require Owner approval of the joining device by default, and the Owner MAY choose automatic acceptance per invite. The approval screen MUST show a short code both devices display, so a copied or photographed invite can be spotted.
 - **FR-015**: A user MUST be able to link multiple devices, each with its own device key, under one user identity, and revoke any of them from another linked device.
 
 ### Key Entities
@@ -191,6 +198,6 @@ An App Developer replaces invite/QR identity with a different provider (e.g. an 
 
 ## Assumptions
 
-- Offline joining over Bluetooth needs two Chromium-based devices in v1 (Web Bluetooth limits); iOS joins via link over WebSocket.
+- Offline joining uses a local-network (WebRTC) link set up by QR or pasted code, in all modern browsers including iOS. Both devices must be on the same Wi-Fi or hotspot. Bluetooth is not used in v1 because browsers cannot connect to each other over it (see 001-sync-core research R-01).
 - Losing every device of a user means losing access to their identity unless another member re-invites them; account recovery is out of scope for v1.
 - Removed members keep anything they already decrypted; rotation protects only future data.

@@ -2,7 +2,7 @@
 
 import { maxClock, nextAfter, type HLC } from '../clock/hlc';
 import type { Extensions } from '../extension/registry';
-import { buildEnvelope, encodeEnvelope } from '../packet/envelope';
+import { buildEnvelope, ENVELOPE_VERSION, encodeEnvelope } from '../packet/envelope';
 import { newObjectId } from '../packet/ids';
 import { StorageQuotaError } from '../storage/types';
 import type { QuotaMonitor } from '../storage/quota';
@@ -111,13 +111,15 @@ export class LocalWriter {
 
       const body: PacketBody = { obj: change.obj, op: change.op, type, schemaVersion, fields };
       const seq = state.seqCounter + 1;
-      const envBody = await codec.encode(body, { space, author: state.deviceId });
-      const env = buildEnvelope({ author: state.deviceId, seq, space, clock, codec: codec.id, body: envBody, sig: null });
-
-      const sendVerdict = await d.ext.validate('send', env, body, { now: d.cfg.now, existing });
-      if (sendVerdict.verdict !== 'accept') throw new PacketRejectedError(sendVerdict.reason);
+      const envBody = await codec.encode(body, { space, author: state.deviceId, envelope: { v: ENVELOPE_VERSION, id: `${state.deviceId}:${seq}`, seq, clock, codec: codec.id } });
+      let env = buildEnvelope({ author: state.deviceId, seq, space, clock, codec: codec.id, body: envBody, sig: null });
+      const signer = d.ext.signer();
+      if (signer) env = { ...env, sig: await signer.sign(encodeEnvelope(env), { space, author: state.deviceId }) };
 
       const raw = encodeEnvelope(env);
+      const sendVerdict = await d.ext.validate('send', env, body, { now: d.cfg.now, existing, raw, source: 'local' });
+      if (sendVerdict.verdict !== 'accept') throw new PacketRejectedError(sendVerdict.reason);
+
       if (raw.byteLength > d.cfg.limits.maxEnvelopeBytes) {
         throw new PacketRejectedError(`envelope is ${raw.byteLength} bytes (limit ${d.cfg.limits.maxEnvelopeBytes})`);
       }
@@ -125,6 +127,7 @@ export class LocalWriter {
       try {
         const result = await d.applier.applyDecoded({ env, raw, unsupportedVersion: false }, 'local', { body, nextState });
         if (result.status === 'rejected') throw new PacketRejectedError(result.reason);
+        if (result.status !== 'applied') throw new PacketRejectedError(`not applied (${result.status}${'reason' in result ? `: ${result.reason}` : ''})`);
       } catch (e) {
         if (e instanceof StorageQuotaError) await d.quota.reportExceeded();
         throw e;
