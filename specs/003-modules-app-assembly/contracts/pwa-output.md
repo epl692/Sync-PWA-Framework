@@ -36,7 +36,7 @@ All references are **relative**. No file requires server-side code, redirects, r
 ## `index.html`
 
 - `<meta name="viewport" content="width=device-width, initial-scale=1">`, `<meta name="theme-color">`, `<link rel="manifest">`.
-- CSP: `default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss: https:; img-src 'self' data: blob:`. `connect-src` is widened by transports through the config only. `blob:` is required by the runtime loader (research R-08).
+- CSP: `default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'; connect-src 'self' <origins from config.connectSrc>; img-src 'self' data: blob:`. `connect-src` is `'self'` plus only the origins listed in `config.connectSrc` (transport servers), so module code cannot send data to arbitrary hosts. `blob:` is required by the runtime loader (research R-08).
 - A single `<div id="app">` and the `<script type="module">`. Apps may place any registered custom element in `index.template.html`.
 
 ## Service worker (`sw.js`, generated)

@@ -5,6 +5,7 @@
 
 import type { ModuleDefinition, ModuleHost } from './module-api';
 import type { JSONValue } from '../../001-sync-core/contracts/public-api';
+import type { Spaces } from '../../002-spaces-security-identity/contracts/spaces-api';
 
 export interface AppConfig {
   name: string;
@@ -38,6 +39,14 @@ export interface AppConfig {
   security?: 'spaces' | 'plaintext-for-tests';
   /** Extra files copied to the output verbatim and added to the precache. Paths relative to the config. */
   assets?: readonly string[];
+  /**
+   * Called once after the bundled modules are active. This is where an app signs the user up, creates or
+   * selects Spaces, and binds Spaces to modules that declare `bound` access. An error is reported and
+   * does not stop the app.
+   */
+  onReady?(host: ModuleHost, spaces: Spaces): void | Promise<void>;
+  /** Extra origins for the CSP `connect-src` (transport servers). Default none: `connect-src` is `'self'` only. */
+  connectSrc?: readonly string[];
 }
 
 // ---------- runtime ----------

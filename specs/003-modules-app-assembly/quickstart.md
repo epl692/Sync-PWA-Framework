@@ -24,7 +24,7 @@ Expect: both modules `active`, registered in dependency order (`todo` before `st
 ## S2: Schemas validate data (US2, SC-003)
 
 ```bash
-npx vitest run packages/modules/tests/unit/schema packages/modules/tests/property/validation
+npx vitest run packages/modules/tests/unit/validate-body.test.ts packages/modules/tests/unit/schema-validator.test.ts packages/modules/tests/property/validation.test.ts packages/modules/tests/integration/schema-sync.test.ts packages/modules/tests/integration/resurrect.test.ts
 ```
 
 Expect: a local write violating the schema throws `SchemaValidationError` and no packet exists (`core.history` unchanged); an injected remote packet violating the schema is rejected and not applied; the same packet with a **newer** schema version is stored and relayed (check with a second core); with `editResurrects` a concurrent delete and edit leaves the object visible, without it the object stays deleted. The property test compares `validateBody` to an independent oracle over ≥ 10,000 generated valid and invalid bodies: 100% agree.
@@ -33,11 +33,11 @@ Expect: a local write violating the schema throws `SchemaValidationError` and no
 
 ```bash
 npm run build -w @sync/sample-app
-node -e "require('@sync/app-build').verifyInstallable('packages/sample-app/dist').then(r=>{console.log(r);process.exit(r.ok?0:1)})"
+npx tsx packages/app-build/src/cli.ts verify-installable packages/sample-app/dist
 npx playwright test tests/e2e/pwa-static.spec.ts
 ```
 
-Expect: `verifyInstallable` returns `ok: true`. The Playwright test serves `dist` with a file-only server (no API, no rewrites) at the root and again under `/apps/sample/`, checks `Page.getInstallabilityErrors` is empty both times, waits for `app:offline-ready`, then sets the context offline and reloads: shell, both modules and previously written data load from the device.
+Expect: `verify-installable` prints `ok` and exits 0. The Playwright test serves `dist` with a file-only server (no API, no rewrites) at the root and again under `/apps/sample/`, checks `Page.getInstallabilityErrors` is empty both times, waits for `app:offline-ready`, then sets the context offline and reloads: shell, both modules and previously written data load from the device.
 
 ## S4: Runtime modules (US4)
 
@@ -67,7 +67,7 @@ Expect, over ≥ 1,000 randomized runs with a v1 host and a v2 host connected th
 ## S7: Crash isolation and developer effort (SC-005, SC-002)
 
 ```bash
-npx vitest run packages/modules/tests/integration/isolation
+npx vitest run packages/modules/tests/unit/host-activate.test.ts packages/modules/tests/unit/wrap-element.test.ts packages/modules/tests/unit/feature-runner.test.ts
 npx playwright test tests/e2e/crashing-module.spec.ts
 ```
 
