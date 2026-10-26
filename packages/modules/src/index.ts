@@ -1,1 +1,11 @@
-export {};
+export { defineModule } from './definition/define';
+export { validateDefinition } from './definition/rules';
+export { normalizeAccess } from './definition/access';
+export { parseVersion, compareVersions, satisfies, validateRange } from './definition/semver';
+export { checkSchema } from './schema/lint';
+export { SchemaRegistry } from './schema/registry';
+export { project } from './schema/project';
+export { validateFieldValue } from './schema/fields';
+export { SchemaValidationError } from './schema/types';
+export type * from './schema/types';
+export type * from './types';

@@ -56,21 +56,21 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### 2c. Module definition and schema registry (tests first)
 
-- [ ] T014 [P] Test semver parsing and range matching (`x.y.z`, `^`, `~`, `>=`; invalid input throws) in `packages/modules/tests/unit/semver.test.ts`
-- [ ] T015 [P] Test definition rules in `packages/modules/tests/unit/definition.test.ts`: module ID must match `^[a-z][a-z0-9]{1,23}$`; version is semver; types must be named `<id>.<name>` with name matching `^[a-z][A-Za-z0-9_]{0,31}$` and may not start with `$`; element names must be `<id>-<name>`; a self-dependency is an error; each error names the module and the offending value
-- [ ] T016 [P] Test access normalization in `packages/modules/tests/unit/access-normalize.test.ts`: own types are implicitly readable and writable and still reported; `write` implies `read`; `spaces.write: 'any'` requires `spaces.read: 'any'`; defaults are `bound`, no `manage`
-- [ ] T017 [P] Test `checkSchema` and the registry in `packages/modules/tests/unit/schema-lint.test.ts`: versions non-empty, ascending, contiguous from 1; version > 1 needs `up`; version > 1 needs `down` or `breaking: true`; a field name keeps one `type` across versions; `enum` has at least one value; `pattern` compiles; `default` satisfies its own field; names match `^[a-z][A-Za-z0-9_]{0,31}$`; `compatWrite` within `[1, latest]`; duplicate type registration throws naming both modules. The check that a `down` emits only declared names is NOT here; it is T097 and T104
+- [X] T014 [P] Test semver parsing and range matching (`x.y.z`, `^`, `~`, `>=`; invalid input throws) in `packages/modules/tests/unit/semver.test.ts`
+- [X] T015 [P] Test definition rules in `packages/modules/tests/unit/definition.test.ts`: module ID must match `^[a-z][a-z0-9]{1,23}$`; version is semver; types must be named `<id>.<name>` with name matching `^[a-z][A-Za-z0-9_]{0,31}$` and may not start with `$`; element names must be `<id>-<name>`; a self-dependency is an error; each error names the module and the offending value
+- [X] T016 [P] Test access normalization in `packages/modules/tests/unit/access-normalize.test.ts`: own types are implicitly readable and writable and still reported; `write` implies `read`; `spaces.write: 'any'` requires `spaces.read: 'any'`; defaults are `bound`, no `manage`
+- [X] T017 [P] Test `checkSchema` and the registry in `packages/modules/tests/unit/schema-lint.test.ts`: versions non-empty, ascending, contiguous from 1; version > 1 needs `up`; version > 1 needs `down` or `breaking: true`; a field name keeps one `type` across versions; `enum` has at least one value; `pattern` compiles; `default` satisfies its own field; names match `^[a-z][A-Za-z0-9_]{0,31}$`; `compatWrite` within `[1, latest]`; duplicate type registration throws naming both modules. The check that a `down` emits only declared names is NOT here; it is T097 and T104
 
 ### 2d. Module definition and schema registry (implementation)
 
-- [ ] T018 [P] Implement the semver parser and range matcher (no dependency) in `packages/modules/src/definition/semver.ts`
-- [ ] T019 [P] Implement `defineModule` (identity function with types) and `validateDefinition(def)` returning a list of problems for the rules in T015 in `packages/modules/src/definition/define.ts` and `packages/modules/src/definition/rules.ts`
-- [ ] T020 [P] Implement `normalizeAccess(def)` producing the effective declaration (the `ModuleReport['access']` shape in `contracts/module-api.ts`) in `packages/modules/src/definition/access.ts`
-- [ ] T021 [P] Copy the field and schema types from `contracts/schema.ts` into `packages/modules/src/schema/types.ts` (`FieldDef`, `SchemaVersion`, `ObjectTypeDef`, `ClockedFields`, `MergeOptions`, `RegisteredType`, `SchemaValidationError`)
-- [ ] T022 Implement `checkSchema(def)` per `contracts/schema-rules.md` §2, all rules except the `down` output-name check (T104), in `packages/modules/src/schema/lint.ts` (depends on T021)
-- [ ] T023 Implement `SchemaRegistry` (`register` runs `checkSchema` and throws on problems or a duplicate type, `unregister`, `get`, `list`) in `packages/modules/src/schema/registry.ts` (depends on T022)
-- [ ] T024 Implement the single-version `project(reg, obj)` (fields of the current version only, invalid stored values omitted and listed in `violations`, no migration yet) in `packages/modules/src/schema/project.ts` (depends on T021)
-- [ ] T025 Export the public surface (`defineModule`, types, `checkSchema`, `SchemaRegistry`, `project`) from `packages/modules/src/index.ts`
+- [X] T018 [P] Implement the semver parser and range matcher (no dependency) in `packages/modules/src/definition/semver.ts`
+- [X] T019 [P] Implement `defineModule` (identity function with types) and `validateDefinition(def)` returning a list of problems for the rules in T015 in `packages/modules/src/definition/define.ts` and `packages/modules/src/definition/rules.ts`
+- [X] T020 [P] Implement `normalizeAccess(def)` producing the effective declaration (the `ModuleReport['access']` shape in `contracts/module-api.ts`) in `packages/modules/src/definition/access.ts`
+- [X] T021 [P] Copy the field and schema types from `contracts/schema.ts` into `packages/modules/src/schema/types.ts` (`FieldDef`, `SchemaVersion`, `ObjectTypeDef`, `ClockedFields`, `MergeOptions`, `RegisteredType`, `SchemaValidationError`)
+- [X] T022 Implement `checkSchema(def)` per `contracts/schema-rules.md` §2, all rules except the `down` output-name check (T104), in `packages/modules/src/schema/lint.ts` (depends on T021)
+- [X] T023 Implement `SchemaRegistry` (`register` runs `checkSchema` and throws on problems or a duplicate type, `unregister`, `get`, `list`) in `packages/modules/src/schema/registry.ts` (depends on T022)
+- [X] T024 Implement the single-version `project(reg, obj)` (fields of the current version only, invalid stored values omitted and listed in `violations`, no migration yet) in `packages/modules/src/schema/project.ts` (depends on T021)
+- [X] T025 Export the public surface (`defineModule`, types, `checkSchema`, `SchemaRegistry`, `project`) from `packages/modules/src/index.ts`
 
 **Checkpoint**: Foundation ready. User story work can begin.
 
