@@ -58,6 +58,8 @@ export interface StartOptions {
   core?: SyncCore;
   spaces?: Spaces;
   now?: () => number;
+  /** Where Space bindings are kept. Default: IndexedDB "sync-modules" in a page, memory elsewhere. */
+  bindingDb?: import('../access/bindings').BindingDb;
   /** Register the generated service worker. Default true; has no effect outside a browser. */
   serviceWorker?: boolean;
   /** Runtime module loading. In a page the defaults apply; tests inject `fetch`, `cache` and `importModule`. */

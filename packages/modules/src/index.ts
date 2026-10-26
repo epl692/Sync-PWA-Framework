@@ -19,6 +19,8 @@ export { resolveModules, type ResolveEntry, type ResolveResult } from './host/re
 export { registerServiceWorker, type SwHandle, type SwOptions as ServiceWorkerOptions } from './app/sw-register';
 export { LiveElement } from './ui/live-element';
 export { createFacade } from './access/facade';
+export { AccessDeniedError } from './access/errors';
+export { Bindings, memoryBindingDb, indexedDbBindingDb, type BindingDb, type BindingMode } from './access/bindings';
 export { checkAppConfig } from './app/check';
 export { RuntimeLoader } from './loader/runtime';
 export { ModuleCache } from './loader/cache';

@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { JSONValue, SyncCore } from '@sync/core';
 import {
+  AccessDeniedError,
   checkSchema,
   createFacade,
   createHost,
@@ -85,6 +86,21 @@ export function moduleContract(opts: ModuleContractOptions): void {
         }
       });
     }
+
+    it('cannot read or write a type it did not declare', async () => {
+      const other: ModuleDefinition = {
+        id: 'zzother',
+        version: '1.0.0',
+        access: { spaces: { read: 'any', write: 'any' } },
+        provides: { types: [{ name: 'secret', versions: [{ version: 1, fields: {} }] }] },
+      };
+      const { host } = await fakeModuleHost([...deps, other, def]);
+      const ctx = host.contextOf(def.id)!;
+      const declared = [...(def.access?.types?.read ?? []), ...(def.access?.types?.write ?? [])];
+      if (declared.includes('zzother.secret')) return; // the module declares it on purpose
+      expect(() => ctx.data.query({ type: 'zzother.secret' })).toThrow(AccessDeniedError);
+      await expect(ctx.data.create('s1', 'zzother.secret', {})).rejects.toBeInstanceOf(AccessDeniedError);
+    });
 
     it('keeps working when a sibling module crashes', async () => {
       const crasher: ModuleDefinition = {

@@ -6,6 +6,7 @@ import { mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BuildError } from './build-app';
+import { bannedForRuntimeModule, bannedImportsPlugin } from './banned-imports';
 
 export interface BuildModuleOptions {
   /** Entry exporting `export default { id, version, ... }` (a module definition). */
@@ -32,9 +33,14 @@ export async function buildModule(opts: BuildModuleOptions): Promise<BuiltModule
   const entry = resolve(opts.entry);
   const outFile = resolve(opts.outFile);
 
+  const banned = bannedImportsPlugin({
+    banned: bannedForRuntimeModule,
+    because: 'a runtime module may import only types from @sync/* (a value import copies the framework into the file); use ModuleContext',
+  });
   let result;
   try {
     result = await build({
+      plugins: [banned.plugin],
       entryPoints: [entry],
       bundle: true,
       format: 'esm',
@@ -48,9 +54,11 @@ export async function buildModule(opts: BuildModuleOptions): Promise<BuiltModule
       logLevel: 'silent',
     });
   } catch (e) {
+    if (banned.problems.length) throw new BuildError(banned.problems);
     const errors = (e as { errors?: Array<{ text: string }> }).errors;
     throw new BuildError(errors?.length ? errors.map((x) => x.text) : [e instanceof Error ? e.message : String(e)]);
   }
+  if (banned.problems.length) throw new BuildError(banned.problems);
 
   const output = result.outputFiles[0]!;
   const text = output.text;

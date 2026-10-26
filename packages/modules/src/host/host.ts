@@ -2,7 +2,10 @@
 
 import type { JSONValue, SpaceId, SyncCore } from '@sync/core';
 import type { Spaces } from '@sync/spaces';
+import { Bindings } from '../access/bindings';
 import { createFacade } from '../access/facade';
+import { createGuard } from '../access/guard';
+import { normalizeAccess } from '../definition/access';
 import { checkSchema } from '../schema/lint';
 import { SchemaRegistry } from '../schema/registry';
 import { createSchemaValidator } from '../validator/schema-validator';
@@ -25,6 +28,8 @@ export interface HostOptions {
   log?: Logger;
   /** Define the modules' views as custom elements. Default true; contract suites turn it off so a module can be hosted many times. */
   defineViews?: boolean;
+  /** Device-local Space bindings. Default: in memory. */
+  bindings?: Bindings;
   /** Web Locks for singleton features. Default `navigator.locks`; null forces "unavailable". */
   locks?: LocksLike | null;
 }
@@ -44,6 +49,8 @@ export interface Host extends ModuleHost {
   addModules(entries: readonly ResolveEntry[]): Promise<void>;
   /** Record a runtime module that could not be loaded, so it shows in the report and its dependents are skipped. */
   markRuntime(m: { id: string; version?: string; status: 'unavailable' | 'refused' | 'failed'; reason: string }): void;
+  /** The context a module was activated with (for tests and tools). Undefined until it has been activated. */
+  contextOf(moduleId: string): ModuleContext | undefined;
 }
 
 interface Committed {
@@ -76,6 +83,8 @@ export function createHost(o: HostOptions): Host {
         return (o.log ?? consoleLogger).warn(`runtime module "${e.id}" is running from its cached copy ${e.cachedVersion}`);
       case 'view:error':
         return (o.log ?? consoleLogger).error(`view <${e.element}> of module "${e.module}" failed: ${e.error}`);
+      case 'access:denied':
+        return (o.log ?? consoleLogger).warn(`access denied: module "${e.module}" may not ${e.what}`);
       case 'feature:stopped':
         return (o.log ?? consoleLogger).error(`feature "${e.module}.${e.feature}" stopped: ${e.error}`);
     }
@@ -87,6 +96,8 @@ export function createHost(o: HostOptions): Host {
   const selected = new Set(o.transports ?? []);
   const runner = new FeatureRunner({ emit: state.emit, locks: o.locks === undefined ? defaultLocks() : o.locks });
   const known = new Map<string, Known>();
+  const bindings = o.bindings ?? Bindings.memory();
+  const contexts = new Map<string, ModuleContext>();
   const committed: Committed[] = [];
   const keys = new Map<ResolveEntry, string>();
 
@@ -99,20 +110,31 @@ export function createHost(o: HostOptions): Host {
     return k;
   };
 
-  const spacesFacade = (def: ModuleDefinition): SpacesFacade => ({
-    list: async () => (o.spaces ? (await o.spaces.list()).map((s) => s.id as SpaceId) : []),
-    ...(def.access?.spaces?.manage && o.spaces ? { admin: o.spaces } : {}),
-  });
+  const spacesFacade = (def: ModuleDefinition): SpacesFacade => {
+    const access = normalizeAccess(def);
+    return {
+      list: async (mode) => {
+        const all = o.spaces ? (await o.spaces.list()).map((s) => s.id as SpaceId) : [];
+        const scope = mode === 'r' ? access.spaces.read : access.spaces.write;
+        return scope === 'any' ? all : all.filter((id) => bindings.allows(def.id, id, mode));
+      },
+      ...(access.spaces.manage && o.spaces ? { admin: o.spaces } : {}),
+    };
+  };
 
-  const contextFor = (def: ModuleDefinition): ModuleContext =>
-    makeContext({
+  const contextFor = (def: ModuleDefinition): ModuleContext => {
+    const guard = createGuard({ moduleId: def.id, access: normalizeAccess(def), bindings, emit: state.emit });
+    const ctx = makeContext({
       moduleId: def.id,
       version: def.version,
       settings: o.settings?.[def.id],
-      data: createFacade({ core, registry, moduleId: def.id, emit: state.emit }),
+      data: createFacade({ core, registry, moduleId: def.id, emit: state.emit, guard }),
       spaces: spacesFacade(def),
       log,
     });
+    contexts.set(def.id, ctx);
+    return ctx;
+  };
 
   /** Registers everything the module declared, or nothing. Returns the started features. */
   async function commit(def: ModuleDefinition, ctx: ModuleContext): Promise<FeatureHandle[]> {
@@ -252,12 +274,12 @@ export function createHost(o: HostOptions): Host {
 
     ready: async () => {},
 
-    report: (): ModuleReport[] => state.list(),
+    report: (): ModuleReport[] => state.list().map((r) => structuredClone(r)),
     on: (cb) => state.on(cb),
 
-    // device-local Space bindings; persisted in US5 (T090, T091)
-    async bindSpace() {},
-    async unbindSpace() {},
+    bindSpace: (moduleId, space, mode) => bindings.set(moduleId, space, mode),
+    unbindSpace: (moduleId, space) => bindings.remove(moduleId, space),
+    contextOf: (id) => contexts.get(id),
 
     // runtime module updates and service worker updates; wired in US3/US4
     async checkForUpdates() {},

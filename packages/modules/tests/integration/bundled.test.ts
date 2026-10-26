@@ -21,10 +21,13 @@ async function boot(modules: ModuleDefinition[]) {
     icons: { src192: 'a', src512: 'b' },
     modules,
     runtime: { manifest: false },
-    async onReady(_h, s) {
+    async onReady(h, s) {
       spaces = s;
       await s.signUp('Me');
-      await s.create('Personal');
+      const personal = await s.create('Personal');
+      // modules use `bound` access by default: this app decides which Space each one may use
+      await h.bindSpace('todo', personal.id, 'rw');
+      await h.bindSpace('stats', personal.id, 'r');
     },
   };
   const host = await startApp(config, { storage: createMemoryStorage(), keyDb: memoryKeyDb(), mode: 'development' });

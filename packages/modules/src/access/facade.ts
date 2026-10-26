@@ -1,20 +1,15 @@
-/** The only way a module reads and writes objects (FR-012, research R-10). Wraps the core with projection and, from US5, access checks. */
+/** The only way a module reads and writes objects (FR-012, research R-10). Wraps the core with projection and access checks. */
 
-import type { JSONValue, ObjectId, Query, SpaceId, SyncCore, SyncableObject, UNSET } from '@sync/core';
-import { UNSET as UNSET_MARK } from '@sync/core';
-import { project } from '../schema/project';
+import { UNSET as UNSET_MARK, type JSONValue, type ObjectId, type Query, type SpaceId, type SyncCore, type SyncableObject, type UNSET } from '@sync/core';
 import { prepareWrite } from '../schema/prepare-write';
+import { project } from '../schema/project';
+import type { SchemaRegistry } from '../schema/registry';
 import { SchemaValidationError, type RegisteredType } from '../schema/types';
 import { validateBody } from '../schema/validate';
-import type { SchemaRegistry } from '../schema/registry';
 import type { DataFacade, FacadeQuerySpec, HostEvent, ProjectedObject } from '../types';
+import { allowAll, type Guard } from './guard';
 
-/** Decides what a module may touch. The default allows everything; US5 supplies the real one. */
-export interface Guard {
-  type(mode: 'r' | 'rw', type: string): void;
-  space(mode: 'r' | 'rw', space: SpaceId): Promise<void> | void;
-}
-export const allowAll: Guard = { type() {}, space() {} };
+export { allowAll, type Guard };
 
 export interface FacadeOptions {
   core: SyncCore;
@@ -27,12 +22,15 @@ export interface FacadeOptions {
 export function createFacade(o: FacadeOptions): DataFacade {
   const { core, registry } = o;
   const guard = o.guard ?? allowAll;
-
   const reported = new Set<string>();
+  /** Where objects this facade has seen live, so undo and history work for deleted objects too. */
+  const seen = new Map<ObjectId, { type: string; space: SpaceId }>();
+
   /** Objects of types no module has registered are not exposed (they are kept, but have no schema). */
   const projectOne = (obj: SyncableObject): ProjectedObject | undefined => {
     const reg = registry.get(obj.type);
     if (!reg) return undefined;
+    seen.set(obj.id, { type: obj.type, space: obj.space });
     const p = project(reg, obj);
     for (const v of p.violations ?? []) {
       const key = `${obj.id}|${v.field}|${v.detail}`;
@@ -53,11 +51,23 @@ export function createFacade(o: FacadeOptions): DataFacade {
     return prepared;
   };
 
-  /** Same error for "no such object" and "type not known", so the answer reveals nothing (R-10). */
-  const known = async (id: ObjectId): Promise<SyncableObject> => {
+  /**
+   * The object to change. "No such object", "type nobody registered", "type not declared" and "Space not
+   * bound" are the same AccessDeniedError, so the module cannot probe for what it may not see.
+   */
+  const writable = async (id: ObjectId): Promise<SyncableObject> => {
     const cur = await core.get(id, { withClocks: true });
-    if (!cur || !registry.get(cur.type)) throw new Error(`object "${id}" not found`);
-    return cur;
+    const why = !cur ? 'no such object' : !registry.get(cur.type) ? `type ${cur.type} has no schema` : !guard.canType('rw', cur.type) ? `type ${cur.type} is not declared for write` : !guard.canSpace('rw', cur.space) ? `Space ${cur.space} is not bound for write` : undefined;
+    if (why || !cur) guard.deny(`write object "${id}"`, why);
+    return cur!;
+  };
+
+  /** Where an object lives, from what this facade has seen or from the core. */
+  const locate = async (id: ObjectId): Promise<{ type: string; space: SpaceId } | undefined> => {
+    const known = seen.get(id);
+    if (known) return known;
+    const cur = await core.get(id);
+    return cur ? { type: cur.type, space: cur.space } : undefined;
   };
 
   return {
@@ -65,49 +75,63 @@ export function createFacade(o: FacadeOptions): DataFacade {
       const reg = registry.get(type);
       if (!reg) throw new Error(`type "${type}" is not registered`);
       guard.type('rw', type);
-      await guard.space('rw', space);
+      guard.space('rw', space);
       const prepared = checkWrite(reg, 'create', fields);
       const obj = await core.create(space, type, prepared.fields, { schemaVersion: prepared.schemaVersion });
       return projectOne(obj)!;
     },
 
     async update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>) {
-      const cur = await known(id);
-      guard.type('rw', cur.type);
-      await guard.space('rw', cur.space);
+      const cur = await writable(id);
       const prepared = checkWrite(registry.get(cur.type)!, 'update', fields);
       const obj = await core.update(id, prepared.fields, { schemaVersion: prepared.schemaVersion });
       return projectOne(obj)!;
     },
 
     async remove(id: ObjectId) {
-      const cur = await known(id);
-      guard.type('rw', cur.type);
-      await guard.space('rw', cur.space);
+      await writable(id);
       await core.remove(id);
     },
 
     async get(id: ObjectId) {
       const obj = await core.get(id, { withClocks: true });
-      if (!obj) return undefined;
-      const p = projectOne(obj);
-      if (!p) return undefined;
-      guard.type('r', obj.type);
-      await guard.space('r', obj.space);
-      return p;
+      if (!obj || !registry.get(obj.type)) return undefined;
+      if (!guard.canType('r', obj.type) || !guard.canSpace('r', obj.space)) {
+        // looks like "not found" to the module; the host hears about it
+        try {
+          guard.deny(`read object "${id}"`, `type ${obj.type} or Space ${obj.space} is not allowed`);
+        } catch {
+          return undefined;
+        }
+      }
+      return projectOne(obj);
     },
 
     query(spec: FacadeQuerySpec): Query<ProjectedObject> {
-      if (spec.type === undefined && spec.id === undefined) throw new Error('a query needs a type or an id');
+      if (spec.type === undefined && spec.id === undefined) guard.deny('query without a type or an id');
       if (spec.type !== undefined) guard.type('r', spec.type);
+      if (spec.space !== undefined) guard.space('r', spec.space);
       const q = core.query({ space: spec.space, type: spec.type, id: spec.id, withClocks: true });
       const map = (rows: SyncableObject[]): ProjectedObject[] =>
         rows.flatMap((r) => {
+          if (!guard.canType('r', r.type) || !guard.canSpace('r', r.space)) return [];
           const p = projectOne(r);
           return p && (!spec.where || spec.where(p)) ? [p] : [];
         });
       return {
-        subscribe: (cb) => q.subscribe((rows) => cb(map(rows))),
+        subscribe: (cb) => {
+          let last: SyncableObject[] = [];
+          const unsub = q.subscribe((rows) => {
+            last = rows;
+            cb(map(rows));
+          });
+          // a Space bound or unbound changes what the same rows show
+          const off = guard.onChange(() => cb(map(last)));
+          return () => {
+            off();
+            unsub();
+          };
+        },
         once: async () => map(await q.once()),
         [Symbol.asyncIterator]() {
           const it = q[Symbol.asyncIterator]();
@@ -122,7 +146,16 @@ export function createFacade(o: FacadeOptions): DataFacade {
       };
     },
 
-    undo: (id: ObjectId) => core.undo(id),
-    history: (id: ObjectId) => core.history(id),
+    async undo(id: ObjectId) {
+      const at = await locate(id);
+      if (!at || !guard.canType('rw', at.type) || !guard.canSpace('rw', at.space)) guard.deny(`write object "${id}"`, at ? `type ${at.type} or Space ${at.space} is not allowed` : 'no such object');
+      await core.undo(id);
+    },
+
+    async history(id: ObjectId) {
+      const at = await locate(id);
+      if (!at || !guard.canType('r', at.type) || !guard.canSpace('r', at.space)) guard.deny(`read object "${id}"`, at ? `type ${at.type} or Space ${at.space} is not allowed` : 'no such object');
+      return core.history(id);
+    },
   };
 }

@@ -2,6 +2,7 @@
 
 import { createIndexedDbStorage, type SyncCore } from '@sync/core';
 import { assertSecureCore, openSecureCore, type IdentityProvider, type Spaces } from '@sync/spaces';
+import { Bindings, indexedDbBindingDb, memoryBindingDb } from '../access/bindings';
 import { bootFacades, consoleLogger, makeContext } from '../host/context';
 import { createHost, type Host } from '../host/host';
 import { resolveModules, type ResolveEntry } from '../host/resolve';
@@ -56,9 +57,11 @@ export async function startApp(config: AppConfig, options: StartOptions = {}): P
   if (config.security !== 'plaintext-for-tests') assertSecureCore(core);
 
   // 3. activate
+  const bindings = await Bindings.open(options.bindingDb ?? (typeof indexedDB !== 'undefined' ? indexedDbBindingDb() : memoryBindingDb()));
   const h = createHost({
     core,
     spaces,
+    bindings,
     entries,
     settings: config.settings,
     transports: config.transports,

@@ -8,6 +8,7 @@ import { DEFAULT_TEMPLATE, renderIndexHtml, renderWebManifest } from './emit';
 import { sha256Hex } from './installable';
 import { loadConfig } from './load-config';
 import { readPngSize } from './png';
+import { bannedForApp, bannedImportsPlugin } from './banned-imports';
 import { generateServiceWorker } from './sw-template';
 import { buildRuntimeModules } from './build-module';
 import { existsSync } from 'node:fs';
@@ -75,7 +76,17 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuildResult> {
   const outDir = resolve(opts.outDir);
   const warnings: string[] = [];
 
-  const config = await loadConfig(configPath);
+  // The config is run in Node first, so banned imports are looked for there too.
+  const banned = bannedImportsPlugin({ banned: bannedForApp, because: 'modules reach data through ModuleContext (import only types from @sync/modules)' });
+  let config: AppConfig;
+  try {
+    config = await loadConfig(configPath, banned.plugin);
+  } catch (e) {
+    if (banned.problems.length) throw new BuildError(banned.problems);
+    const errors = (e as { errors?: Array<{ text: string }> }).errors;
+    throw new BuildError(errors?.length ? errors.map((x) => x.text) : [e instanceof Error ? e.message : String(e)]);
+  }
+  if (banned.problems.length) throw new BuildError(banned.problems);
   const problems = [...checkAppConfig(config), ...(await checkIcons(config, configDir))];
   if (mode === 'production' && config.security === 'plaintext-for-tests') {
     problems.push('config.security "plaintext-for-tests" is not allowed in a production build');
@@ -93,6 +104,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuildResult> {
   const bundle = await build({
     entryPoints: { app: 'sync-app-entry' }, // a virtual module (below), so the output is named app.[hash].js
     plugins: [
+      banned.plugin,
       {
         name: 'sync-app-entry',
         setup(b) {
@@ -115,6 +127,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuildResult> {
     write: false,
     logLevel: 'silent',
   });
+
+  if (banned.problems.length) throw new BuildError(banned.problems);
 
   const out = new Map<string, Buffer | string>();
   const rel = (abs: string) => abs.slice(outDir.length + 1).split('\\').join('/');

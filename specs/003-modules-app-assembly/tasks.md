@@ -207,18 +207,18 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ### Tests for User Story 5 (write first, must FAIL)
 
-- [ ] T085 [P] [US5] Enforcement matrix test in `packages/modules/tests/integration/access.test.ts`: own types always allowed; other module's type needs `types.read` or `types.write`; `write` implies `read`; `query` without `type` or `id` is denied; `update`/`remove` of a missing object and of an undeclared type throw the same `AccessDeniedError`; `spaces: 'bound'` modules can use only Spaces bound to them, `'any'` any joined Space; `spaces.admin` is present only with `manage: true`; the keystore, signer and raw core are never reachable from `ctx`; each denial emits `access:denied`
-- [ ] T086 [P] [US5] Binding store test in `packages/modules/tests/unit/bindings.test.ts` (fake-indexeddb): `bindSpace`/`unbindSpace` persist across host restarts, per module and per Space with mode `r` or `rw`, and are device-local (nothing is written as a Syncable Object)
-- [ ] T087 [P] [US5] Report test in `packages/modules/tests/unit/report-access.test.ts`: `host.report()` shows each module's declared access and registrations before and after activation, including skipped and failed modules
-- [ ] T088 [P] [US5] Banned-import test in `packages/app-build/tests/banned-imports.test.ts`: `buildApp` and `buildModule` fail when module source imports `@sync/core`, `@sync/spaces` or any other `@sync/*` internal (checked on the esbuild metafile), allowing type-only imports of `@sync/modules`
+- [X] T085 [P] [US5] Enforcement matrix test in `packages/modules/tests/integration/access.test.ts`: own types always allowed; other module's type needs `types.read` or `types.write`; `write` implies `read`; `query` without `type` or `id` is denied; `update`/`remove` of a missing object and of an undeclared type throw the same `AccessDeniedError`; `spaces: 'bound'` modules can use only Spaces bound to them, `'any'` any joined Space; `spaces.admin` is present only with `manage: true`; the keystore, signer and raw core are never reachable from `ctx`; each denial emits `access:denied`
+- [X] T086 [P] [US5] Binding store test in `packages/modules/tests/unit/bindings.test.ts` (fake-indexeddb): `bindSpace`/`unbindSpace` persist across host restarts, per module and per Space with mode `r` or `rw`, and are device-local (nothing is written as a Syncable Object)
+- [X] T087 [P] [US5] Report test in `packages/modules/tests/unit/report-access.test.ts`: `host.report()` shows each module's declared access and registrations before and after activation, including skipped and failed modules
+- [X] T088 [P] [US5] Banned-import test in `packages/app-build/tests/banned-imports.test.ts`: `buildApp` and `buildModule` fail when module source imports `@sync/core`, `@sync/spaces` or any other `@sync/*` internal (checked on the esbuild metafile), allowing type-only imports of `@sync/modules`
 
 ### Implementation for User Story 5
 
-- [ ] T089 [US5] Extend the facade with declared-type and Space checks, uniform `AccessDeniedError`, and `access:denied` events in `packages/modules/src/access/facade.ts` and `packages/modules/src/access/errors.ts`
-- [ ] T090 [P] [US5] Implement the device-local binding store (IndexedDB database `sync-modules`, store `bindings`) in `packages/modules/src/access/bindings.ts`
-- [ ] T091 [US5] Implement `host.bindSpace`/`unbindSpace` and `ctx.spaces` (`list(mode)`; `admin` only when `manage`) in `packages/modules/src/host/host.ts` and `packages/modules/src/access/spaces-facade.ts`; then extend the sample app's `onReady` (T045) to call `host.bindSpace('todo', personalSpaceId, 'rw')` and `host.bindSpace('stats', personalSpaceId, 'r')` so the sample keeps working under the default `bound` access, and re-run T046 and T063
-- [ ] T092 [P] [US5] Implement the metafile-based banned-import check shared by `buildApp` and `buildModule` in `packages/app-build/src/banned-imports.ts`
-- [ ] T093 [US5] Enable the undeclared-type denial check in `moduleContract()` in `packages/testkit/src/modules/index.ts`
+- [X] T089 [US5] Extend the facade with declared-type and Space checks, uniform `AccessDeniedError`, and `access:denied` events in `packages/modules/src/access/facade.ts` and `packages/modules/src/access/errors.ts`
+- [X] T090 [P] [US5] Implement the device-local binding store (IndexedDB database `sync-modules`, store `bindings`) in `packages/modules/src/access/bindings.ts`
+- [X] T091 [US5] Implement `host.bindSpace`/`unbindSpace` and `ctx.spaces` (`list(mode)`; `admin` only when `manage`) in `packages/modules/src/host/host.ts` and `packages/modules/src/access/spaces-facade.ts`; then extend the sample app's `onReady` (T045) to call `host.bindSpace('todo', personalSpaceId, 'rw')` and `host.bindSpace('stats', personalSpaceId, 'r')` so the sample keeps working under the default `bound` access, and re-run T046 and T063
+- [X] T092 [P] [US5] Implement the metafile-based banned-import check shared by `buildApp` and `buildModule` in `packages/app-build/src/banned-imports.ts`
+- [X] T093 [US5] Enable the undeclared-type denial check in `moduleContract()` in `packages/testkit/src/modules/index.ts`
 
 **Checkpoint**: Access enforcement works with all earlier stories.
 

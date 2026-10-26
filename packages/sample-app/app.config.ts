@@ -12,10 +12,14 @@ export default {
   icons: { src192: 'public/icons/icon-192.png', src512: 'public/icons/icon-512.png', maskable512: 'public/icons/maskable-512.png' },
   modules: [identity, todo, stats],
   identityProvider: 'identity.invite',
-  // First launch: a user and a Space to write to. Space bindings for `bound` modules are added with US5 (T091).
-  async onReady(_host, spaces) {
+  // First launch: a user and a Space to write to. Modules use `bound` Space access by default, so the app says
+  // which Space each one may use on this device (a device setting that persists).
+  async onReady(host, spaces) {
     if (!spaces.session()) await spaces.signUp('Me');
-    if (!(await spaces.list()).length) await spaces.create('Personal');
+    const personal = (await spaces.list())[0] ?? (await spaces.create('Personal'));
+    await host.bindSpace('todo', personal.id, 'rw');
+    await host.bindSpace('stats', personal.id, 'r');
+    await host.bindSpace('notes', personal.id, 'rw'); // a runtime module: the binding is made before it loads
     mountShell();
   },
 } satisfies AppConfig;
