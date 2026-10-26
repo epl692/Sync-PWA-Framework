@@ -126,3 +126,12 @@ Review of 001: `defer` parks a packet (kept, relayed, not applied), but parked p
 5. The 001 validators receive `existing` only after decode in the apply phase. This feature's validator never uses it (pure checks, R-04), so it is unaffected by that restriction.
 6. Spaces have no "kind" (002 `SpaceInfo` is id, name, role), so access declarations can only say `any` or `bound`, not "a notes Space". `bound` plus a host call is the smallest mechanism that meets FR-012.
 7. 002 `openSecureCore` wires the codec, signer and snapshot guard; this feature's `startApp` calls it and refuses a plaintext test codec when building for production (`assertSecureCore`).
+
+## Changes made during implementation
+
+Decisions above that changed once the code existed (reasons in [validation.md](./validation.md#deviations-from-the-plan)):
+
+- **R-08 (cache)**: the loader finds a cached module by id as well as by URL, and tidies the cache only after the manifest's modules have been loaded (an older copy stays as the fallback until the listed version is cached).
+- **R-08 (boot)**: waiting for the manifest on a first launch is opt-in (`runtime.waitForBoot`); otherwise bundled modules never wait.
+- **R-07**: updates declare their schema version (core amendment C-3); the migration helpers live at `@sync/modules/migrate` so runtime modules can use them; `Derived` values carry the clock of their source through a chain of migrations.
+- **R-10**: denials for a missing object, an undeclared type and an unbound Space are one uniform error; the host event carries the detail. The host is not published on `window` in production builds.

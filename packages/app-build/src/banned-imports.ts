@@ -10,7 +10,8 @@ const FRAMEWORK_SRC = /[\\/]packages[\\/](?:core|spaces|modules|testkit|identity
 export const bannedForApp = (spec: string): boolean => /^@sync\/(?:core|spaces|testkit|relay-server|app-build)(?:\/|$)/.test(spec);
 
 /** A runtime module is one self-contained file: any `@sync/*` value import would copy the framework into it. */
-export const bannedForRuntimeModule = (spec: string): boolean => spec.startsWith('@sync/');
+/** (`@sync/modules/migrate` is the exception: migration helpers, about 1 KB, no dependencies.) */
+export const bannedForRuntimeModule = (spec: string): boolean => spec.startsWith('@sync/') && spec !== '@sync/modules/migrate';
 
 /**
  * An esbuild plugin that notes every banned import made by the app's own files while resolving, and keeps the build

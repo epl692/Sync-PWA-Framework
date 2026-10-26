@@ -18,7 +18,7 @@ Technical approach (details in [research.md](./research.md)):
 - **Runtime modules**: same-origin only, fetched, optionally integrity-checked, cached by the loader, then imported from a blob of the verified bytes. Boot never waits on the network (R-08).
 - **Access declarations are enforced by a facade** and backed by build-time import checks; documented as API-level enforcement, not a sandbox (R-10).
 - **Packaging**: esbuild-driven `buildApp` emits hashed assets, web manifest and a generated precache service worker; installability is checked statically and with Chromium's `Page.getInstallabilityErrors` (R-01, R-14).
-- **Review of 001/002 found two gaps this feature closes with two additive core amendments** (C-1 mutable type registry, C-2 optional field clocks on reads) and one hazard it works around (parked-packet overflow drops data, R-09). See [contracts/core-amendments.md](./contracts/core-amendments.md).
+- **Review of 001/002 found gaps this feature closes with three additive core amendments** (C-1 mutable type registry, C-2 optional field clocks on reads, C-3 an `update` that declares its schema version, found during implementation) and one hazard it works around (parked-packet overflow drops data, R-09). See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ## Technical Context
 
@@ -139,4 +139,4 @@ No constitution violations. Noted for transparency:
 | Own semver range parser and schema checker instead of libraries | Zero runtime dependencies in the shipped runtime | `semver` and a validation library would be the first runtime dependencies for a few hundred lines of owned code |
 | Loader owns a module cache instead of relying on the service worker | The bytes that run must be the bytes that were verified, and FR-011 must hold even if the worker is unavailable | Service-worker-only caching lets redirects and stale entries slip past the integrity check |
 | Three-phase boot (resolve, boot core, activate) | An identity provider must exist before the core opens, while modules need the core to register types | One-phase registration cannot support provider modules or transactional rollback |
-| Two core amendments | Core needs mutable type registration and optional field clocks | Working around them in the modules package would duplicate core state or make migrations clock-blind and non-convergent |
+| Three core amendments | Core needs mutable type registration, optional field clocks, and an `update` that can declare its schema version | Working around them in the modules package would duplicate core state, make migrations clock-blind and non-convergent, or make every cross-version edit invalid |

@@ -20,6 +20,11 @@ export interface BuildAppOptions {
   mode?: 'production' | 'development';
   /** Content-hash file names. Default true in production. */
   hash?: boolean;
+  /**
+   * Publish the module host on `globalThis.__syncHost` for tools and tests. Default: only in development builds.
+   * The host gives access to the core, so in production any module could use it to bypass its access declarations.
+   */
+  exposeHost?: boolean;
 }
 
 export interface BuildResult {
@@ -99,7 +104,9 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuildResult> {
     `import config from ${JSON.stringify(configPath)};`,
     `import { startApp } from '@sync/modules';`,
     hasRuntime ? 'const cfg = config;' : `const cfg = { ...config, runtime: { ...config.runtime, manifest: config.runtime?.manifest ?? false } };`,
-    `(globalThis as { __syncHost?: unknown }).__syncHost = await startApp(cfg, { mode: ${JSON.stringify(mode)} });`,
+    opts.exposeHost ?? mode !== 'production'
+      ? `(globalThis as { __syncHost?: unknown }).__syncHost = await startApp(cfg, { mode: ${JSON.stringify(mode)} });`
+      : `await startApp(cfg, { mode: ${JSON.stringify(mode)} });`,
   ].join('\n');
   const bundle = await build({
     entryPoints: { app: 'sync-app-entry' }, // a virtual module (below), so the output is named app.[hash].js

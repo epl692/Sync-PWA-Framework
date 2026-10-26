@@ -34,7 +34,7 @@ const ready = async (page: Page) => {
 };
 
 test('runtime modules: first load, offline, refusals, stale copy, integrity, updates', async () => {
-  await buildApp({ config: 'packages/sample-app/app.config.ts', outDir: dir });
+  await buildApp({ config: 'packages/sample-app/app.config.ts', outDir: dir, exposeHost: true }); // the tests drive the host from the page
   const { server, origin } = await staticHost(dir, '/');
   const evilRequests: string[] = [];
   const evil = await staticHost(dir, '/', (p) => evilRequests.push(p));

@@ -10,7 +10,7 @@ export default tseslint.config(
       'no-restricted-imports': 'off',
       '@typescript-eslint/no-restricted-imports': ['error', { patterns: [
         { group: ['@sync/core', '@sync/core/*', '@sync/spaces', '@sync/spaces/*', '@sync/identity-invite', '@sync/transport-*', '@sync/relay-server', '@sync/testkit', '@sync/app-build'], message: 'Modules get data through ModuleContext; import only types from @sync/modules.' },
-        { group: ['@sync/modules'], allowTypeImports: true, message: 'Import only types from @sync/modules.' },
+        { regex: '^@sync/modules$', allowTypeImports: true, message: 'Import only types from @sync/modules (the migration helpers are at @sync/modules/migrate).' },
       ] }],
     },
   },

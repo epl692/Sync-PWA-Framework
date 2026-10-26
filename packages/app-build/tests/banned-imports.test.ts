@@ -72,6 +72,14 @@ describe('buildModule (runtime modules)', () => {
     expect(msg).toMatch(/type/i);
   });
 
+  it('allows the migration helpers: a small subpath with no framework code', async () => {
+    const dir = tmpDir('rm');
+    write(dir, 'index.ts', `import { migrate } from '@sync/modules/migrate';\nexport default { id: 'notes', version: '1.0.0', provides: { types: [{ name: 'n', versions: [{ version: 1, fields: { a: { type: 'string' } } }, { version: 2, fields: { b: { type: 'string' } }, up: migrate.rename('a', 'b'), breaking: true }] }] } };`);
+    const r = await buildModule({ entry: join(dir, 'index.ts'), outFile: join(dir, 'out.js') });
+    expect(r.id).toBe('notes');
+    expect(readFileSync(join(dir, 'out.js'), 'utf8').length).toBeLessThan(4000); // helpers only, not the runtime
+  });
+
   it('allows type-only imports', async () => {
     const r = await build(`import type { ModuleDefinition } from '@sync/modules';\nimport type { SyncCore } from '@sync/core';\nexport default { id: 'notes', version: '1.0.0' } satisfies ModuleDefinition;\nexport type X = SyncCore;`);
     expect(r.id).toBe('notes');

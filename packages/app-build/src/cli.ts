@@ -16,7 +16,7 @@ async function main(argv: string[]): Promise<number> {
       const [config, outDir] = args;
       if (!config || !outDir) return usage();
       try {
-        const r = await buildApp({ config, outDir, mode: flags.has('--dev') ? 'development' : 'production' });
+        const r = await buildApp({ config, outDir, mode: flags.has('--dev') ? 'development' : 'production', exposeHost: flags.has('--expose-host') ? true : undefined });
         console.log(`built ${r.files.length} files into ${r.outDir}`);
         for (const w of r.warnings) console.warn(`warning: ${w}`);
         return 0;
@@ -69,7 +69,7 @@ async function main(argv: string[]): Promise<number> {
 }
 
 function usage(): number {
-  console.error('usage: cli.ts build <config> <outDir> [--dev] | build-runtime <config> <outDir> | check-modules <config> | verify-installable <dir>');
+  console.error('usage: cli.ts build <config> <outDir> [--dev] [--expose-host] | build-runtime <config> <outDir> | check-modules <config> | verify-installable <dir>');
   return 2;
 }
 

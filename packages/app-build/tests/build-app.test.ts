@@ -57,6 +57,20 @@ describe('buildApp', () => {
     expect(await scriptOf()).not.toBe(a);
   });
 
+  it('keeps the host off the page in production (a module could use it to reach the core), and publishes it on request or in development', async () => {
+    const app = makeApp();
+    const prod = tmpDir('out');
+    const dev = tmpDir('out');
+    const exposed = tmpDir('out');
+    await buildApp({ config: app.config, outDir: prod });
+    await buildApp({ config: app.config, outDir: dev, mode: 'development' });
+    await buildApp({ config: app.config, outDir: exposed, exposeHost: true });
+    const js = (dir: string) => read(dir, readdirSync(dir).find((n) => /^app(\..+)?\.js$/.test(n))!);
+    expect(js(prod)).not.toContain('__syncHost');
+    expect(js(dev)).toContain('__syncHost');
+    expect(js(exposed)).toContain('__syncHost');
+  });
+
   it('does not hash names in development, and keeps source maps out of the precache', async () => {
     const app = makeApp();
     const out = tmpDir('out');

@@ -254,14 +254,14 @@ See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T106 [P] E2E test in `tests/e2e/crashing-module.spec.ts` (SC-005): a module whose `activate` throws, one whose view throws on connect, and one whose feature throws five times; all other modules stay functional, the failures appear in `host.report()` with reasons, and the page shows an error placeholder only where the failing view sits
-- [ ] T107 [P] Write `docs/building-a-module.md` (a single-type module with a list view, from scratch, using only `defineModule`, a schema and `ctx.ui.LiveElement`) and `docs/app-config.md` (every `AppConfig` field, hosting notes from `contracts/pwa-output.md`, CSP and `blob:`, schema evolution rules, runtime manifest workflow)
-- [ ] T108 [P] Add `packages/modules/README.md` and `packages/app-build/README.md` (public API, what is and is not enforced by access declarations, the dependency list)
-- [ ] T109 [P] Benchmarks in `packages/modules/bench/`: registering 50 modules with 200 types under 100 ms on the phone profile (4x CPU slowdown); schema validation adds under 5% to ingest time for 10,000 packets
-- [ ] T110 Time the SC-002 walkthrough: a person (or a fresh agent session) follows `docs/building-a-module.md` from scratch; record the time (target under 30 minutes) and any friction in `specs/003-modules-app-assembly/validation.md`
-- [ ] T111 Security review against the constitution in `specs/003-modules-app-assembly/validation.md`: no `@sync/core` import path from module code in either build path; the production build refuses the plaintext codec; the runtime loader executes only verified bytes from the same origin; CSP is set; access is documented as API-level, not a sandbox
-- [ ] T112 Run the whole suite (`npm run typecheck`, `npm run lint`, `npm run test`, `npm run test:contract`, `npm run test:mixed-versions`, `npm run e2e`) and record the results, the 10,000-run validation property and the 1,000-run convergence property in `specs/003-modules-app-assembly/validation.md`
-- [ ] T113 Run each scenario in `quickstart.md` (S1 to S7) and tick off the result in `specs/003-modules-app-assembly/validation.md`
+- [X] T106 [P] E2E test in `tests/e2e/crashing-module.spec.ts` (SC-005): a module whose `activate` throws, one whose view throws on connect, and one whose feature throws five times; all other modules stay functional, the failures appear in `host.report()` with reasons, and the page shows an error placeholder only where the failing view sits
+- [X] T107 [P] Write `docs/building-a-module.md` (a single-type module with a list view, from scratch, using only `defineModule`, a schema and `ctx.ui.LiveElement`) and `docs/app-config.md` (every `AppConfig` field, hosting notes from `contracts/pwa-output.md`, CSP and `blob:`, schema evolution rules, runtime manifest workflow)
+- [X] T108 [P] Add `packages/modules/README.md` and `packages/app-build/README.md` (public API, what is and is not enforced by access declarations, the dependency list)
+- [X] T109 [P] Benchmarks in `packages/modules/bench/`: registering 50 modules with 200 types under 100 ms on the phone profile (4x CPU slowdown); schema validation adds under 5% to ingest time for 10,000 packets
+- [X] T110 Time the SC-002 walkthrough: a person (or a fresh agent session) follows `docs/building-a-module.md` from scratch; record the time (target under 30 minutes) and any friction in `specs/003-modules-app-assembly/validation.md`
+- [X] T111 Security review against the constitution in `specs/003-modules-app-assembly/validation.md`: no `@sync/core` import path from module code in either build path; the production build refuses the plaintext codec; the runtime loader executes only verified bytes from the same origin; CSP is set; access is documented as API-level, not a sandbox
+- [X] T112 Run the whole suite (`npm run typecheck`, `npm run lint`, `npm run test`, `npm run test:contract`, `npm run test:mixed-versions`, `npm run e2e`) and record the results, the 10,000-run validation property and the 1,000-run convergence property in `specs/003-modules-app-assembly/validation.md`
+- [X] T113 Run each scenario in `quickstart.md` (S1 to S7) and tick off the result in `specs/003-modules-app-assembly/validation.md`
 
 ---
 

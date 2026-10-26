@@ -22,6 +22,7 @@
       "@sync/spaces": ["packages/spaces/src/index.ts"],
       "@sync/identity-invite": ["packages/identity-invite/src/index.ts"],
       "@sync/modules": ["packages/modules/src/index.ts"],
+      "@sync/modules/migrate": ["packages/modules/src/schema/migrate.ts"],
       "@sync/app-build": ["packages/app-build/src/index.ts"]
     }
   }

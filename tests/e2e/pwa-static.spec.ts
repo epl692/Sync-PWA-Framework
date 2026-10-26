@@ -10,7 +10,7 @@ import { staticHost } from './static-host';
 const outDir = join('test-results', 'pwa-static');
 const servers: Server[] = [];
 test.beforeAll(async () => {
-  await buildApp({ config: 'packages/sample-app/app.config.ts', outDir });
+  await buildApp({ config: 'packages/sample-app/app.config.ts', outDir, exposeHost: true }); // the tests drive the host from the page
 });
 test.afterAll(() => Promise.all(servers.map((s) => new Promise((r) => s.close(r)))));
 
