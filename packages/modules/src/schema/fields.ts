@@ -77,6 +77,32 @@ export function checkType(f: FieldDef, value: JSONValue): string | undefined {
   }
 }
 
+/** The JSON type only, without constraints, enum membership or custom checks. Used for packets newer than this peer's schema. */
+export function checkBaseType(f: FieldDef, value: JSONValue): string | undefined {
+  switch (f.type) {
+    case 'string':
+    case 'enum':
+      return typeof value === 'string' ? undefined : 'must be a string';
+    case 'number':
+      return isNum(value) ? undefined : 'must be a finite number';
+    case 'integer':
+      return isInt(value) ? undefined : 'must be an integer';
+    case 'boolean':
+      return typeof value === 'boolean' ? undefined : 'must be a boolean';
+    case 'timestamp':
+      return isInt(value) && value >= 0 ? undefined : 'must be a timestamp (non-negative integer)';
+    case 'ref':
+      return typeof value === 'string' && value.length > 0 ? undefined : 'must be a non-empty object id';
+    case 'json':
+      return undefined;
+    case 'list': {
+      if (!Array.isArray(value)) return 'must be a list';
+      for (const item of value) if (!(f.of === 'number' ? isNum(item) : typeof item === f.of)) return `items must be ${f.of}`;
+      return undefined;
+    }
+  }
+}
+
 /** True when the field definition itself marks the field required. */
 export function isRequired(f: FieldDef): boolean {
   return 'required' in f && f.required === true;

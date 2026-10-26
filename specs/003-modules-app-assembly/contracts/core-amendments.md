@@ -40,8 +40,25 @@ The data is already stored on every field (`toSyncable` simply omits it). Defaul
 
 **Compatibility.** Pure read-API addition; no storage or wire change.
 
+## C-3: `update` declares its schema version
+
+**Problem.** `update` packets carry the object's existing `schemaVersion` (the maximum seen). A v2 peer editing an object last written at v1 would send v2 field names in a packet labeled v1; every peer validates a packet against its own version, so all of them (including the author) would reject it as `unknown-field` (found while implementing US2).
+
+**Change.**
+
+```ts
+interface SyncCore {
+  update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>, opts?: { schemaVersion?: number }): Promise<SyncableObject>;
+}
+```
+
+The packet's `schemaVersion` is `opts.schemaVersion` when given, otherwise the object's current version (unchanged behavior). The core's merge already keeps the maximum, so a lower value never lowers the object version.
+
+**Compatibility.** `schemaVersion` already exists in every packet body; only the value the author writes changes, and only for callers that pass the option.
+
 ## Required tests (added to core's suites)
 
 1. `registerType` after queries exist: a deleted+edited object becomes visible and `undo(delete)` stops throwing `NotUndoable`; unregistering reverses it.
 2. `withClocks: true` returns clocks matching the HLC strings in `history()`; default results have no `clocks` key.
-3. Property: with identical packet sets, two cores that call `registerType` in different orders produce equal `stateHash`.
+3. C-3: an update written with `schemaVersion: 2` makes the object version 2 and the packet version 2; the default is unchanged; a lower version never lowers the object version.
+4. Property: with identical packet sets, two cores that call `registerType` in different orders produce equal `stateHash`.

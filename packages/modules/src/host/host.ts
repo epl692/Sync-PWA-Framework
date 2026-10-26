@@ -5,6 +5,7 @@ import type { Spaces } from '@sync/spaces';
 import { createFacade } from '../access/facade';
 import { checkSchema } from '../schema/lint';
 import { SchemaRegistry } from '../schema/registry';
+import { createSchemaValidator } from '../validator/schema-validator';
 import { FeatureRunner, type FeatureHandle, type LocksLike } from '../features/runner';
 import { wrapElement } from '../ui/wrap-element';
 import type { ModuleContext, ModuleDefinition, ModuleHost, ModuleReport, SpacesFacade } from '../types';
@@ -32,6 +33,11 @@ export interface Host extends ModuleHost {
   /** Resolve and activate every entry. Resolves when all have settled. */
   start(): Promise<void>;
   readonly registry: SchemaRegistry;
+  /**
+   * End the window in which packets of unknown types are deferred, and re-run the ones that were.
+   * startApp calls it once every module that can load has settled.
+   */
+  closeBootWindow(): Promise<void>;
 }
 
 interface Committed {
@@ -53,6 +59,8 @@ export function createHost(o: HostOptions): Host {
   const { core } = o;
   const state = new HostState();
   const registry = new SchemaRegistry();
+  const validator = createSchemaValidator(registry);
+  core.registerValidator(validator);
   const log = o.log ?? consoleLogger;
   const timeoutMs = o.activateTimeoutMs ?? 5000;
   const selected = new Set(o.transports ?? []);
@@ -164,6 +172,11 @@ export function createHost(o: HostOptions): Host {
   const host: Host = {
     registry,
     core,
+
+    async closeBootWindow() {
+      validator.closeBootWindow();
+      await core.revalidate();
+    },
 
     async start() {
       const res = resolveModules(o.entries, known);

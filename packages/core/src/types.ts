@@ -191,7 +191,11 @@ export interface SyncCore extends ExtensionRegistry {
     fields: Record<string, JSONValue>,
     opts?: { schemaVersion?: number; id?: ObjectId },
   ): Promise<SyncableObject>;
-  update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>): Promise<SyncableObject>;
+  /**
+   * `opts.schemaVersion` (spec 003 C-3): the schema version the fields are written at. Default: the version
+   * the object already has. The packet is validated against that version by every peer.
+   */
+  update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>, opts?: { schemaVersion?: number }): Promise<SyncableObject>;
   remove(id: ObjectId): Promise<void>;
   get(id: ObjectId, opts?: { withClocks?: boolean }): Promise<SyncableObject | undefined>;
 

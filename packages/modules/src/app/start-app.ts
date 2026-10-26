@@ -43,6 +43,7 @@ export async function startApp(config: AppConfig, options: StartOptions = {}): P
     activateTimeoutMs: config.runtime?.activateTimeoutMs,
   });
   await host.start();
+  await host.closeBootWindow(); // runtime modules extend this window in US4
 
   if (config.onReady && spaces) {
     try {

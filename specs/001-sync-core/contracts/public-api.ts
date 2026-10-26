@@ -92,7 +92,8 @@ export type CoreEvent =
 export interface SyncCore extends ExtensionRegistry {
   // ---- objects (every call authors a packet) ----
   create(space: SpaceId, type: string, fields: Record<string, JSONValue>, opts?: { schemaVersion?: number; id?: ObjectId }): Promise<SyncableObject>;
-  update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>): Promise<SyncableObject>;
+  /** Spec 003 C-3: `opts.schemaVersion` is the version the fields are written at; default is the object's current version. */
+  update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>, opts?: { schemaVersion?: number }): Promise<SyncableObject>;
   remove(id: ObjectId): Promise<void>;
   get(id: ObjectId, opts?: { withClocks?: boolean }): Promise<SyncableObject | undefined>;
 

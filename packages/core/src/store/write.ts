@@ -41,7 +41,7 @@ export interface WriterDeps {
 
 type Change =
   | { op: 'create'; obj: ObjectId; space: SpaceId; type: string; schemaVersion: number; fields: Record<string, JSONValue> }
-  | { op: 'update'; obj: ObjectId; fields: Record<string, JSONValue> }
+  | { op: 'update'; obj: ObjectId; fields: Record<string, JSONValue>; schemaVersion?: number }
   | { op: 'delete'; obj: ObjectId };
 
 export class LocalWriter {
@@ -65,11 +65,11 @@ export class LocalWriter {
     return toSyncable(this.d.cache.get(id)!);
   }
 
-  async update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>): Promise<SyncableObject> {
+  async update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>, opts: { schemaVersion?: number } = {}): Promise<SyncableObject> {
     this.requireCodec();
     const clean: Record<string, JSONValue> = {};
     for (const [k, v] of Object.entries(fields)) clean[k] = v === UNSET ? { $unset: true } : (v as JSONValue);
-    await this.commit({ op: 'update', obj: id, fields: clean });
+    await this.commit({ op: 'update', obj: id, fields: clean, schemaVersion: opts.schemaVersion });
     return toSyncable(this.d.cache.get(id)!);
   }
 
@@ -95,7 +95,7 @@ export class LocalWriter {
       const state = d.getState();
       const space = change.op === 'create' ? change.space : existing!.space;
       const type = change.op === 'create' ? change.type : existing!.type;
-      const schemaVersion = change.op === 'create' ? change.schemaVersion : existing!.schemaVersion;
+      const schemaVersion = change.op === 'create' ? change.schemaVersion : (change.op === 'update' ? change.schemaVersion : undefined) ?? existing!.schemaVersion;
       const fields = change.op === 'delete' ? {} : change.fields;
 
       // One clock per packet: above our local HLC, above every stored clock of the fields we touch

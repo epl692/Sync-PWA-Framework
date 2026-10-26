@@ -1,7 +1,11 @@
 /** The only way a module reads and writes objects (FR-012, research R-10). Wraps the core with projection and, from US5, access checks. */
 
 import type { JSONValue, ObjectId, Query, SpaceId, SyncCore, SyncableObject, UNSET } from '@sync/core';
+import { UNSET as UNSET_MARK } from '@sync/core';
 import { project } from '../schema/project';
+import { prepareWrite } from '../schema/prepare-write';
+import { SchemaValidationError, type RegisteredType } from '../schema/types';
+import { validateBody } from '../schema/validate';
 import type { SchemaRegistry } from '../schema/registry';
 import type { DataFacade, FacadeQuerySpec, HostEvent, ProjectedObject } from '../types';
 
@@ -24,10 +28,29 @@ export function createFacade(o: FacadeOptions): DataFacade {
   const { core, registry } = o;
   const guard = o.guard ?? allowAll;
 
+  const reported = new Set<string>();
   /** Objects of types no module has registered are not exposed (they are kept, but have no schema). */
   const projectOne = (obj: SyncableObject): ProjectedObject | undefined => {
     const reg = registry.get(obj.type);
-    return reg ? project(reg, obj) : undefined;
+    if (!reg) return undefined;
+    const p = project(reg, obj);
+    for (const v of p.violations ?? []) {
+      const key = `${obj.id}|${v.field}|${v.detail}`;
+      if (reported.has(key)) continue; // queries re-emit on every change; report each problem once
+      reported.add(key);
+      o.emit({ kind: 'schema:violation', type: obj.type, obj: obj.id, field: v.field, detail: v.detail });
+    }
+    return p;
+  };
+
+  /** Refuse a write before any packet exists, with the field and the reason (US2-1). */
+  const checkWrite = (reg: RegisteredType, op: 'create' | 'update', fields: Record<string, JSONValue | typeof UNSET_MARK>) => {
+    const plain: Record<string, JSONValue> = {};
+    for (const [k, v] of Object.entries(fields)) plain[k] = v === UNSET_MARK ? { $unset: true } : (v as JSONValue);
+    const prepared = prepareWrite(reg, op, plain);
+    const r = validateBody(reg, { op, schemaVersion: prepared.schemaVersion, fields: prepared.fields });
+    if (!r.ok) throw new SchemaValidationError(reg.type, r.field, r.detail);
+    return prepared;
   };
 
   /** Same error for "no such object" and "type not known", so the answer reveals nothing (R-10). */
@@ -43,15 +66,17 @@ export function createFacade(o: FacadeOptions): DataFacade {
       if (!reg) throw new Error(`type "${type}" is not registered`);
       guard.type('rw', type);
       await guard.space('rw', space);
-      const obj = await core.create(space, type, fields, { schemaVersion: reg.latest });
-      return project(reg, obj);
+      const prepared = checkWrite(reg, 'create', fields);
+      const obj = await core.create(space, type, prepared.fields, { schemaVersion: prepared.schemaVersion });
+      return projectOne(obj)!;
     },
 
     async update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>) {
       const cur = await known(id);
       guard.type('rw', cur.type);
       await guard.space('rw', cur.space);
-      const obj = await core.update(id, fields);
+      const prepared = checkWrite(registry.get(cur.type)!, 'update', fields);
+      const obj = await core.update(id, prepared.fields, { schemaVersion: prepared.schemaVersion });
       return projectOne(obj)!;
     },
 

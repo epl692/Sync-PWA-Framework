@@ -102,8 +102,8 @@ class CoreImpl implements SyncCore {
   create(space: SpaceId, type: string, fields: Record<string, JSONValue>, opts?: { schemaVersion?: number; id?: ObjectId }) {
     return this.parts.writer.create(space, type, fields, opts);
   }
-  update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>) {
-    return this.parts.writer.update(id, fields);
+  update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>, opts?: { schemaVersion?: number }) {
+    return this.parts.writer.update(id, fields, opts);
   }
   remove(id: ObjectId) {
     return this.parts.writer.remove(id);
