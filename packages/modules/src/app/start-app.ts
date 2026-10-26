@@ -22,9 +22,9 @@ export async function startApp(config: AppConfig, options: StartOptions = {}): P
   }
 
   // events that happen before the host exists (runtime loading during boot) are replayed once it does
-  let host: Host | undefined;
+  const created: { host?: Host } = {};
   const early: HostEvent[] = [];
-  const emit = (e: HostEvent) => (host ? host.emit(e) : void early.push(e));
+  const emit = (e: HostEvent) => (created.host ? created.host.emit(e) : void early.push(e));
 
   // 1. resolve what is bundled, and bring in the runtime modules that must exist before the core opens
   const bundled: ResolveEntry[] = config.modules.map((def) => ({ def, source: 'bundled' }));
@@ -64,7 +64,7 @@ export async function startApp(config: AppConfig, options: StartOptions = {}): P
     transports: config.transports,
     activateTimeoutMs: config.runtime?.activateTimeoutMs,
   });
-  host = h;
+  created.host = h;
   early.splice(0).forEach((e) => h.emit(e));
   for (const l of bootLoaded) {
     if (!l.outcome.ok) h.markRuntime({ id: l.entry.id, version: l.entry.version, status: l.outcome.reason === 'unavailable' ? 'unavailable' : 'refused', reason: l.outcome.detail });

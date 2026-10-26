@@ -7,7 +7,6 @@ import { createStubIdentityProvider, waitFor } from '@sync/testkit';
 import { startApp } from '../../src/app/start-app';
 import type { AppConfig, StartOptions } from '../../src/app/config';
 import type { HostEvent, ModuleDefinition, ModuleHost } from '../../src/types';
-import { sha256Integrity } from '../../src/loader/load';
 import { BASE, MANIFEST_URL, ORIGIN, FakeHost, fakeModuleCache, fileBytes } from '../helpers-runtime';
 import { collectEvents } from '../helpers';
 
