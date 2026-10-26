@@ -44,15 +44,15 @@ description: "Task list for Modules & App Assembly (003-modules-app-assembly)"
 
 See [contracts/core-amendments.md](./contracts/core-amendments.md).
 
-- [ ] T008 [P] C-1 test in `packages/core/tests/integration/amendments/register-type.test.ts`: after queries exist, `registerType('m.t', {resurrects: true})` makes a deleted-then-edited object visible and `undo` of a delete stops throwing `NotUndoable`; `unregisterType` reverses it; registering a `$`-prefixed type throws; live queries re-emit when visibility changes
-- [ ] T009 [P] C-2 test in `packages/core/tests/integration/amendments/with-clocks.test.ts`: `get(id, {withClocks: true})` and `query({withClocks: true})` return `clocks` equal to the HLC strings reported by `history()`; default results have no `clocks` key
-- [ ] T010 [P] C-1 property test in `packages/core/tests/property/register-type-order.test.ts`: two cores given the same packets and calling `registerType` in different orders and at different times have equal `stateHash`
+- [X] T008 [P] C-1 test in `packages/core/tests/integration/amendments/register-type.test.ts`: after queries exist, `registerType('m.t', {resurrects: true})` makes a deleted-then-edited object visible and `undo` of a delete stops throwing `NotUndoable`; `unregisterType` reverses it; registering a `$`-prefixed type throws; live queries re-emit when visibility changes
+- [X] T009 [P] C-2 test in `packages/core/tests/integration/amendments/with-clocks.test.ts`: `get(id, {withClocks: true})` and `query({withClocks: true})` return `clocks` equal to the HLC strings reported by `history()`; default results have no `clocks` key
+- [X] T010 [P] C-1 property test in `packages/core/tests/property/register-type-order.test.ts`: two cores given the same packets and calling `registerType` in different orders and at different times have equal `stateHash`
 
 ### 2b. Core amendments (implementation)
 
-- [ ] T011 C-1: add `registerType(type, {resurrects?})` and `unregisterType(type)` to `SyncCore`; make `ResolvedConfig.resurrectingTypes` the mutable backing set seeded from `Config.resurrectingTypes`; re-emit affected live queries; edit `packages/core/src/types.ts`, `packages/core/src/core.ts`, `packages/core/src/query/engine.ts`
-- [ ] T012 [P] C-2: add `SyncableObject.clocks?`, `QuerySpec.withClocks?` and `get(id, {withClocks})`; populate `clocks` from stored per-field clocks only when requested; edit `packages/core/src/store/objects.ts`, `packages/core/src/query/engine.ts`, `packages/core/src/core.ts`, `packages/core/src/types.ts`
-- [ ] T013 Update `specs/001-sync-core/contracts/public-api.ts` with `registerType`, `unregisterType`, `withClocks` and `clocks`, then run `npm run test` and `npm run test:contract` and confirm gate S0 passes (T008 to T010 green, all 001 and 002 tests unchanged)
+- [X] T011 C-1: add `registerType(type, {resurrects?})` and `unregisterType(type)` to `SyncCore`; make `ResolvedConfig.resurrectingTypes` the mutable backing set seeded from `Config.resurrectingTypes`; re-emit affected live queries; edit `packages/core/src/types.ts`, `packages/core/src/core.ts`, `packages/core/src/query/engine.ts`
+- [X] T012 [P] C-2: add `SyncableObject.clocks?`, `QuerySpec.withClocks?` and `get(id, {withClocks})`; populate `clocks` from stored per-field clocks only when requested; edit `packages/core/src/store/objects.ts`, `packages/core/src/query/engine.ts`, `packages/core/src/core.ts`, `packages/core/src/types.ts`
+- [X] T013 Update `specs/001-sync-core/contracts/public-api.ts` with `registerType`, `unregisterType`, `withClocks` and `clocks`, then run `npm run test` and `npm run test:contract` and confirm gate S0 passes (T008 to T010 green, all 001 and 002 tests unchanged)
 
 ### 2c. Module definition and schema registry (tests first)
 

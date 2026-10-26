@@ -40,8 +40,10 @@ export interface SyncableObject {
   type: string;
   space: SpaceId;
   schemaVersion: number;
-  /** Plain values for app use. Per-field clocks are internal. */
+  /** Plain values for app use. */
   fields: Record<string, JSONValue>;
+  /** Spec 003 C-2: serialized HLC of the last write per field name. Present only when requested with `withClocks`. */
+  clocks?: Record<string, string>;
 }
 
 export interface Query<T = SyncableObject> {
@@ -58,6 +60,8 @@ export interface QuerySpec {
   id?: ObjectId;
   /** Predicate over plain fields. Evaluated locally. */
   where?: (obj: SyncableObject) => boolean;
+  /** Spec 003 C-2: include per-field clocks in results. Default false. */
+  withClocks?: boolean;
 }
 
 export interface Config {
@@ -90,7 +94,7 @@ export interface SyncCore extends ExtensionRegistry {
   create(space: SpaceId, type: string, fields: Record<string, JSONValue>, opts?: { schemaVersion?: number; id?: ObjectId }): Promise<SyncableObject>;
   update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>): Promise<SyncableObject>;
   remove(id: ObjectId): Promise<void>;
-  get(id: ObjectId): Promise<SyncableObject | undefined>;
+  get(id: ObjectId, opts?: { withClocks?: boolean }): Promise<SyncableObject | undefined>;
 
   // ---- reactive queries (FR-003) ----
   query(spec: QuerySpec): Query;
@@ -105,6 +109,11 @@ export interface SyncCore extends ExtensionRegistry {
   undo(id: ObjectId): Promise<void>;
   history(id: ObjectId): Promise<ReadonlyArray<{ packetId: string; clock: string; op: string; fields: string[] }>>;
   compact(opts?: { space?: SpaceId; olderThanMs?: number }): Promise<{ packetsRemoved: number; bytesFreed?: number }>;
+
+  // ---- added by spec 003 ----
+  /** C-1: declare type-level behavior after the core is open. Idempotent; re-evaluates live queries. `$` types throw. */
+  registerType(type: string, opts: { resurrects?: boolean }): void;
+  unregisterType(type: string): void;
 
   // ---- added by spec 002 ----
   /** A-2: replay every retained packet of a Space through the validators. Returns how many changed status. */

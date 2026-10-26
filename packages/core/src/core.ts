@@ -108,9 +108,22 @@ class CoreImpl implements SyncCore {
   remove(id: ObjectId) {
     return this.parts.writer.remove(id);
   }
-  async get(id: ObjectId): Promise<SyncableObject | undefined> {
+  async get(id: ObjectId, opts?: { withClocks?: boolean }): Promise<SyncableObject | undefined> {
     const o = this.parts.cache.get(id);
-    return o && isVisible(o, this.parts.cfg.resurrectingTypes) ? toSyncable(o) : undefined;
+    return o && isVisible(o, this.parts.cfg.resurrectingTypes) ? toSyncable(o, opts?.withClocks) : undefined;
+  }
+
+  registerType(type: string, opts: { resurrects?: boolean }): void {
+    if (type.startsWith('$')) throw new Error(`type "${type}" is reserved`);
+    // The set is shared by reference with the query engine and history, so mutating it updates them all.
+    const set = this.parts.cfg.resurrectingTypes;
+    const had = set.has(type);
+    if (opts.resurrects) set.add(type);
+    else set.delete(type);
+    if (had !== set.has(type)) this.parts.queries.refresh();
+  }
+  unregisterType(type: string): void {
+    if (this.parts.cfg.resurrectingTypes.delete(type)) this.parts.queries.refresh();
   }
 
   query(spec: QuerySpec): Query {
