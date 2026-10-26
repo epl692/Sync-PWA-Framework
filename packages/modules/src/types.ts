@@ -130,6 +130,9 @@ export interface LiveElementInstance extends HTMLElement {
    * Call from `connectedCallback` or the constructor.
    */
   bind(spec: FacadeQuerySpec, render: (rows: ProjectedObject[]) => void): void;
+  /** Subclasses that override these MUST call the super version. */
+  connectedCallback(): void;
+  disconnectedCallback(): void;
 }
 export interface LiveElementConstructor {
   new (): LiveElementInstance;

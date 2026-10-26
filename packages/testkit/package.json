@@ -12,7 +12,8 @@
   "dependencies": {
     "@sync/core": "*",
     "@sync/spaces": "*",
-    "@sync/relay-server": "*"
+    "@sync/relay-server": "*",
+    "@sync/modules": "*"
   },
   "scripts": {
     "test": "vitest run",
