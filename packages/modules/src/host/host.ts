@@ -85,6 +85,8 @@ export function createHost(o: HostOptions): Host {
         return (o.log ?? consoleLogger).error(`view <${e.element}> of module "${e.module}" failed: ${e.error}`);
       case 'access:denied':
         return (o.log ?? consoleLogger).warn(`access denied: module "${e.module}" may not ${e.what}`);
+      case 'schema:breaking':
+        return (o.log ?? consoleLogger).warn(`${e.type} version ${e.version} is breaking: peers on older versions will not see changes to the fields it replaced`);
       case 'feature:stopped':
         return (o.log ?? consoleLogger).error(`feature "${e.module}.${e.feature}" stopped: ${e.error}`);
     }
@@ -98,6 +100,7 @@ export function createHost(o: HostOptions): Host {
   const known = new Map<string, Known>();
   const bindings = o.bindings ?? Bindings.memory();
   const contexts = new Map<string, ModuleContext>();
+  const announcedBreaking = new Set<string>();
   const committed: Committed[] = [];
   const keys = new Map<ResolveEntry, string>();
 
@@ -178,6 +181,16 @@ export function createHost(o: HostOptions): Host {
       throw e;
     }
 
+    // a version that cannot mirror its changes for older peers: say so once per session (they still converge and lose nothing)
+    for (const t of types) {
+      for (const v of t.versions) {
+        const key = `${def.id}.${t.name}@${v.version}`;
+        if (v.breaking && !announcedBreaking.has(key)) {
+          announcedBreaking.add(key);
+          state.emit({ kind: 'schema:breaking', type: `${def.id}.${t.name}`, version: v.version });
+        }
+      }
+    }
     for (const [name, ctor] of elements) customElements.define(name, ctor);
     const features: FeatureHandle[] = [];
     for (const f of p.features ?? []) features.push(await runner.start(def.id, f, ctx));

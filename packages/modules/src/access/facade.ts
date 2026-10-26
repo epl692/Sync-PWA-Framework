@@ -71,13 +71,13 @@ export function createFacade(o: FacadeOptions): DataFacade {
   };
 
   return {
-    async create(space: SpaceId, type: string, fields: Record<string, JSONValue>) {
+    async create(space: SpaceId, type: string, fields: Record<string, JSONValue>, opts?: { id?: ObjectId }) {
       const reg = registry.get(type);
       if (!reg) throw new Error(`type "${type}" is not registered`);
       guard.type('rw', type);
       guard.space('rw', space);
       const prepared = checkWrite(reg, 'create', fields);
-      const obj = await core.create(space, type, prepared.fields, { schemaVersion: prepared.schemaVersion });
+      const obj = await core.create(space, type, prepared.fields, { schemaVersion: prepared.schemaVersion, id: opts?.id });
       return projectOne(obj)!;
     },
 

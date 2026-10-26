@@ -70,6 +70,32 @@ describe('checkSchema: fields', () => {
   });
 });
 
+describe('checkSchema: down (T097)', () => {
+  const two = (down: SchemaVersion['down'], breaking?: boolean): ObjectTypeDef =>
+    def({ versions: [v1, { version: 2, fields: { name: { type: 'string' }, extra: { type: 'integer' } }, up, down, ...(breaking ? { breaking } : {}) }] });
+
+  it('a down that emits only names the previous version declares passes', () => {
+    expect(checkSchema(two((c) => ('name' in c ? { title: c.name } : {})))).toEqual([]);
+  });
+
+  it('a down that emits a name the previous version does not declare fails, naming it', () => {
+    const p = checkSchema(two(() => ({ nonsense: 1 })));
+    expect(p.join()).toMatch(/version 2 down\(\) emitted "nonsense", which version 1 does not declare/);
+  });
+
+  it('a name only this version declares is not allowed either', () => {
+    expect(checkSchema(two((c) => ('extra' in c ? { extra: c.extra } : {}))).join()).toMatch(/emitted "extra"/);
+  });
+
+  it('a down that throws on a sample input fails the lint instead of crashing', () => {
+    expect(checkSchema(two(() => { throw new Error('boom'); })).join()).toMatch(/down\(\) threw.*boom/);
+  });
+
+  it('breaking: true together with a down is allowed', () => {
+    expect(checkSchema(two(() => ({}), true))).toEqual([]);
+  });
+});
+
 describe('SchemaRegistry', () => {
   it('registers as <module>.<name>, lists, gets and unregisters', () => {
     const r = new SchemaRegistry();

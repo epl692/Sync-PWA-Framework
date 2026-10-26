@@ -104,7 +104,7 @@ export type FacadeQuerySpec = Omit<QuerySpec, 'where' | 'withClocks'> & { where?
 /** Same method names as SyncCore for objects and queries; every call is checked against `access`. */
 export interface DataFacade {
   /** `type` is the full name. Validated against the schema before any packet exists (SchemaValidationError). */
-  create(space: SpaceId, type: string, fields: Record<string, JSONValue>): Promise<ProjectedObject>;
+  create(space: SpaceId, type: string, fields: Record<string, JSONValue>, opts?: { id?: ObjectId }): Promise<ProjectedObject>;
   update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>): Promise<ProjectedObject>;
   remove(id: ObjectId): Promise<void>;
   get(id: ObjectId): Promise<ProjectedObject | undefined>;

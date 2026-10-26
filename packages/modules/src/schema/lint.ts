@@ -1,6 +1,7 @@
 /** checkSchema (schema-rules.md §2). The check that a `down` emits only declared names lives with US6 (T104). */
 
 import { validateFieldValue } from './fields';
+import type { JSONValue } from '@sync/core';
 import { NAME_RE, type FieldDef, type ObjectTypeDef } from './types';
 
 const q = (s: unknown) => JSON.stringify(s);
@@ -30,6 +31,58 @@ function checkField(name: string, f: FieldDef, version: number): string[] {
   return out;
 }
 
+/** A sample value of the right type, for test-running `down`. */
+function sample(f: FieldDef): JSONValue {
+  switch (f.type) {
+    case 'string':
+    case 'ref':
+      return 'a';
+    case 'number':
+    case 'integer':
+    case 'timestamp':
+      return 1;
+    case 'boolean':
+      return true;
+    case 'enum':
+      return f.values[0] ?? 'a';
+    case 'json':
+      return {};
+    case 'list':
+      return [];
+  }
+}
+
+/** Every name a version's `down` can emit must be declared by the version below it (research R-07). */
+function checkDown(def: ObjectTypeDef, who: string): string[] {
+  const out: string[] = [];
+  const versions = def.versions ?? [];
+  for (const v of versions) {
+    if (v.version < 2 || !v.down) continue;
+    const target = versions[v.version - 2];
+    if (!target) continue;
+    const declared = new Set(Object.keys(target.fields));
+    const names = Object.keys(v.fields);
+    const inputs: Array<Record<string, JSONValue>> = [
+      ...names.map((n) => ({ [n]: sample(v.fields[n]!) })),
+      ...names.map((n) => ({ [n]: { $unset: true } as JSONValue })),
+      Object.fromEntries(names.map((n) => [n, sample(v.fields[n]!)])),
+    ];
+    for (const input of inputs) {
+      let result: Record<string, unknown>;
+      try {
+        result = v.down(input);
+      } catch (e) {
+        out.push(`${who}: version ${v.version} down() threw for ${JSON.stringify(Object.keys(input))}: ${e instanceof Error ? e.message : String(e)}`);
+        continue;
+      }
+      for (const name of Object.keys(result)) {
+        if (!declared.has(name)) out.push(`${who}: version ${v.version} down() emitted ${q(name)}, which version ${v.version - 1} does not declare`);
+      }
+    }
+  }
+  return [...new Set(out)];
+}
+
 export function checkSchema(def: ObjectTypeDef): string[] {
   const out: string[] = [];
   const who = `type ${q(def.name)}`;
@@ -56,6 +109,8 @@ export function checkSchema(def: ObjectTypeDef): string[] {
       if (!v.down && v.breaking !== true) out.push(`${who}: version ${v.version} needs a "down" mirror or breaking: true`);
     }
   }
+
+  out.push(...checkDown(def, who));
 
   if (def.compatWrite !== undefined && (!Number.isInteger(def.compatWrite) || def.compatWrite < 1 || def.compatWrite > versions.length)) {
     out.push(`${who}: compatWrite ${q(def.compatWrite)} must be within [1, ${versions.length}]`);

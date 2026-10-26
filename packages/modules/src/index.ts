@@ -26,3 +26,5 @@ export { RuntimeLoader } from './loader/runtime';
 export { ModuleCache } from './loader/cache';
 export { parseManifest, type ManifestEntry, type ParsedManifest, type ParsedEntry } from './loader/manifest';
 export { UpdateChecker } from './loader/update';
+export { migrate, derive, isDerived } from './schema/migrate';
+export { clockedFields } from './schema/clocked';

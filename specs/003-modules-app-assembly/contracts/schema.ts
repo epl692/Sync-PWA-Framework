@@ -35,8 +35,20 @@ export interface ClockedFields {
   has(name: string): boolean;
 }
 
-/** Output of `up`/`down`: fields to expose, with their value; `undefined` means not set. */
-export type MigrationResult = Record<string, JSONValue | undefined>;
+/**
+ * A value an `up` migration derived from older fields, with the clock of the write it came from, so later steps and
+ * the "newer write wins" rule can still order it. Built with `derive`. Clock '' sorts before every real clock.
+ */
+export interface Derived { readonly __derived: true; value: JSONValue | undefined; clock: string }
+
+/**
+ * Output of `up`: the next version's fields this step decides. A field it does not mention keeps the newer of the
+ * earlier version's value and the natively written value (a tie keeps the native one). `undefined` removes the field.
+ * `down` returns plain values (`{ "$unset": true }` removes, `undefined` says nothing).
+ */
+export type MigrationResult = Record<string, JSONValue | undefined | Derived>;
+
+export type UpFn = (prev: ClockedFields, own: ClockedFields) => MigrationResult;
 
 export interface SchemaVersion {
   /** 1, 2, 3 ... contiguous. */
@@ -48,7 +60,7 @@ export interface SchemaVersion {
    * (and, where both exist, this version's fields), choosing by clock. Run at read time only.
    * Prefer the helpers in `migrate`.
    */
-  up?: (prev: ClockedFields, own: ClockedFields) => MigrationResult;
+  up?: UpFn;
   /**
    * Optional. Maps changed fields of THIS version into the PREVIOUS version's field names so older
    * peers still see the change. The host calls it on every write while `compatWrite` includes the older version.
@@ -62,13 +74,16 @@ export interface SchemaVersion {
 
 declare const UNSET_MARK: unique symbol;
 
-/** Declarative migration helpers (all clock-aware: when old and new both exist, the newer write wins). */
+/** Migration helpers (all clock-aware: when old and new were both written, the later write wins; a tie keeps the native one). */
 export interface MigrateHelpers {
-  rename(from: string, to: string): (prev: ClockedFields, own: ClockedFields) => MigrationResult;
-  convert(from: string, to: string, fn: (v: JSONValue) => JSONValue): (prev: ClockedFields, own: ClockedFields) => MigrationResult;
-  addDefault(field: string, value: JSONValue): (prev: ClockedFields, own: ClockedFields) => MigrationResult;
-  /** Run several in order and merge their results. */
-  all(...steps: Array<(prev: ClockedFields, own: ClockedFields) => MigrationResult>): (prev: ClockedFields, own: ClockedFields) => MigrationResult;
+  rename(from: string, to: string): UpFn;
+  convert(from: string, to: string, fn: (v: JSONValue) => JSONValue): UpFn;
+  /** Only when the field was never written, not even unset; any real write beats it. */
+  addDefault(field: string, value: JSONValue): UpFn;
+  /** Independent steps on the same inputs, merged; a later step wins on the same field. */
+  all(...steps: UpFn[]): UpFn;
+  /** For `down`: write the older name whenever the newer one is written. */
+  mirrorRename(from: string, to: string): (changed: Record<string, JSONValue>) => MigrationResult;
 }
 export declare const migrate: MigrateHelpers;
 

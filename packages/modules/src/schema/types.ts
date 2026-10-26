@@ -33,8 +33,24 @@ export interface ClockedFields {
   has(name: string): boolean;
 }
 
-/** Output of `up`/`down`: field values to expose; `undefined` means not set. */
-export type MigrationResult = Record<string, JSONValue | undefined>;
+/**
+ * A value an `up` migration derived from older fields, with the clock of the write it came from (so that
+ * later steps, and the "newer write wins" rule, can still order it). Build with `derive` in `migrate.ts`.
+ */
+export interface Derived {
+  readonly [DERIVED]: true;
+  value: JSONValue | undefined;
+  /** When the source was written. `''` sorts before every real clock. */
+  clock: string;
+}
+export const DERIVED: unique symbol = Symbol.for('sync.derived') as never;
+
+/**
+ * Output of `up`: the next version's fields this step decides (a field the step does not mention keeps the newer of
+ * the earlier version's value and the value written natively). `undefined` removes the field. `down` returns plain
+ * values, with `{ "$unset": true }` for a removal, and `undefined` for "nothing to say".
+ */
+export type MigrationResult = Record<string, JSONValue | undefined | Derived>;
 
 export type UpFn = (prev: ClockedFields, own: ClockedFields) => MigrationResult;
 
@@ -44,8 +60,8 @@ export interface SchemaVersion {
   /** Complete field list of this version (not a diff), so packets of this version can be validated alone. */
   fields: Record<string, FieldDef>;
   /**
-   * Required for version > 1. Pure. Computes this version's fields from the PREVIOUS version's fields
-   * (and, where both exist, this version's), choosing by clock. Run at read time only.
+   * Required for version > 1. Pure. Decides this version's fields from the PREVIOUS version's fields (`prev`) and the
+   * ones written natively at this version (`own`), choosing by clock. Run at read time only; use the helpers in `migrate`.
    */
   up?: UpFn;
   /**
