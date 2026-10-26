@@ -1,0 +1,12 @@
+{
+  "name": "@sync/sample-app",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Sample app: two bundled modules (todo, stats) and one runtime module (notes)",
+  "type": "module",
+  "scripts": {
+    "build": "tsx ../app-build/src/cli.ts build app.config.ts dist",
+    "build:runtime": "tsx ../app-build/src/cli.ts build-runtime app.config.ts dist"
+  }
+}

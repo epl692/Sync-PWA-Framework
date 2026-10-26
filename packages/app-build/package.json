@@ -1,0 +1,21 @@
+{
+  "name": "@sync/app-build",
+  "version": "0.0.0",
+  "license": "MIT",
+  "description": "Build tool: bundles an app config into a static, installable PWA (Node only; never shipped to browsers)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "sync-check-modules": "./src/cli.ts"
+  },
+  "dependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

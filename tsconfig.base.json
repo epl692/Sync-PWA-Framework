@@ -20,7 +20,9 @@
       "@sync/transport-webrtc": ["packages/transport-webrtc/src/index.ts"],
       "@sync/relay-server": ["packages/relay-server/src/index.ts"],
       "@sync/spaces": ["packages/spaces/src/index.ts"],
-      "@sync/identity-invite": ["packages/identity-invite/src/index.ts"]
+      "@sync/identity-invite": ["packages/identity-invite/src/index.ts"],
+      "@sync/modules": ["packages/modules/src/index.ts"],
+      "@sync/app-build": ["packages/app-build/src/index.ts"]
     }
   }
 }
