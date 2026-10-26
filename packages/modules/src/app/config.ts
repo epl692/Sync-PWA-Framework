@@ -53,4 +53,6 @@ export interface StartOptions {
   core?: SyncCore;
   spaces?: Spaces;
   now?: () => number;
+  /** Register the generated service worker. Default true; has no effect outside a browser. */
+  serviceWorker?: boolean;
 }

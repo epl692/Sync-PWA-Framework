@@ -16,5 +16,7 @@ export { startApp } from './app/start-app';
 export type { AppConfig, StartOptions } from './app/config';
 export { createHost, type Host, type HostOptions } from './host/host';
 export { resolveModules, type ResolveEntry, type ResolveResult } from './host/resolve';
+export { registerServiceWorker, type SwHandle, type SwOptions as ServiceWorkerOptions } from './app/sw-register';
 export { LiveElement } from './ui/live-element';
 export { createFacade } from './access/facade';
+export { checkAppConfig } from './app/check';

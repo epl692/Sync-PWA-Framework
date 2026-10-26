@@ -39,12 +39,23 @@ export class HostState {
   private readonly listeners = new Set<(e: HostEvent) => void>();
   private readonly reports = new Map<string, ModuleReport>();
 
+  /** App-level state (service worker lifecycle) is replayed to late subscribers: the worker may finish before the UI attaches. */
+  private readonly sticky = new Map<string, HostEvent>();
+
   on(cb: (e: HostEvent) => void): () => void {
     this.listeners.add(cb);
+    for (const e of this.sticky.values()) {
+      try {
+        cb(e);
+      } catch {
+        /* a broken listener never affects the host */
+      }
+    }
     return () => void this.listeners.delete(cb);
   }
 
   emit = (e: HostEvent): void => {
+    if (e.kind.startsWith('app:') || e.kind.startsWith('sw:')) this.sticky.set(e.kind, e);
     for (const cb of [...this.listeners]) {
       try {
         cb(e);

@@ -8,7 +8,7 @@ import { SchemaRegistry } from '../schema/registry';
 import { createSchemaValidator } from '../validator/schema-validator';
 import { FeatureRunner, type FeatureHandle, type LocksLike } from '../features/runner';
 import { wrapElement } from '../ui/wrap-element';
-import type { ModuleContext, ModuleDefinition, ModuleHost, ModuleReport, SpacesFacade } from '../types';
+import type { HostEvent, ModuleContext, ModuleDefinition, ModuleHost, ModuleReport, SpacesFacade } from '../types';
 import { consoleLogger, makeContext, type Logger } from './context';
 import { HostState, newReport } from './report';
 import { resolveModules, type Known, type ResolveEntry } from './resolve';
@@ -38,6 +38,8 @@ export interface Host extends ModuleHost {
    * startApp calls it once every module that can load has settled.
    */
   closeBootWindow(): Promise<void>;
+  /** Report an event on behalf of the app shell (service worker state, for example). */
+  emit(e: HostEvent): void;
 }
 
 interface Committed {
@@ -172,6 +174,8 @@ export function createHost(o: HostOptions): Host {
   const host: Host = {
     registry,
     core,
+
+    emit: state.emit,
 
     async closeBootWindow() {
       validator.closeBootWindow();

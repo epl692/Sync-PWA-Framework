@@ -7,6 +7,7 @@ import { createHost } from '../host/host';
 import { resolveModules, type ResolveEntry } from '../host/resolve';
 import type { IdentityProviderDef, ModuleHost } from '../types';
 import type { AppConfig, StartOptions } from './config';
+import { registerServiceWorker, type SwHandle } from './sw-register';
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -52,6 +53,16 @@ export async function startApp(config: AppConfig, options: StartOptions = {}): P
       consoleLogger.error(`onReady failed: ${message(e)}`);
     }
   }
+
+  // The service worker is the shell's concern, not a module's: register it without waiting for it.
+  let sw: SwHandle | undefined;
+  if (options.serviceWorker !== false) {
+    void registerServiceWorker({ emit: host.emit }).then((h) => void (sw = h));
+  }
+  host.applyUpdate = async () => {
+    await sw?.applyServiceWorkerUpdate();
+    if (typeof location !== 'undefined') location.reload();
+  };
 
   const stop = host.stop.bind(host);
   host.stop = async () => {
