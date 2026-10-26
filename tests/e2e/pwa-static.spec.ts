@@ -2,37 +2,12 @@
 import { chromium, expect, test, type Page } from '@playwright/test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { createServer, type Server } from 'node:http';
-import { readFileSync, existsSync, statSync } from 'node:fs';
-import { extname, join, normalize } from 'node:path';
+import type { Server } from 'node:http';
+import { join } from 'node:path';
 import { buildApp } from '@sync/app-build';
+import { staticHost } from './static-host';
 
 const outDir = join('test-results', 'pwa-static');
-const TYPES: Record<string, string> = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.json': 'application/json',
-  '.webmanifest': 'application/manifest+json',
-  '.png': 'image/png',
-};
-
-/** The simplest possible static host: files under a URL prefix, nothing else. No rewrites, no API, no special headers. */
-function staticHost(prefix: string): Promise<{ server: Server; origin: string }> {
-  return new Promise((resolve) => {
-    const server = createServer((req, res) => {
-      const path = decodeURIComponent((req.url ?? '/').split('?')[0]!);
-      if (!path.startsWith(prefix)) return void res.writeHead(404).end();
-      let rel = normalize('/' + path.slice(prefix.length)).slice(1); // no way out of the folder
-      if (rel === '' || rel.endsWith('/')) rel += 'index.html';
-      const file = join(outDir, rel);
-      if (!existsSync(file) || !statSync(file).isFile()) return void res.writeHead(404).end();
-      res.writeHead(200, { 'content-type': TYPES[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache' });
-      res.end(readFileSync(file));
-    });
-    server.listen(0, '127.0.0.1', () => resolve({ server, origin: `http://localhost:${(server.address() as { port: number }).port}` }));
-  });
-}
-
 const servers: Server[] = [];
 test.beforeAll(async () => {
   await buildApp({ config: 'packages/sample-app/app.config.ts', outDir });
@@ -47,7 +22,7 @@ async function installabilityErrors(page: Page): Promise<unknown[]> {
 
 for (const prefix of ['/', '/apps/sample/']) {
   test(`installable and offline-capable when served from ${prefix}`, async () => {
-    const { server, origin } = await staticHost(prefix);
+    const { server, origin } = await staticHost(outDir, prefix);
     servers.push(server);
     // A persistent profile: the default throw-away profile always reports "in-incognito", which says nothing about the app.
     const profile = mkdtempSync(join(tmpdir(), 'pwa-profile-'));

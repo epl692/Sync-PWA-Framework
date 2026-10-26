@@ -183,6 +183,8 @@ export interface ModuleHost {
   checkForUpdates(): Promise<void>;
   /** Take effect of cached runtime-module updates and a waiting service worker: reloads the page. */
   applyUpdate(): Promise<void>;
+  /** Resolves when runtime module loading has settled (immediately when the app has none). */
+  ready(): Promise<void>;
   readonly core: SyncCore;
   stop(): Promise<void>;
 }

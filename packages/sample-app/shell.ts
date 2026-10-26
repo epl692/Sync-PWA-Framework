@@ -1,5 +1,5 @@
 /** ~20 lines of app code (not framework): show the view for the current hash. Views are plain custom elements. */
-const views: Record<string, string> = { '#todo': 'todo-list', '#stats': 'stats-summary' };
+const views: Record<string, string> = { '#todo': 'todo-list', '#stats': 'stats-summary', '#notes': 'notes-list' };
 
 export function mountShell(root: ParentNode = document): void {
   const target = root.querySelector('#view');

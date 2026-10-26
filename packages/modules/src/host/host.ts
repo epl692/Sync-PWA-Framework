@@ -40,6 +40,10 @@ export interface Host extends ModuleHost {
   closeBootWindow(): Promise<void>;
   /** Report an event on behalf of the app shell (service worker state, for example). */
   emit(e: HostEvent): void;
+  /** Activate more modules after start (runtime modules). Dependencies may be modules that are already active. */
+  addModules(entries: readonly ResolveEntry[]): Promise<void>;
+  /** Record a runtime module that could not be loaded, so it shows in the report and its dependents are skipped. */
+  markRuntime(m: { id: string; version?: string; status: 'unavailable' | 'refused' | 'failed'; reason: string }): void;
 }
 
 interface Committed {
@@ -61,6 +65,21 @@ export function createHost(o: HostOptions): Host {
   const { core } = o;
   const state = new HostState();
   const registry = new SchemaRegistry();
+  // problems are visible in the console, so a developer sees a refused or failed module without wiring a listener
+  state.on((e) => {
+    switch (e.kind) {
+      case 'module:refused':
+        return (o.log ?? consoleLogger).warn(`runtime module ${e.id ?? e.url ?? ''} refused (${e.reason})${e.url ? ` <${e.url}>` : ''}`);
+      case 'module:unavailable':
+        return (o.log ?? consoleLogger).warn(`runtime module "${e.id}" is unavailable (not reachable and not cached)`);
+      case 'module:stale':
+        return (o.log ?? consoleLogger).warn(`runtime module "${e.id}" is running from its cached copy ${e.cachedVersion}`);
+      case 'view:error':
+        return (o.log ?? consoleLogger).error(`view <${e.element}> of module "${e.module}" failed: ${e.error}`);
+      case 'feature:stopped':
+        return (o.log ?? consoleLogger).error(`feature "${e.module}.${e.feature}" stopped: ${e.error}`);
+    }
+  });
   const validator = createSchemaValidator(registry);
   core.registerValidator(validator);
   const log = o.log ?? consoleLogger;
@@ -162,13 +181,38 @@ export function createHost(o: HostOptions): Host {
       if (def.activate) await withTimeout(Promise.resolve().then(() => def.activate!(ctx)), timeoutMs, `activate of module "${def.id}"`);
       const features = await commit(def, ctx);
       committed.push({ def, features });
-      state.patch(key, { status: 'active', reason: undefined });
+      state.patch(key, { status: entry.stale ? 'stale' : 'active', reason: undefined });
       known.set(def.id, { version: def.version, ok: true });
       state.emit({ kind: 'module:registered', id: def.id });
     } catch (e) {
       log.error(`module "${def.id}" failed: ${message(e)}`);
       fail('failed', message(e));
     }
+  }
+
+  /** Resolve and activate entries, in dependency order, against what is already active. */
+  async function add(entries: readonly ResolveEntry[]): Promise<void> {
+    // an identity provider has to exist before the core opens, so a runtime module that is not `boot` cannot offer one
+    const accepted: ResolveEntry[] = [];
+    for (const e of entries) {
+      if (e.source === 'runtime' && !e.boot && (e.def.provides?.identityProviders?.length ?? 0) > 0) {
+        const reason = 'provides an identity provider but is not listed with boot: true';
+        const key = reportKey(e);
+        state.upsert(key, newReport(e, 'refused', reason));
+        known.set(e.def.id, { version: e.def.version, ok: false, reason });
+        state.emit({ kind: 'module:refused', id: e.def.id, reason: 'provider-after-boot' });
+      } else accepted.push(e);
+    }
+    const res = resolveModules(accepted, known);
+    for (const r of res.results) {
+      const key = reportKey(r.entry);
+      state.upsert(key, newReport(r.entry, r.status === 'resolved' ? 'resolved' : r.status, r.reason));
+      if (r.status !== 'resolved') {
+        state.emit({ kind: r.status === 'failed' ? 'module:failed' : 'module:skipped', id: r.entry.def.id, reason: r.reason! });
+        if (!known.has(r.entry.def.id)) known.set(r.entry.def.id, { version: r.entry.def.version, ok: false, reason: r.reason });
+      }
+    }
+    for (const entry of res.order) await activate(entry);
   }
 
   const host: Host = {
@@ -183,17 +227,30 @@ export function createHost(o: HostOptions): Host {
     },
 
     async start() {
-      const res = resolveModules(o.entries, known);
-      for (const r of res.results) {
-        const key = reportKey(r.entry);
-        state.upsert(key, newReport(r.entry, r.status === 'resolved' ? 'resolved' : r.status, r.reason));
-        if (r.status !== 'resolved') {
-          state.emit({ kind: r.status === 'failed' ? 'module:failed' : 'module:skipped', id: r.entry.def.id, reason: r.reason! });
-          if (!known.has(r.entry.def.id)) known.set(r.entry.def.id, { version: r.entry.def.version, ok: false, reason: r.reason });
-        }
-      }
-      for (const entry of res.order) await activate(entry);
+      await add(o.entries);
     },
+
+    async addModules(entries) {
+      await add(entries);
+      await core.revalidate(); // packets parked for a type that has just been registered can apply now
+    },
+
+    markRuntime({ id, version, status, reason }) {
+      const key = state.get(id) ? `${id}#${keys.size}` : id;
+      state.upsert(key, {
+        id,
+        version: version ?? '',
+        source: 'runtime',
+        status,
+        reason,
+        dependencies: {},
+        access: { types: { read: [], write: [] }, spaces: { read: 'bound', write: 'bound', manage: false } },
+        registers: { types: [], views: [], features: [], transports: [], identityProviders: [] },
+      });
+      known.set(id, { version: version ?? '0.0.0', ok: false, reason });
+    },
+
+    ready: async () => {},
 
     report: (): ModuleReport[] => state.list(),
     on: (cb) => state.on(cb),

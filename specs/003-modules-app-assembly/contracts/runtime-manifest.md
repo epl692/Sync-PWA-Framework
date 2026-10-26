@@ -69,7 +69,10 @@ A single ES module with `export default defineModule({...})` and **no import sta
 
 ## Cache
 
-`Cache Storage` name `sync-modules-v1`. Keys are absolute URLs. Stores the manifest and each verified module file. Entries not referenced by the latest manifest are removed after a successful load of that manifest. Offline start after one online visit therefore loads manifest and modules from the cache (US4-1, SC-001).
+`Cache Storage` name `sync-modules-v1`. Keys are absolute URLs. Stores the manifest and each verified module file, with the module id, version and integrity as headers. Offline start after one online visit therefore loads manifest and modules from the cache (US4-1, SC-001).
+
+- **Lookup**: by URL first, then by module id (the newest cached version), because a new version usually has a new file name. That is what lets an unreachable `notes.1.1.0.js` fall back to the cached `notes.1.0.0.js`.
+- **Housekeeping** runs after the manifest's modules have been loaded (or have failed), never before: files of ids the manifest no longer lists are removed; an older copy of a listed module is removed only once the listed version is itself cached, so it stays as the fallback until then. A manifest that cannot be fetched, or has an unsupported version, changes nothing.
 
 ## Updates while open
 

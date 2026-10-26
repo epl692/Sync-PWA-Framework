@@ -2,7 +2,9 @@
 /** sync-app-build CLI:  build <config> <outDir> [--dev] | check-modules <config> | verify-installable <dir> */
 
 import { BuildError, buildApp } from './build-app';
+import { buildRuntimeModules } from './build-module';
 import { checkModules } from './check-modules';
+import { dirname, resolve } from 'node:path';
 import { verifyInstallable } from './installable';
 
 async function main(argv: string[]): Promise<number> {
@@ -17,6 +19,21 @@ async function main(argv: string[]): Promise<number> {
         const r = await buildApp({ config, outDir, mode: flags.has('--dev') ? 'development' : 'production' });
         console.log(`built ${r.files.length} files into ${r.outDir}`);
         for (const w of r.warnings) console.warn(`warning: ${w}`);
+        return 0;
+      } catch (e) {
+        if (e instanceof BuildError) {
+          console.error(e.message);
+          return 1;
+        }
+        throw e;
+      }
+    }
+    case 'build-runtime': {
+      const [config, outDir] = args;
+      if (!config || !outDir) return usage();
+      try {
+        const written = await buildRuntimeModules({ configDir: dirname(resolve(config)), outDir: resolve(outDir) });
+        console.log(written.length ? `built ${written.join(', ')}` : 'no runtime modules found');
         return 0;
       } catch (e) {
         if (e instanceof BuildError) {
@@ -52,7 +69,7 @@ async function main(argv: string[]): Promise<number> {
 }
 
 function usage(): number {
-  console.error('usage: cli.ts build <config> <outDir> [--dev] | check-modules <config> | verify-installable <dir>');
+  console.error('usage: cli.ts build <config> <outDir> [--dev] | build-runtime <config> <outDir> | check-modules <config> | verify-installable <dir>');
   return 2;
 }
 

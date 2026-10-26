@@ -7,6 +7,10 @@ import type { ModuleDefinition } from '../types';
 export interface ResolveEntry {
   def: ModuleDefinition;
   source: 'bundled' | 'runtime';
+  /** Runtime only: listed with `boot: true`, so it was loaded before the core opened. */
+  boot?: boolean;
+  /** Runtime only: running from a cached copy because the network copy was unavailable. */
+  stale?: boolean;
 }
 
 /** A module that is already active (or already failed) when a later entry is resolved. */

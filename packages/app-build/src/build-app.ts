@@ -9,6 +9,8 @@ import { sha256Hex } from './installable';
 import { loadConfig } from './load-config';
 import { readPngSize } from './png';
 import { generateServiceWorker } from './sw-template';
+import { buildRuntimeModules } from './build-module';
+import { existsSync } from 'node:fs';
 
 export interface BuildAppOptions {
   /** Path to app.config.ts. */
@@ -80,10 +82,13 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuildResult> {
   }
   if (problems.length) throw new BuildError(problems);
 
+  // An app with no runtime-modules folder does not look for a manifest (no 404 on every start), unless it says otherwise.
+  const hasRuntime = existsSync(join(configDir, 'runtime-modules'));
   const entry = [
     `import config from ${JSON.stringify(configPath)};`,
     `import { startApp } from '@sync/modules';`,
-    `(globalThis as { __syncHost?: unknown }).__syncHost = await startApp(config, { mode: ${JSON.stringify(mode)} });`,
+    hasRuntime ? 'const cfg = config;' : `const cfg = { ...config, runtime: { ...config.runtime, manifest: config.runtime?.manifest ?? false } };`,
+    `(globalThis as { __syncHost?: unknown }).__syncHost = await startApp(cfg, { mode: ${JSON.stringify(mode)} });`,
   ].join('\n');
   const bundle = await build({
     entryPoints: { app: 'sync-app-entry' }, // a virtual module (below), so the output is named app.[hash].js
@@ -151,6 +156,11 @@ export async function buildApp(opts: BuildAppOptions): Promise<BuildResult> {
     await mkdir(dirname(join(outDir, name)), { recursive: true });
     await writeFile(join(outDir, name), bytes);
     files.push({ path: name, bytes: bytes.length, revision: sha256Hex(bytes) });
+  }
+  // Runtime modules are served next to the app but are not part of the shell: the loader caches them, not the worker.
+  for (const path of await buildRuntimeModules({ configDir, outDir })) {
+    const bytes = await readFile(join(outDir, path));
+    files.push({ path, bytes: bytes.length, revision: sha256Hex(bytes) });
   }
   return { outDir, files, warnings };
 }

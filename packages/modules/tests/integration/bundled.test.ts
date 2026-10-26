@@ -20,6 +20,7 @@ async function boot(modules: ModuleDefinition[]) {
     themeColor: '#000000',
     icons: { src192: 'a', src512: 'b' },
     modules,
+    runtime: { manifest: false },
     async onReady(_h, s) {
       spaces = s;
       await s.signUp('Me');

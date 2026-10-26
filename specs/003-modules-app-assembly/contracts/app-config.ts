@@ -34,6 +34,11 @@ export interface AppConfig {
     activateTimeoutMs?: number;
     /** Unknown-type deferral window (research R-09). Default 10000. */
     bootWindowMs?: number;
+    /**
+     * On a very first launch (no cached manifest), wait up to `manifestTimeoutMs` for the manifest so modules listed
+     * with `boot: true` can load before the core opens. Default false: bundled modules never wait for the network.
+     */
+    waitForBoot?: boolean;
   };
   /** Security wiring. Production refuses `'plaintext-for-tests'` (Principle V). */
   security?: 'spaces' | 'plaintext-for-tests';

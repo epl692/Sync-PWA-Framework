@@ -20,3 +20,7 @@ export { registerServiceWorker, type SwHandle, type SwOptions as ServiceWorkerOp
 export { LiveElement } from './ui/live-element';
 export { createFacade } from './access/facade';
 export { checkAppConfig } from './app/check';
+export { RuntimeLoader } from './loader/runtime';
+export { ModuleCache } from './loader/cache';
+export { parseManifest, type ManifestEntry, type ParsedManifest, type ParsedEntry } from './loader/manifest';
+export { UpdateChecker } from './loader/update';
