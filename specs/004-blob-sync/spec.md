@@ -17,6 +17,14 @@ Attaching binary data to objects, encrypting and content-addressing it, transfer
 
 - Q: Binary attachments in v1? → A: Yes, as separate lazy blob sync.
 
+### Session 2026-10-27
+
+- Q: How long should a relay or server keep a stored blob, given it only sees ciphertext and cannot tell what is referenced? → A: It is a cache: delete after a configurable idle period (default 90 days since last use), or oldest-first when over a size cap; devices re-upload what the relay lacks.
+- Q: Should pinning an attachment be per device or synced across a user's devices? → A: Per device only; never synced.
+- Q: If an object moves into an override share after a blob was attached, must the blob be re-encrypted for the share? → A: No; it stays readable to the Space (same as earlier packets in spec 002); apps re-attach under the share if they need it private.
+- Q: Should a missing photo download automatically when its object is shown, or only on request? → A: On demand by default (the app or user asks), with an optional app-defined rule for automatic download.
+- Q: What is the largest single attachment accepted by default? → A: 1 GiB, configurable up to 16 GiB.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Attach a File Without Slowing Sync (Priority: P1)
@@ -81,7 +89,7 @@ An End User on a phone with little space lets old attachments be evicted and re-
 - A blob's only copy is on a device that is offline or lost.
 - Very large files (hundreds of MB) over Bluetooth: slow, must be resumable and cancellable.
 - A Space key rotates after a blob was written: entitled members must still decrypt older blobs.
-- An override-share object's blob must be unreadable to Space members outside the share.
+- An override-share object's blob must be unreadable to Space members outside the share. A blob attached before its object moved into the share stays readable to the Space (parity with earlier packets); the app re-attaches it under the share if it must be private.
 - Storage quota hit mid-download.
 
 ## Requirements *(mandatory)*
@@ -95,9 +103,11 @@ An End User on a phone with little space lets old attachments be evicted and re-
 - **FR-005**: Blobs MUST be fetchable from any transport/peer that holds them; the Transport contract (spec 001) MUST include blob transfer.
 - **FR-006**: Fetched blobs MUST be verified against their hash before use.
 - **FR-007**: Identical content within the same Space/share MUST be stored once.
-- **FR-008**: Unreferenced blobs MUST be removed after the retention window.
-- **FR-009**: The Framework MUST support a per-device blob storage budget with LRU eviction, pinning, and protection of not-yet-shared copies.
+- **FR-008**: Unreferenced blobs MUST be removed from a device after the retention window. A relay or server cannot see references, so it MUST instead treat stored blobs as a cache: remove them after a configurable idle period (default 90 days since last use) or oldest-first when over a configured size cap, and devices that still hold a blob MUST re-upload it when they find the relay lacks it.
+- **FR-009**: The Framework MUST support a per-device blob storage budget with LRU eviction, pinning, and protection of not-yet-shared copies. Pins and budgets are per device and MUST NOT be synced.
 - **FR-010**: Views MUST be able to observe blob state (missing, downloading with progress, available, failed).
+- **FR-011**: A blob that is not on the device MUST be downloaded only when the app or user requests it, unless the app supplies a rule enabling automatic download (for example, small images); the Framework default is on demand.
+- **FR-012**: The Framework MUST reject an attachment larger than the configured maximum before encrypting it (default 1 GiB, configurable up to 16 GiB), and views MUST be told the reason.
 
 ### Key Entities
 
@@ -119,4 +129,4 @@ An End User on a phone with little space lets old attachments be evicted and re-
 
 - Dedup is per Space/share only (not across Spaces), since content is encrypted with different keys.
 - Default per-device blob budget is set by the app; the Framework default is "no eviction" unless configured.
-- Blob storage on the reference relay server is included, with no size limit enforcement in v1 beyond configuration.
+- Blob storage on the reference relay server is included, with no size limit enforcement in v1 beyond configuration; relay-held blobs are a cache, and devices remain the source of truth.
