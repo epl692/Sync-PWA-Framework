@@ -100,21 +100,22 @@ An End User on a phone with little space lets old attachments be evicted and re-
 - **FR-002**: Blobs MUST be encrypted on the client with the key of the object's Space or override share (spec 002) before leaving the device.
 - **FR-003**: Blobs MUST sync separately from packets and never block packet sync.
 - **FR-004**: Blob transfer MUST be chunked, resumable, and verifiable per chunk and as a whole.
-- **FR-005**: Blobs MUST be fetchable from any transport/peer that holds them; the Transport contract (spec 001) MUST include blob transfer.
+- **FR-005**: Blobs MUST be fetchable from any transport/peer that holds them; blob transfer MUST be carried by every Transport through the spec 001 Transport contract (a binary lane over `send`), and the reusable Transport contract suite MUST verify it.
 - **FR-006**: Fetched blobs MUST be verified against their hash before use.
-- **FR-007**: Identical content within the same Space/share MUST be stored once.
+- **FR-007**: Identical content within the same Space/share and key epoch MUST be stored once; after a key rotation the same content attached again is stored again under a new identity.
 - **FR-008**: Unreferenced blobs MUST be removed from a device after the retention window. A relay or server cannot see references, so it MUST instead treat stored blobs as a cache: remove them after a configurable idle period (default 90 days since last use) or oldest-first when over a configured size cap, and devices that still hold a blob MUST re-upload it when they find the relay lacks it.
 - **FR-009**: The Framework MUST support a per-device blob storage budget with LRU eviction, pinning, and protection of not-yet-shared copies. Pins and budgets are per device and MUST NOT be synced.
 - **FR-010**: Views MUST be able to observe blob state (missing, downloading with progress, available, failed).
 - **FR-011**: A blob that is not on the device MUST be downloaded only when the app or user requests it, unless the app supplies a rule enabling automatic download (for example, small images); the Framework default is on demand.
-- **FR-012**: The Framework MUST reject an attachment larger than the configured maximum before encrypting it (default 1 GiB, configurable up to 16 GiB), and views MUST be told the reason.
+- **FR-012**: The Framework MUST reject an attachment larger than the configured maximum before encrypting it (default 1 GiB, configurable up to 16 GiB), and the caller MUST be told the reason and the limit.
 
 ### Key Entities
 
-- **Blob**: encrypted bytes, content hash, size, media type, key epoch.
+- **Blob**: encrypted bytes, identified by a hash (the hash of its manifest of per-chunk digests, which commits to every chunk), size, media type, key epoch.
+- **Manifest**: the list of per-chunk digests that fixes a blob's identity and lets any peer, including an untrusted relay, verify chunks.
 - **Blob Reference**: field value pointing to a blob.
 - **Chunk**: verifiable piece of a blob used for transfer.
-- **Blob State**: per-device status (missing, downloading, available, pinned, evicted).
+- **Blob State**: per-device status (missing, downloading with progress, available, failed), plus device-local flags (pinned; evicted, shown as missing).
 
 ## Success Criteria *(mandatory)*
 
@@ -127,6 +128,7 @@ An End User on a phone with little space lets old attachments be evicted and re-
 
 ## Assumptions
 
-- Dedup is per Space/share only (not across Spaces), since content is encrypted with different keys.
+- Dedup is per Space/share and key epoch (not across Spaces or across a key rotation), since content is encrypted with different keys.
+- Devices delete unreferenced blobs after 30 days by default (the spec 001 history window); an attachment never referenced by any object counts as unreferenced after 24 hours.
 - Default per-device blob budget is set by the app; the Framework default is "no eviction" unless configured.
 - Blob storage on the reference relay server is included, with no size limit enforcement in v1 beyond configuration; relay-held blobs are a cache, and devices remain the source of truth.

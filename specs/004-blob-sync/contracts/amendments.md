@@ -4,14 +4,15 @@ Specs 001–003 are implemented. This feature needs the small, additive changes 
 
 | ID | Package | Change | Why |
 |---|---|---|---|
-| **C-1** | `@sync/core` | Binary lane: `core.lane(magic)` plus `hello.lanes` | Bulk bytes must not share the JSON packet queue or be base64-wrapped (research R-01) |
-| **C-2** | `@sync/core` | Expose connected-peer info (`spaces`, `relay`, `maxMessageBytes`) and the `onApplied` object-field stream needed by the reference index | The scheduler picks peers by shared Space; the index follows applied packets |
+| **B-1** | `@sync/core` | Binary lane: `core.lane(magic)` plus `hello.lanes` | Bulk bytes must not share the JSON packet queue or be base64-wrapped (research R-01) |
+| **B-2** | `@sync/core` | Extend the existing `PeerSummary` / `core.peers()` with `spaces`, `relay`, `maxMessageBytes`, `bulk`, and add `peer:ready` / `peer:gone` events | The scheduler picks peers by shared Space |
+| **B-3** | `@sync/core` | `onApplied` events carry the post-apply `object` | The reference index must follow object state, not packet bodies |
 | **S-1** | `@sync/spaces` | `blobKeys`: derive blob keys for a scope and epoch | The blob engine must never see raw epoch keys |
 | **M-1** | `@sync/modules` | `blob` field type and an optional `ctx.blobs` facade | Validation of references and access control (research R-11, R-12) |
 | **R-1** | `@sync/relay-server` | `BlobRelay` plugged into `RelayHub`'s lane hook | Relay stores ciphertext blobs (spec US2.4) |
 | **T-1** | `@sync/testkit` | `laneContract()`, `blobStorageContract()`, blob peer harness | Principle VIII |
 
-## C-1: Binary lane
+## B-1: Binary lane
 
 ```ts
 // @sync/core (additive)
@@ -22,7 +23,7 @@ interface Lane {
   onMessage(handler: (peerKey: string, bytes: Uint8Array) => void): () => void;
   onPeer(handler: (e: { type: 'up' | 'down'; peer: LanePeer }) => void): () => void;
 }
-interface LanePeer { key: string; transport: string; peerId: string; spaces: string[]; relay: boolean; maxMessageBytes: number; bulk: boolean }
+type LanePeer = PeerSummary & { spaces: string[]; relay: boolean; maxMessageBytes: number; bulk: boolean }; // PeerSummary (key, transport, peerId, label?) already exists in @sync/core
 core.lane(magic: number): Lane;                         // registering twice with one magic throws
 ```
 
@@ -30,13 +31,21 @@ core.lane(magic: number): Lane;                         // registering twice wit
 - **No head-of-line coupling**: lane sends do not use the session's packet queue (`Session.enqueue`); they call the transport's `send` directly. The transport's own ordering and backpressure still apply.
 - **`spaces`/`relay`** come from the peer's `hello` (wildcard Spaces from a relay are reported as `["*"]`); `peers()` updates when the peer announces a new Space. **`bulk`** is the transport's `capabilities.blobs`.
 - **Unregistered magic**: dropped and counted in telemetry, never fatal.
+- **Size limit**: the lane router enforces `limits.maxMessageBytes` (default 4 MiB) on each message as delivered by the transport, after any transport framing; an oversize message is dropped and reported and the connection stays open. The sync decoder's own check does not run for lane messages.
 - **Compatibility**: a 001/002 peer ignores the unknown `hello.lanes` field and is never sent a lane message (it is not in `peers()`). A lane message that reaches a peer without the lane (for example a relay that does not know it) is dropped by the existing "malformed message is reported, connection stays open" rule. `Transport.blob` hooks remain declared in the 001 contract but unused and marked reserved.
-- **Tests (first)**: lane round trip over memory, WebSocket and WebRTC transports; a 1 MiB binary message intact; lane traffic does not delay a packet beyond one chunk (timing test with fake clock); a peer without the lane is never sent lane bytes; an old-style peer receiving a stray lane byte stays connected.
+- **Tests (first)**: lane round trip over memory, WebSocket and WebRTC transports; a 1 MiB binary message intact; lane traffic does not delay a packet beyond one chunk (timing test with fake clock); a peer without the lane is never sent lane bytes; an old-style peer receiving a stray lane byte stays connected; an oversize lane message is dropped and reported; messages above the transport's `maxMessageBytes` up to the core limit arrive intact (transport framing).
 
-## C-2: Peer info and field stream
+## B-2: Peer info
 
-- `core.peers()` returns the same `LanePeer`-like summaries for all connected peers, and `core.on('peer:ready' | 'peer:gone')` events. (Already derivable inside the session code; this exposes it.)
-- The reference index uses the existing 002 A-8 `onApplied` hook; if its payload lacks the post-apply object fields, add them (new optional property, no behavior change). Investigated during Phase A, recorded here if needed.
+- `core.peers()` already exists and returns `PeerSummary { key, transport, peerId, label? }` (`packages/core/src/sync/channel.ts`, exported from `@sync/core`). This amendment extends `PeerSummary` additively with `spaces`, `relay`, `maxMessageBytes`, `bulk` (all from the peer's `hello` and the transport's capabilities) and adds `peer:ready` (after `hello`) and `peer:gone` to `CoreEvent`.
+- **Compatibility**: new optional fields and event kinds; existing consumers ignore them.
+- **Tests (first)**: peers carry the new fields; `peer:ready` fires after `hello`; `peer:gone` on disconnect; a relay's wildcard Space is `["*"]`; a newly announced Space updates the entry.
+
+## B-3: `onApplied` carries the post-apply object
+
+- `onApplied(cb: (e: { env, body, source, object?: SyncableObject }) => void)`: `object` is the object as it stands after the packet was applied (for a delete, the tombstoned object). It is set from the local `obj` at the existing emit point in `packages/core/src/store/apply.ts` (including the reapply path). Needed because `body.fields` holds only the packet's own fields, so for updates, last-writer-wins losers and nested values the reference index could not see current state from the packet alone.
+- **Compatibility**: new optional property; no behavior change; consumers that ignore it are unaffected (002 spaces suites stay green).
+- **Tests (first)**: create, update, a last-writer-wins-losing update (reports the current object, older value not applied), a parked packet applied later, and delete.
 
 ## S-1: Blob keys (spaces)
 
@@ -64,6 +73,7 @@ spaces.blobKeys: BlobKeys;
 
 - **`blob` field type** (schema language, 003 `schema.ts`): `{ type: 'blob'; required?: boolean; accept?: string[]; maxBytes?: number }`. Validates the reference per [data-model.md](../data-model.md#blob-reference-synced-inside-a-packet) (shape, ID format, `size ≤ min(maxBytes, configured max)`, media type matches `accept` patterns such as `image/*`). `checkSchema` accepts it; a list of blobs is `list` of `blob` (extends `of`). Migration and projection treat it as an opaque JSON value.
 - **`ctx.blobs` facade** (optional service): `attach`, `request`, `open`, `observe`, `pin`, `unpin`, `cancel` with the same signatures as `Blobs`, each checking declared Space access (`AccessDeniedError`). Present only when the app config enables blobs.
+- **Dependency direction**: `@sync/blobs` exports a pure subpath `@sync/blobs/ref` (`BlobRef`, `validateRef`, `extractRefs`; no crypto, no storage, no `@sync/core` or `@sync/spaces` imports). `@sync/modules` declares `@sync/blobs` as an optional peerDependency (`peerDependenciesMeta`) and imports only that subpath (plus `import type` of `Blobs` for the facade, the instance being injected through the app config). A release-surface test enforces this; modules keeps zero runtime `dependencies`.
 - **Compatibility**: older modules ignore both. Schemas without `blob` fields are unchanged. A newer schema using `blob` on an older host fails `checkSchema` with a clear "unknown field type" error at registration, never at runtime on data.
 - **Tests (first)**: oracle comparison for `blob` validation (property); facade denies a Space not declared; list-of-blob works.
 

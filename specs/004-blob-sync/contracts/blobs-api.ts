@@ -153,6 +153,7 @@ export declare class BlobFetchError extends Error { readonly reason: BlobFailure
 export declare class BlobIntegrityError extends Error {}
 export declare class BlobNotLocalError extends Error {}
 export declare class BlobKeyError extends Error {}   // no entitlement to the scope/epoch at attach time
+export declare class BlobTooLargeError extends Error { readonly size: number; readonly limit: number }   // attach rejected before reading any chunk (FR-012)
 
 // ---------------------------------------------------------------------------------------------
 // Local storage contract. Every implementation MUST pass blobStorageContract() from @sync/testkit.

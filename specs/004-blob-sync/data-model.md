@@ -23,11 +23,11 @@ Validation is a pure function of the value (the `blob` field type, M-1), so ever
 
 ### Manifest (immutable, content-addressed)
 
-Fixed binary layout; its SHA-256 is the blob ID. Contains `scopeId`, `keyId`, `size`, `chunkBytes`, and one SHA-256 digest per ciphertext chunk. Created at attach, transferred on request (`manifest` lane message), stored beside the chunks. It never changes.
+Fixed binary layout; its SHA-256 is the blob ID. Contains `scopeId`, `keyId`, `size`, `chunkBytes`, and one SHA-256 digest per stored chunk (`nonce ‖ ciphertext`). Created at attach, transferred on request (`manifest` lane message), stored beside the chunks. It never changes.
 
 ### Chunk (immutable)
 
-`index` (0-based) plus ciphertext bytes (`chunkBytes + 16`, last one shorter). Verified against `manifest.digests[index]` before it is stored or served.
+`index` (0-based) plus the stored form `nonce(12) ‖ ciphertext`, `12 + len + 16` bytes where `len` is `chunkBytes` except for the last chunk. Verified against `manifest.digests[index]` before it is stored or served.
 
 ### Blob Record (device-local, IndexedDB `blobs` store, key = `id`)
 

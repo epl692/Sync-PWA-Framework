@@ -10,14 +10,14 @@ Add encrypted, content-addressed binary attachments that sync lazily and separat
 
 Technical approach (details in [research.md](./research.md)):
 
-- **Binary lane (C-1)**: the one core change. Lane messages (`0xB1`) bypass the JSON decoder and the per-peer packet queue, so a 100 MB transfer cannot delay packets and nothing is base64-wrapped (R-01). Advertised through an additive `hello.lanes`, so older peers are never sent lane bytes.
+- **Binary lane (B-1)**: the one core change. Lane messages (`0xB1`) bypass the JSON decoder and the per-peer packet queue, so a 100 MB transfer cannot delay packets and nothing is base64-wrapped (R-01). Advertised through an additive `hello.lanes`, so older peers are never sent lane bytes.
 - **Deterministic encryption within a scope (R-02)**: nonces derive from the key and chunk digest, so identical content gives an identical manifest and ID. Dedup is an ID lookup; a relay cannot confirm a guessed file; different Spaces never collide.
 - **One identity commits to everything (R-03)**: blob ID = SHA-256 of a manifest of per-chunk ciphertext digests. Any peer, including an untrusted relay, can serve data and the receiver verifies manifest, each chunk, the AES-GCM tag, and the total size.
 - **Streaming everywhere (R-04, R-13)**: attach reads one chunk at a time and never holds the file; open decrypts chunk by chunk.
 - **Own storage, own contract (R-05)**: a separate IndexedDB database of ciphertext chunks, with memory and Node file-system implementations behind `blobStorageContract()`. The 001 `StorageAdapter` is untouched.
 - **Pull model (R-06, R-07)**: devices `offer`; receivers `get` what they want and can take ranges from several peers; resume is "request only missing indexes". A relay is a ciphertext cache (R-08).
 - **Derived, rebuildable bookkeeping (R-09, R-10)**: the reference index, GC, LRU eviction, pins, and replica counts are device-local state, never synced and never authoritative. Pins and budgets are per device.
-- **Small additive amendments (C-1, C-2, S-1, M-1, R-1, T-1)** to core, spaces, modules, relay, and testkit, listed with compatibility notes in [contracts/amendments.md](./contracts/amendments.md).
+- **Small additive amendments (B-1, B-2, B-3, S-1, M-1, R-1, T-1)** to core, spaces, modules, relay, and testkit, listed with compatibility notes in [contracts/amendments.md](./contracts/amendments.md).
 
 ## Technical Context
 
@@ -25,6 +25,7 @@ Technical approach (details in [research.md](./research.md)):
 
 **Primary Dependencies**:
 - `packages/blobs` (`@sync/blobs`): **none at runtime** (Web Crypto, IndexedDB, `Blob.stream()`), depends on workspace packages `@sync/core` and a type-only view of `@sync/spaces` (`BlobKeys`).
+- `packages/modules` gains an optional peerDependency on `@sync/blobs`, imported only through the pure `@sync/blobs/ref` subpath (types and `validateRef`); no runtime dependency.
 - `packages/relay-server`: Node built-ins (`fs`, `crypto`) only; no new dependency.
 - Dev/test: existing `vitest`, `fast-check`, `fake-indexeddb`, `@playwright/test`, `jsdom`.
 
@@ -52,7 +53,7 @@ Technical approach (details in [research.md](./research.md)):
 | II. Everything is a Syncable Object | PASS (justified, see Complexity Tracking) | The only synced datum is the reference, an ordinary field of an ordinary object. The bytes are immutable, content-addressed, referenced only from object fields; there is no mutable synced state outside the object model. |
 | III. Packets are the only way state changes | PASS | Attaching, replacing, and removing an attachment are packets that change the reference. Blob storage is a set of immutable verified items (union, idempotent, order-free); the reference index, pins, replica counts, and eviction are local derived state. Property tests cover reorder, duplication, and resume. |
 | IV. Transport agnostic | PASS | The lane rides `Transport.send`; no transport-specific code in `@sync/blobs`. `laneContract()` is required of every transport. |
-| V. Zero-trust, E2E | PASS | Encrypted on the authoring device with per-scope derived keys before leaving it; relays hold ciphertext and verify only digests; every receiver verifies manifest, chunk, tag, and size; references live in signed, role-checked packets so peers cannot be tricked into trusting swapped bytes. Residual risks (junk storage on a relay, equality leaks within a scope) are stated in R-02 and R-08. |
+| V. Zero-trust, E2E | PASS | Encrypted on the authoring device with per-scope keys derived (HKDF, S-1) from the Space's or share's epoch key before leaving it; relays hold ciphertext and verify only digests; every receiver verifies manifest, chunk, tag, and size; references live in signed, role-checked packets so peers cannot be tricked into trusting swapped bytes. Residual risks (junk storage on a relay, equality leaks within a scope) are stated in R-02 and R-08. |
 | VI. Modular | PASS | New package; core gains only the generic lane. Modules reach blobs through a facade that enforces declared Space access, and `blob` is a schema field type. |
 | VII. Static-hostable | PASS | No backend needed: devices exchange blobs over any transport; the relay is optional and only a transport target. Verified by the static-host e2e (S12). |
 | VIII. Contract-tested, test-first | PASS | `laneContract`, `blobStorageContract`, vectors, property and adversarial tests; tasks put every test before its implementation. |
@@ -82,7 +83,7 @@ specs/004-blob-sync/
 │   ├── blobs-api.ts         # BlobRef, Blobs API, config, events, BlobStorage contract
 │   ├── blob-format.md       # keys, chunking, nonce, manifest, ID, verification, compatibility
 │   ├── blob-protocol.md     # lane framing and messages (hello, offer, get, manifest, chunk, miss, stored, reject, cancel)
-│   └── amendments.md        # C-1, C-2 (core), S-1 (spaces), M-1 (modules), R-1 (relay), T-1 (testkit)
+│   └── amendments.md        # B-1, B-2, B-3 (core), S-1 (spaces), M-1 (modules), R-1 (relay), T-1 (testkit)
 └── tasks.md             # Phase 2 (/speckit-tasks, not created here)
 ```
 
@@ -90,14 +91,14 @@ specs/004-blob-sync/
 
 ```text
 packages/
-├── core/                    # AMENDED (C-1, C-2): lane registry, hello.lanes, peer info
+├── core/                    # AMENDED (B-1 to B-3): lane registry, hello.lanes, extended peer info, post-apply object on onApplied
 ├── spaces/                  # AMENDED (S-1): blobKeys (HKDF derivation, scope lookup, key-arrival event)
 ├── modules/                 # AMENDED (M-1): `blob` field type, optional ctx.blobs facade
 ├── relay-server/            # AMENDED (R-1): lane hook, BlobRelay, FileBlobStorage
 ├── testkit/                 # ADDED (T-1): laneContract, blobStorageContract, blobPeers harness, tamper helpers
 ├── blobs/                   # NEW  @sync/blobs (browser runtime, zero deps)
 │   ├── src/
-│   │   ├── format/          # manifest encode/verify, reference validation, constants, base64url
+│   │   ├── format/          # manifest encode/verify, reference validation (also the pure `@sync/blobs/ref` subpath), constants, base64url
 │   │   ├── crypto/          # chunk seal/open, nonce derivation, digests (uses BlobKeys)
 │   │   ├── storage/         # BlobStorage interface, IndexedDB and memory implementations
 │   │   ├── attach/          # streaming attach pipeline, partial cleanup, dedup by ID
@@ -123,7 +124,7 @@ docs/blobs.md                # using blobs in a module, config, relay setup, lim
 | Item | Why Needed | Simpler Alternative Rejected Because |
 |---|---|---|
 | Bytes stored outside the object model (Principle II) | Spec FR-003 and "lazy, separate" require bulk data not to travel in packets; a 100 MB value in a packet would block sync and bloat the log and snapshots | Embedding bytes in fields breaks SC-001 and compaction; making each chunk a Syncable Object would put large immutable data through the packet path and conflict logic for no convergence benefit. Mitigation: only the reference is state, bytes are immutable and verified by the ID that lives in a signed packet |
-| New binary lane in the core (C-1) | Channel messages are base64 JSON in the packet queue (+33%, head-of-line); `Transport.blob` hooks have no implementations or control plane | A per-transport blob implementation triples the work and still shares a stream; `chan` fails FR-003/SC-001 |
+| New binary lane in the core (B-1) | Channel messages are base64 JSON in the packet queue (+33%, head-of-line); `Transport.blob` hooks have no implementations or control plane | A per-transport blob implementation triples the work and still shares a stream; `chan` fails FR-003/SC-001 |
 | Deterministic nonce derivation | Dedup within a scope and a relay-verifiable ID require same content to give same ciphertext | Random nonces make FR-007 depend on a plaintext tag or local-only index and a second pass over the file |
 | Separate `BlobStorage` contract and three implementations | Atomicity needs differ, sizes are large, and the relay must use the same code on disk | Extending `StorageAdapter` changes a contract all implementations must meet and mixes quota and compaction concerns |
 | Own manifest and reference formats, no library | Zero runtime dependencies in shipped code | A Merkle or CAR library would be the first runtime dependency for ~200 lines of owned, vector-tested code |

@@ -1,6 +1,6 @@
 # Contract: Blob Lane Protocol (`blob/1`)
 
-Carried over the **binary lane** (amendment C-1): every message starts with the lane magic `0xB1`, then a type byte, then the body. The lane is separate from the 001 JSON sync protocol and does not share its per-peer queue.
+Carried over the **binary lane** (amendment B-1): every message starts with the lane magic `0xB1`, then a type byte, then the body. The lane is separate from the 001 JSON sync protocol and does not share its per-peer queue.
 
 ## Framing
 
@@ -24,7 +24,7 @@ Integers big endian. `idRaw` = the 32 raw bytes of the blob ID. JSON bodies are 
 | `0x08` | `reject` | JSON `{id, reason}` (`quota`, `too-large`, `space`, `busy`, `unsupported`) | receiver → sender |
 | `0x09` | `cancel` | `idRaw(32)` | either |
 
-Unknown types are ignored (forward compatibility). A message larger than the transport's `maxMessageBytes`, or larger than `limits.maxMessageBytes`, is dropped and reported; the connection stays open.
+Unknown types are ignored (forward compatibility). A message larger than `limits.maxMessageBytes` (core default 4 MiB; checked by the lane router on the message as delivered, after transport framing) is dropped and reported; the connection stays open. Messages larger than the transport's own `maxMessageBytes` are framed by the transport (001 Transport contract); the lane never splits or frames messages. A chunk message is 262,210 bytes and a manifest message for a 16 GiB blob is about 2 MiB, both under the default limit.
 
 ## Session
 
@@ -38,7 +38,8 @@ Unknown types are ignored (forward compatibility). A message larger than the tra
 
 ## Rules
 
-- A holder answers `get` only for a Space that is in both sides' sync `hello` for that peer; otherwise `reject {reason:'space'}`.
+- A holder answers `get` only for a Space that is in both sides' sync `hello` for that peer; otherwise `reject {reason:'space'}`. A relay's wildcard Space (`"*"`) counts as listing every Space.
+- **Limits per peer**: a holder accepts at most 256 pending requested ranges and 64 `offer` messages per second (sliding window); excess `get` is answered `reject {busy}`, excess `offer` is dropped. A wanter coalesces missing chunks so one `get` carries at most 256 ranges (the codec still accepts up to 4096).
 - A holder never serves a chunk it has not itself verified.
 - Responders yield to the event loop between chunks and never queue more than `window` chunk messages per peer (keeps packets flowing, FR-003).
 - A relay (`BlobRelay`, amendment R-1) answers `offer` with `get` only when it passes its caps (`quota`, `too-large`), and serves `get` like any holder. It verifies manifest and chunk digests but has no key.
