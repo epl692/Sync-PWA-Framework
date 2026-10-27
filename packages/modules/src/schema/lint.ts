@@ -24,6 +24,15 @@ function checkField(name: string, f: FieldDef, version: number): string[] {
   if ((f.type === 'number' || f.type === 'integer' || f.type === 'timestamp') && f.min !== undefined && f.max !== undefined && f.min > f.max) {
     out.push(`${where}: min ${f.min} is greater than max ${f.max}`);
   }
+  if (f.type === 'blob' || (f.type === 'list' && f.of === 'blob')) {
+    if (f.accept !== undefined) {
+      if (!f.accept.length) out.push(`${where}: accept needs at least one media type`);
+      for (const a of f.accept) if (!/^[\w.+-]+\/([\w.+-]+|\*)$/.test(a)) out.push(`${where}: accept entry ${q(a)} is not a media type such as "image/*" or "application/pdf"`);
+    }
+    if (f.maxBytes !== undefined && (!Number.isSafeInteger(f.maxBytes) || f.maxBytes < 1 || f.maxBytes > 16 * 1024 ** 3)) {
+      out.push(`${where}: maxBytes must be an integer from 1 to 16 GiB`);
+    }
+  }
   if ('default' in f && f.default !== undefined && !out.length) {
     const bad = validateFieldValue(f, f.default);
     if (bad) out.push(`${where}: default ${q(f.default)} ${bad}`);
@@ -49,6 +58,8 @@ function sample(f: FieldDef): JSONValue {
       return {};
     case 'list':
       return [];
+    case 'blob':
+      return { $blob: 1, id: 'A'.repeat(43), size: 1, type: 'a/b', space: 's', scope: 's', keyId: '0'.repeat(16) };
   }
 }
 

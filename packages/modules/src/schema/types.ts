@@ -21,7 +21,14 @@ export type FieldDef =
   /** Opaque JSON, replaced whole under LWW. */
   | { type: 'json'; required?: boolean; maxBytes?: number; check?: Check<JSONValue> }
   /** List of primitives, replaced whole under LWW (not a CRDT list). */
-  | { type: 'list'; of: 'string' | 'number' | 'boolean'; required?: boolean; maxItems?: number; check?: Check<JSONValue[]> };
+  | { type: 'list'; of: 'string' | 'number' | 'boolean'; required?: boolean; maxItems?: number; check?: Check<JSONValue[]> }
+  /** A list of attachment references (spec 004). `accept` and `maxBytes` apply to every item. */
+  | { type: 'list'; of: 'blob'; required?: boolean; maxItems?: number; accept?: readonly string[]; maxBytes?: number; check?: Check<JSONValue[]> }
+  /**
+   * An attachment reference (spec 004, M-1): `{ $blob: 1, id, size, type, space, scope, keyId, name? }`, opaque JSON to
+   * migration and projection. `accept` lists media types (`image/*` or `application/pdf`); `maxBytes` caps `size`.
+   */
+  | { type: 'blob'; required?: boolean; accept?: readonly string[]; maxBytes?: number; check?: Check<JSONValue> };
 
 export type FieldType = FieldDef['type'];
 

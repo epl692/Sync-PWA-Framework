@@ -6,6 +6,16 @@ export interface PeerSummary {
   transport: string;
   peerId: string;
   label?: string;
+  /** Spaces the peer declared in its hello (empty until the hello arrives). A relay that holds data for everyone reports ["*"]. */
+  spaces: string[];
+  /** The peer's hello `relay` flag (false until the hello arrives). */
+  relay: boolean;
+  /** Largest single message the transport carries unframed. */
+  maxMessageBytes: number;
+  /** The transport has a separate channel for bulk data (`capabilities.blobs`). */
+  bulk: boolean;
+  /** Lane magics the peer advertised in its hello (spec 004 B-1). */
+  lanes: number[];
 }
 
 export interface Channel {

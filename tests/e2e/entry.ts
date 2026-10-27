@@ -6,6 +6,7 @@ import { createWebSocketTransport } from '@sync/transport-websocket';
 import { createWebRtcTransport } from '@sync/transport-webrtc';
 import { indexedDbKeyDb, openSecureCore, assertSecureCore } from '@sync/spaces';
 import { createInviteProvider, qrToSvg } from '@sync/identity-invite';
+import { createBlobs, createIndexedDbBlobStorage } from '@sync/blobs';
 
 /** A fully encrypted node (spec 002): device keys in IndexedDB, the default invite/QR provider, WebSocket and/or WebRTC. */
 async function openSecureNode(name: string, o: { url?: string; rtc?: boolean; approve?: boolean } = {}) {
@@ -46,4 +47,9 @@ async function openRtcCore(dbName: string, spaces: string[]) {
   return { core, rtc };
 }
 
-(window as any).__sync = { openCore, openSyncedCore, openRtcCore, createIndexedDbStorage, createSyncCore, PlaintextCodec, openSecureNode, qrToSvg };
+/** Attachments (spec 004) on a secure node, with the blob store in its own IndexedDB database. */
+async function openBlobs(node: { core: any; spaces: any }, name: string, config: Record<string, unknown> = {}) {
+  return createBlobs({ core: node.core, keys: node.spaces.blobKeys, storage: await createIndexedDbBlobStorage({ name: `${name}-blobs` }), config });
+}
+
+(window as any).__sync = { openCore, openSyncedCore, openRtcCore, createIndexedDbStorage, createSyncCore, PlaintextCodec, openSecureNode, openBlobs, qrToSvg };

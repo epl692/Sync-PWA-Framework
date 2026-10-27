@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { PeerId, Transport } from '@sync/core';
+import { laneContract } from './blobs/laneContract';
 
 /** The far end of a transport under test, seen at the byte level. */
 export interface RemoteEnd {
@@ -177,4 +178,7 @@ export function transportContract(name: string, harness: TransportHarness) {
       await until(() => t.received.some((b) => b[0] === 4 && b[1] === 2), 5000, 'valid message after corrupt one');
     });
   });
+
+  // Spec 004: every transport must also carry the binary lane.
+  laneContract(name, harness);
 }

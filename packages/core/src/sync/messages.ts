@@ -8,7 +8,7 @@ export const PROTOCOL = { min: 1, max: 1 } as const;
 export const ANY_SPACE = '*';
 
 export type Msg =
-  | { t: 'hello'; protocol: { min: number; max: number }; device: string; spaces: string[]; relay: boolean }
+  | { t: 'hello'; protocol: { min: number; max: number }; device: string; spaces: string[]; relay: boolean; lanes?: number[] }
   | { t: 'summary'; space: string; held: Held }
   | { t: 'want'; space: string; ranges: Held; max?: number }
   | { t: 'packets'; space: string; items: string[] }
@@ -28,6 +28,7 @@ export function encodeMessage(m: Msg): Uint8Array {
 }
 
 const isStr = (x: unknown): x is string => typeof x === 'string';
+const isLanes = (x: unknown): x is number[] => Array.isArray(x) && x.every((n) => Number.isInteger(n) && n >= 0x80 && n <= 0xff);
 const isHeld = (x: unknown): x is Held =>
   typeof x === 'object' &&
   x !== null &&
@@ -53,7 +54,7 @@ export function decodeMessage(bytes: Uint8Array, maxBytes?: number): Decoded {
         isStr(o.device) &&
         Array.isArray(o.spaces) &&
         o.spaces.every(isStr)
-        ? { ok: true, msg: { t: 'hello', protocol: o.protocol, device: o.device, spaces: o.spaces, relay: o.relay !== false } }
+        ? { ok: true, msg: { t: 'hello', protocol: o.protocol, device: o.device, spaces: o.spaces, relay: o.relay !== false, ...(isLanes(o.lanes) ? { lanes: o.lanes } : {}) } }
         : bad;
     case 'summary':
       return isStr(o.space) && isHeld(o.held) ? { ok: true, msg: o } : bad;

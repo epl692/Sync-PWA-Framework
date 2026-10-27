@@ -4,7 +4,7 @@ import type { Plugin } from 'esbuild';
 import { relative } from 'node:path';
 
 /** The framework's own sources (in this monorepo; installed copies live under node_modules). */
-const FRAMEWORK_SRC = /[\\/]packages[\\/](?:core|spaces|modules|testkit|identity-invite|transport-[a-z]+|relay-server|app-build)[\\/]src[\\/]/;
+const FRAMEWORK_SRC = /[\\/]packages[\\/](?:core|spaces|modules|blobs|testkit|identity-invite|transport-[a-z]+|relay-server|app-build)[\\/]src[\\/]/;
 
 /** An app may use `@sync/modules` and the infrastructure packages (transports, identity providers), but not the core itself. */
 export const bannedForApp = (spec: string): boolean => /^@sync\/(?:core|spaces|testkit|relay-server|app-build)(?:\/|$)/.test(spec);

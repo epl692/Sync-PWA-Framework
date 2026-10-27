@@ -55,12 +55,15 @@ export async function startApp(config: AppConfig, options: StartOptions = {}): P
     ({ core, spaces } = await openSecureCore({ provider, keyDb: options.keyDb, now: options.now, core: { storage, now: options.now } }));
   }
   if (config.security !== 'plaintext-for-tests') assertSecureCore(core);
+  const blobsFactory = options.blobs ?? config.blobs;
+  const blobs = blobsFactory ? await blobsFactory({ core, spaces }) : undefined;
 
   // 3. activate
   const bindings = await Bindings.open(options.bindingDb ?? (typeof indexedDB !== 'undefined' ? indexedDbBindingDb() : memoryBindingDb()));
   const h = createHost({
     core,
     spaces,
+    blobs,
     bindings,
     entries,
     settings: config.settings,
@@ -114,6 +117,7 @@ export async function startApp(config: AppConfig, options: StartOptions = {}): P
   h.stop = async () => {
     clearTimeout(backstop);
     await stop();
+    await blobs?.close();
     await spaces?.close();
     await core.close();
   };

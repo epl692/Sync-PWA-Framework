@@ -55,6 +55,7 @@ export class Keystore {
   private aesCache = new Map<string, CryptoKey>();
   private counters = new Map<string, number>();
   private unflushed = new Map<string, number>();
+  private keyListeners = new Set<(scope: string) => void>();
 
   private constructor(
     private readonly db: KeyDb,
@@ -121,7 +122,20 @@ export class Keystore {
     const wrapped = await aesSeal(d.wrapKey, nonce, raw, this.aad(scope, keyId));
     const rec: EpochKeyRecord = { scope, epoch, keyId, wrapped, nonce, source, createdAt: this.now() };
     await this.db.put('epoch-keys', id, rec);
+    for (const h of [...this.keyListeners]) {
+      try {
+        h(scope);
+      } catch {
+        // a faulty listener must not break key storage
+      }
+    }
     return keyId;
+  }
+
+  /** Called after a new epoch key is stored (not for a key already held). */
+  onKeyStored(handler: (scope: string) => void): () => void {
+    this.keyListeners.add(handler);
+    return () => void this.keyListeners.delete(handler);
   }
 
   async hasKey(scope: string, keyId: string): Promise<boolean> {

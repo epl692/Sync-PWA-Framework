@@ -1,3 +1,4 @@
+import { createBlobs, defineSyncBlob } from '@sync/blobs';
 import type { AppConfig } from '@sync/modules';
 import identity from './infra/identity/index';
 import stats from './modules/stats/index';
@@ -12,6 +13,12 @@ export default {
   icons: { src192: 'public/icons/icon-192.png', src512: 'public/icons/icon-512.png', maskable512: 'public/icons/maskable-512.png' },
   modules: [identity, todo, stats],
   identityProvider: 'identity.invite',
+  // Attachments: the todo items can carry a photo, shown with <sync-blob>. This is app code, so it may import the blobs package.
+  async blobs({ core, spaces }) {
+    const blobs = await createBlobs({ core, keys: spaces!.blobKeys });
+    defineSyncBlob(blobs);
+    return blobs;
+  },
   // First launch: a user and a Space to write to. Modules use `bound` Space access by default, so the app says
   // which Space each one may use on this device (a device setting that persists).
   async onReady(host, spaces) {

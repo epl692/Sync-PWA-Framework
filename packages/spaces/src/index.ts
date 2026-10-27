@@ -11,5 +11,6 @@ export * from './crypto/bytes';
 export { deviceIdFromSignPub, spaceIdFor, keyIdOf } from './crypto/ids';
 export { wrapKeys, unwrapKeys } from './crypto/wrap';
 export * from './service/api';
+export { createBlobKeys, type BlobKeys, type BlobReadKeys, type BlobWriteKeys } from './service/blobKeys';
 export * from './service/events';
 export { installSpaces, openSecureCore, assertSecureCore, type SecureCoreOptions } from './service/install';

@@ -9,8 +9,18 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': 'off',
       '@typescript-eslint/no-restricted-imports': ['error', { patterns: [
-        { group: ['@sync/core', '@sync/core/*', '@sync/spaces', '@sync/spaces/*', '@sync/identity-invite', '@sync/transport-*', '@sync/relay-server', '@sync/testkit', '@sync/app-build'], message: 'Modules get data through ModuleContext; import only types from @sync/modules.' },
+        { group: ['@sync/core', '@sync/core/*', '@sync/spaces', '@sync/spaces/*', '@sync/blobs', '@sync/blobs/*', '@sync/identity-invite', '@sync/transport-*', '@sync/relay-server', '@sync/testkit', '@sync/app-build'], message: 'Modules get data through ModuleContext; import only types from @sync/modules.' },
         { regex: '^@sync/modules$', allowTypeImports: true, message: 'Import only types from @sync/modules (the migration helpers are at @sync/modules/migrate).' },
+      ] }],
+    },
+  },
+  {
+    // Key access stays in one reviewed file (spec 004 T004): @sync/spaces values are imported only from crypto/keys.ts.
+    files: ['packages/blobs/src/**'],
+    ignores: ['packages/blobs/src/crypto/keys.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', { patterns: [
+        { regex: '^@sync/spaces', allowTypeImports: true, message: 'Only crypto/keys.ts may import @sync/spaces values; type imports are fine.' },
       ] }],
     },
   },

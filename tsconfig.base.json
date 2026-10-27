@@ -23,7 +23,9 @@
       "@sync/identity-invite": ["packages/identity-invite/src/index.ts"],
       "@sync/modules": ["packages/modules/src/index.ts"],
       "@sync/modules/migrate": ["packages/modules/src/schema/migrate.ts"],
-      "@sync/app-build": ["packages/app-build/src/index.ts"]
+      "@sync/app-build": ["packages/app-build/src/index.ts"],
+      "@sync/blobs": ["packages/blobs/src/index.ts"],
+      "@sync/blobs/ref": ["packages/blobs/src/ref.ts"]
     }
   }
 }

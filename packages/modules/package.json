@@ -12,7 +12,13 @@
   },
   "peerDependencies": {
     "@sync/core": "*",
-    "@sync/spaces": "*"
+    "@sync/spaces": "*",
+    "@sync/blobs": "*"
+  },
+  "peerDependenciesMeta": {
+    "@sync/blobs": {
+      "optional": true
+    }
   },
   "scripts": {
     "test": "vitest run",

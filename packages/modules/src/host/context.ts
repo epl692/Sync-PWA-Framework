@@ -2,7 +2,7 @@
 
 import type { JSONValue } from '@sync/core';
 import { LiveElement } from '../ui/live-element';
-import type { DataFacade, ModuleContext, SpacesFacade } from '../types';
+import type { BlobsFacade, DataFacade, ModuleContext, SpacesFacade } from '../types';
 
 export interface Logger {
   info(msg: string, extra?: unknown): void;
@@ -40,6 +40,7 @@ export function makeContext(o: {
   settings?: Record<string, JSONValue>;
   data: DataFacade;
   spaces: SpacesFacade;
+  blobs?: BlobsFacade;
   log: Logger;
 }): ModuleContext {
   const prefix = `[${o.moduleId}]`;
@@ -49,6 +50,7 @@ export function makeContext(o: {
     settings: Object.freeze({ ...(o.settings ?? {}) }),
     data: o.data,
     spaces: o.spaces,
+    ...(o.blobs ? { blobs: o.blobs } : {}),
     ui: Object.freeze({ LiveElement }),
     log: Object.freeze({
       info: (m: string, x?: unknown) => o.log.info(`${prefix} ${m}`, x),

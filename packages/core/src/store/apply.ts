@@ -12,12 +12,12 @@ import { decodeEnvelope, EnvelopeError, type DecodedEnvelope } from '../packet/e
 import { QuotaMonitor } from '../storage/quota';
 import { StorageQuotaError, type StorageAdapter } from '../storage/types';
 import { addValue } from '../sync/intervals';
-import type { CoreEvent, DataPacketEnvelope, IngestResult, PacketBody, ResolvedConfig } from '../types';
+import type { CoreEvent, DataPacketEnvelope, IngestResult, PacketBody, ResolvedConfig, SyncableObject } from '../types';
 import { ObjectCache } from './cache';
 import { canonicalString } from '../packet/canonical';
 import { mergeSnapshots, type Snapshot } from '../history/snapshot';
 import { mergeIntervals } from '../sync/intervals';
-import { joinObjects, mergeInto, type StoredObject } from './objects';
+import { joinObjects, mergeInto, toSyncable, type StoredObject } from './objects';
 import { addOutbox, newOutboxEntry } from './outbox';
 import { SummaryCache, type SummaryRecord } from './summaries';
 
@@ -88,7 +88,7 @@ export class Applier {
   private tail: Promise<unknown> = Promise.resolve();
   readonly accepted = new Emitter<Accepted>();
   /** Fires after every packet that is applied and committed, including parked packets applied later (A-8). */
-  readonly applied = new Emitter<{ env: DataPacketEnvelope; body: PacketBody; source: string }>();
+  readonly applied = new Emitter<{ env: DataPacketEnvelope; body: PacketBody; source: string; object?: SyncableObject }>();
 
   constructor(private readonly d: ApplierDeps) {}
 
@@ -473,7 +473,7 @@ export class Applier {
     }
     void d.quota.checkSoon();
     if (!reapply) this.accepted.emit({ space: env.space, id: env.id, raw, source: local ? 'local' : source, status: 'applied' });
-    this.applied.emit({ env, body, source: local ? 'local' : source });
+    this.applied.emit({ env, body, source: local ? 'local' : source, object: toSyncable(obj) });
     return { status: 'applied', id: env.id };
   }
 }

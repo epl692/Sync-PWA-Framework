@@ -20,7 +20,11 @@ export type FieldDef =
   /** Opaque JSON, replaced whole under LWW. */
   | { type: 'json'; required?: boolean; maxBytes?: number; check?: Check<JSONValue> }
   /** List of primitives, replaced whole under LWW (not a CRDT list). */
-  | { type: 'list'; of: 'string' | 'number' | 'boolean'; required?: boolean; maxItems?: number; check?: Check<JSONValue[]> };
+  | { type: 'list'; of: 'string' | 'number' | 'boolean'; required?: boolean; maxItems?: number; check?: Check<JSONValue[]> }
+  /** Spec 004: a list of attachment references. `accept` and `maxBytes` apply to every item. */
+  | { type: 'list'; of: 'blob'; required?: boolean; maxItems?: number; accept?: readonly string[]; maxBytes?: number; check?: Check<JSONValue[]> }
+  /** Spec 004: an attachment reference `{ $blob: 1, id, size, type, space, scope, keyId, name? }`, opaque JSON to migration and projection. */
+  | { type: 'blob'; required?: boolean; accept?: readonly string[]; maxBytes?: number; check?: Check<JSONValue> };
 
 /** Must be pure: no clock, no I/O, no other objects. Return a message to reject, nothing to accept. */
 export type Check<T> = (value: T) => string | undefined;
