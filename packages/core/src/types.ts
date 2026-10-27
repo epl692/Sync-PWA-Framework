@@ -39,8 +39,10 @@ export interface SyncableObject {
   type: string;
   space: SpaceId;
   schemaVersion: number;
-  /** Plain values for app use. Per-field clocks are internal. */
+  /** Plain values for app use. */
   fields: Record<string, JSONValue>;
+  /** Serialized HLC of the last write per field name. Present only when requested with `withClocks` (spec 003 C-2). */
+  clocks?: Record<string, string>;
 }
 
 export interface Query<T = SyncableObject> {
@@ -57,6 +59,8 @@ export interface QuerySpec {
   id?: ObjectId;
   /** Predicate over plain fields. Evaluated locally. */
   where?: (obj: SyncableObject) => boolean;
+  /** Include per-field clocks in the results (spec 003 C-2). Default false. */
+  withClocks?: boolean;
 }
 
 export interface Limits {
@@ -187,11 +191,22 @@ export interface SyncCore extends ExtensionRegistry {
     fields: Record<string, JSONValue>,
     opts?: { schemaVersion?: number; id?: ObjectId },
   ): Promise<SyncableObject>;
-  update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>): Promise<SyncableObject>;
+  /**
+   * `opts.schemaVersion` (spec 003 C-3): the schema version the fields are written at. Default: the version
+   * the object already has. The packet is validated against that version by every peer.
+   */
+  update(id: ObjectId, fields: Record<string, JSONValue | typeof UNSET>, opts?: { schemaVersion?: number }): Promise<SyncableObject>;
   remove(id: ObjectId): Promise<void>;
-  get(id: ObjectId): Promise<SyncableObject | undefined>;
+  get(id: ObjectId, opts?: { withClocks?: boolean }): Promise<SyncableObject | undefined>;
 
   query(spec: QuerySpec): Query;
+
+  /**
+   * Spec 003 C-1: declares type-level behavior after the core is open. Idempotent. Re-evaluates live queries.
+   * `$`-prefixed types are reserved and throw.
+   */
+  registerType(type: string, opts: { resurrects?: boolean }): void;
+  unregisterType(type: string): void;
 
   /** The single path for packets received from any source: decode, validate, merge. */
   ingest(raw: Uint8Array, source: string): Promise<IngestResult>;

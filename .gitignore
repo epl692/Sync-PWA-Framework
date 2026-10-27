@@ -8,3 +8,5 @@ Thumbs.db
 playwright-report/
 test-results/
 *.tsbuildinfo
+packages/app-build/tests/.tmp/
+packages/sample-app/dist/

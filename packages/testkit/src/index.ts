@@ -8,3 +8,4 @@ export * from './peers';
 export * from './scenarios';
 export * from './mockRtc';
 export * from './spaces';
+export * from './modules';

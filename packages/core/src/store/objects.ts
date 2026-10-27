@@ -90,10 +90,16 @@ export function isVisible(obj: StoredObject, resurrectingTypes: ReadonlySet<stri
   return resurrectingTypes.has(obj.type) && obj.deleteClock !== null && maxFieldClock(obj) > obj.deleteClock;
 }
 
-export function toSyncable(obj: StoredObject): SyncableObject {
+export function toSyncable(obj: StoredObject, withClocks = false): SyncableObject {
   const fields: Record<string, JSONValue> = {};
   for (const [name, f] of Object.entries(obj.fields)) if (!isUnset(f.value)) fields[name] = f.value;
-  return { id: obj.id, type: obj.type, space: obj.space, schemaVersion: obj.schemaVersion, fields };
+  const out: SyncableObject = { id: obj.id, type: obj.type, space: obj.space, schemaVersion: obj.schemaVersion, fields };
+  if (withClocks) {
+    // C-2: the clock of the last write per field name; fields that were unset keep theirs.
+    out.clocks = {};
+    for (const [name, f] of Object.entries(obj.fields)) out.clocks[name] = f.clock;
+  }
+  return out;
 }
 
 /**

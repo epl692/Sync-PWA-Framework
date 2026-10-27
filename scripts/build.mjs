@@ -2,7 +2,7 @@
 import { build } from 'esbuild';
 import { readdirSync, existsSync } from 'node:fs';
 
-const external = ['ws'];
+const external = ['ws', 'esbuild'];
 for (const name of readdirSync('packages')) {
   const entry = `packages/${name}/src/index.ts`;
   if (!existsSync(entry)) continue;
@@ -11,7 +11,7 @@ for (const name of readdirSync('packages')) {
     outfile: `packages/${name}/dist/index.js`,
     bundle: true,
     format: 'esm',
-    platform: name === 'relay-server' ? 'node' : 'browser',
+    platform: name === 'relay-server' || name === 'app-build' ? 'node' : 'browser',
     target: 'es2022',
     sourcemap: true,
     external,

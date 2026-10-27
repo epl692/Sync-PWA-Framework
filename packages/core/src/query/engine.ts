@@ -43,7 +43,7 @@ export class QueryEngine {
       // A-5: `$`-prefixed types are system objects; only an exact type or id query sees them.
       if (o.type.startsWith('$') && spec.type !== o.type && spec.id === undefined) continue;
       if (!isVisible(o, this.resurrecting)) continue;
-      if (spec.where && !spec.where(toSyncable(o))) continue;
+      if (spec.where && !spec.where(toSyncable(o, spec.withClocks))) continue;
       out.push(o);
     }
     out.sort((a, b) => (a.createdClock < b.createdClock ? -1 : a.createdClock > b.createdClock ? 1 : a.id < b.id ? -1 : 1));
@@ -55,7 +55,7 @@ export class QueryEngine {
   }
 
   once(spec: QuerySpec): SyncableObject[] {
-    return this.evaluate(spec).map(toSyncable);
+    return this.evaluate(spec).map((o) => toSyncable(o, spec.withClocks));
   }
 
   query(spec: QuerySpec): Query {
@@ -63,7 +63,7 @@ export class QueryEngine {
       const objs = this.evaluate(spec);
       const a: Active = { spec, cb, sig: QueryEngine.signature(objs), ids: new Set(objs.map((o) => o.id)) };
       this.active.add(a);
-      cb(objs.map(toSyncable));
+      cb(objs.map((o) => toSyncable(o, spec.withClocks)));
       return () => void this.active.delete(a);
     };
     return {
@@ -136,7 +136,19 @@ export class QueryEngine {
       if (sig === a.sig) continue;
       a.sig = sig;
       a.ids = new Set(objs.map((o) => o.id));
-      a.cb(objs.map(toSyncable));
+      a.cb(objs.map((o) => toSyncable(o, s.withClocks)));
+    }
+  }
+
+  /** Re-evaluate every live query (visibility rules changed, C-1). Emits only where the result changed. */
+  refresh(): void {
+    for (const a of [...this.active]) {
+      const objs = this.evaluate(a.spec);
+      const sig = QueryEngine.signature(objs);
+      if (sig === a.sig) continue;
+      a.sig = sig;
+      a.ids = new Set(objs.map((o) => o.id));
+      a.cb(objs.map((o) => toSyncable(o, a.spec.withClocks)));
     }
   }
 }
