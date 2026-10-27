@@ -23,7 +23,10 @@ export interface TransportCapabilities {
   ordered: boolean;
   /** True if one transport instance can reach many peers at once (server). */
   multiPeer: boolean;
-  /** Supports the optional blob hooks used by spec 004. */
+  /**
+   * Spec 004: the transport has a physically separate channel for bulk data (a hint that raises the default blob window).
+   * Blob traffic itself travels as binary lane messages over `send()` on every transport; see the lane contract.
+   */
   blobs: boolean;
 }
 
@@ -67,7 +70,10 @@ export interface Transport {
 
   on<K extends keyof TransportEvents>(event: K, handler: TransportEvents[K]): () => void;
 
-  /** Optional blob transfer hooks (spec 004). Core never calls these in spec 001. */
+  /**
+   * Reserved and unused (spec 004 decision): blob transfer uses the core's binary lane over `send()`, which every transport
+   * already supports and which `laneContract()` verifies. Kept declared so existing implementations stay valid.
+   */
   readonly blob?: {
     sendChunk(peerId: PeerId, blobId: string, index: number, bytes: Uint8Array): Promise<void>;
     onChunk(handler: (peerId: PeerId, blobId: string, index: number, bytes: Uint8Array) => void): () => void;

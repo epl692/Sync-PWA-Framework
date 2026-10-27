@@ -2,6 +2,7 @@
 
 import type { JSONValue, StorageAdapter, SyncCore } from '@sync/core';
 import type { KeyDb, Spaces } from '@sync/spaces';
+import type { Blobs } from '@sync/blobs';
 import type { ModuleDefinition, ModuleHost } from '../types';
 
 export interface AppConfig {
@@ -41,6 +42,12 @@ export interface AppConfig {
   security?: 'spaces' | 'plaintext-for-tests';
   /** Extra files copied to the output verbatim and added to the precache. */
   assets?: readonly string[];
+  /**
+   * Attachments (spec 004): called once the core is open, with the core and Spaces, and returns the engine, for example
+   * `async ({ core, spaces }) => createBlobs({ core, keys: spaces!.blobKeys })`. The factory may also define `<sync-blob>` for the app.
+   * This is app code, not module code, so `@sync/modules` never imports `@sync/blobs` at runtime. Overridden by `StartOptions.blobs`.
+   */
+  blobs?: (deps: { core: SyncCore; spaces?: Spaces }) => Promise<Blobs>;
   /** Called once after the bundled modules are active: sign up, create or select Spaces, bind Spaces to modules. Errors are reported, not fatal. */
   onReady?(host: ModuleHost, spaces: Spaces): void | Promise<void>;
   /** Extra origins for the CSP `connect-src` (transport servers). Default none: `'self'` only. */
@@ -58,6 +65,12 @@ export interface StartOptions {
   core?: SyncCore;
   spaces?: Spaces;
   now?: () => number;
+  /**
+   * Enable attachments (spec 004): called once the core is open, with the core and Spaces, and returns the engine, for
+   * example `({ core, spaces }) => createBlobs({ core, keys: spaces!.blobKeys })`. The engine is created by the app so this
+   * package never depends on `@sync/blobs` at runtime. Closed when the host stops.
+   */
+  blobs?: (deps: { core: SyncCore; spaces?: Spaces }) => Promise<Blobs>;
   /** Where Space bindings are kept. Default: IndexedDB "sync-modules" in a page, memory elsewhere. */
   bindingDb?: import('../access/bindings').BindingDb;
   /** Register the generated service worker. Default true; has no effect outside a browser. */

@@ -30,6 +30,7 @@ export default {
 | `identityProvider` | ID (`<moduleId>.<id>`) of the identity provider to use. Default: the first one a module provides. Needed before the core opens, so it comes from a bundled module or a runtime module listed with `boot: true`. |
 | `transports` | IDs of the transports to start. Modules can offer several; only these are created. |
 | `onReady(host, spaces)` | Called once after the bundled modules are active. Sign the user up, create or choose Spaces, and bind Spaces to modules here. An error is reported and does not stop the app. |
+| `blobs({ core, spaces })` | Attachments (spec 004): called once the core is open; return the engine, for example `createBlobs({ core, keys: spaces.blobKeys })`, and define `<sync-blob>` with `defineSyncBlob(blobs)`. Modules then get `ctx.blobs`. App code may import `@sync/blobs`; module code may not. See [blobs.md](blobs.md). |
 | `runtime.manifest` | Path of the runtime manifest (default `modules/manifest.json`), or `false` to switch runtime loading off. Apps with no `runtime-modules/` folder switch it off by default. |
 | `runtime.manifestTimeoutMs` | How long to wait for the manifest when online (default 2500). Bundled modules never wait for it. |
 | `runtime.activateTimeoutMs` | Per-module activation limit (default 5000). |

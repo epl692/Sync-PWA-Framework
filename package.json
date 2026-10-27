@@ -24,6 +24,8 @@
     "dev": "echo \"run dev in a specific workspace, e.g. npm run dev -w @sync/transport-webrtc\"",
     "test:adversarial": "vitest run packages/spaces/tests/adversarial",
     "test:modules": "vitest run packages/modules",
+    "test:blobs": "vitest run packages/blobs",
+    "test:blobs:adversarial": "vitest run packages/blobs/tests/adversarial",
     "test:mixed-versions": "vitest run packages/modules/tests/property/mixed-versions"
   },
   "devDependencies": {

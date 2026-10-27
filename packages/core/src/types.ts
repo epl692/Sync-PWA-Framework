@@ -4,6 +4,7 @@ import type { StorageAdapter } from './storage/types';
 import type { Transport } from './sync/transport';
 import type { CompactionPin, PacketSigner, PacketValidator, PayloadCodec, SnapshotGuard } from './extension/types';
 import type { Channel, PeerSummary } from './sync/channel';
+import type { Lane } from './sync/lane';
 import type { Snapshot } from './history/snapshot';
 
 export type ObjectId = string;
@@ -138,7 +139,10 @@ export type CoreEvent =
   | { kind: 'packet:rejected'; id: string; reason: string }
   | { kind: 'packet:parked'; id: string; reason: string }
   | { kind: 'sync:progress'; peer: string; space: SpaceId; received: number; total?: number; warning?: string }
-  | { kind: 'transport:state'; transport: string; state: string };
+  | { kind: 'transport:state'; transport: string; state: string }
+  /** A peer's hello arrived (spec 004 B-2). */
+  | { kind: 'peer:ready'; peer: PeerSummary }
+  | { kind: 'peer:gone'; peer: PeerSummary };
 
 export type IngestResult =
   | { status: 'applied'; id: string }
@@ -233,8 +237,10 @@ export interface SyncCore extends ExtensionRegistry {
 
   /** A-4: a named message channel for plugins. Messages are never stored by the core. */
   channel(name: string): Channel;
+  /** Spec 004 B-1: a binary lane for bulk data. `magic` is 0x80..0xFF. Throws if already registered. */
+  lane(magic: number): Lane;
   /** A-8: called synchronously after each packet is applied and committed (including parked packets applied later). */
-  onApplied(cb: (e: { env: DataPacketEnvelope; body: PacketBody; source: string }) => void): () => void;
+  onApplied(cb: (e: { env: DataPacketEnvelope; body: PacketBody; source: string; object?: SyncableObject }) => void): () => void;
   /** A-8: decoded applied packets of a Space (optionally only bodies whose type starts with a prefix), oldest first. */
   scanApplied(space: SpaceId, opts?: { typePrefix?: string }): Promise<Array<{ env: DataPacketEnvelope; body: PacketBody }>>;
   /** A-8: highest clock and sequence number applied per author in a Space (system objects excluded). */

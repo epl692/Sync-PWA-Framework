@@ -6,6 +6,7 @@
 
 import type { JSONValue, ObjectId, Query, QuerySpec, SpaceId, SyncCore, Transport, UNSET } from '@sync/core';
 import type { IdentityProvider, Spaces } from '@sync/spaces';
+import type { Blobs } from '@sync/blobs';
 import type { ObjectTypeDef } from './schema/types';
 
 export type { ObjectTypeDef } from './schema/types';
@@ -95,6 +96,8 @@ export interface ModuleContext {
   readonly settings: Readonly<Record<string, JSONValue>>;
   readonly data: DataFacade;
   readonly spaces: SpacesFacade;
+  /** Attachments (spec 004). Present only when the app enables blobs and the module has types to attach to. Every call is checked against the declared Spaces. */
+  readonly blobs?: BlobsFacade;
   readonly ui: { LiveElement: LiveElementConstructor };
   readonly log: { info(msg: string, extra?: unknown): void; warn(msg: string, extra?: unknown): void; error(msg: string, extra?: unknown): void };
 }
@@ -113,6 +116,9 @@ export interface DataFacade {
   undo(id: ObjectId): Promise<void>;
   history: SyncCore['history'];
 }
+
+/** The blob engine as a module sees it: same methods, checked against the declared Spaces. */
+export type BlobsFacade = Pick<Blobs, 'attach' | 'observe' | 'request' | 'open' | 'toBlob' | 'cancel' | 'pin' | 'unpin'>;
 
 export interface SpacesFacade {
   /** Space IDs this module may use for the given mode. */

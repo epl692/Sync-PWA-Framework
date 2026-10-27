@@ -57,3 +57,10 @@ Additions and clarifications found while implementing; none change the envelope.
 - **`chan`** (A-4): unknown `t` values are already ignored, so older peers drop it. Relays forward it without storing.
 - **Sealed snapshots** (A-3): when a `SnapshotGuard` is registered, `snapshot` carries `sealed` (base64url, one per part) plus `signer` and `sig` instead of `objects`. The signature covers the canonical message with `sig: null`. A receiver with a guard discards plain snapshots; a receiver without one discards sealed snapshots. Both report `packet:rejected` with a reason containing "snapshot discarded" and catch up from packets.
 - **Rejected packets** (A-2): a packet the local validators refuse after a rebuild stays in the log as `rejected`, is counted as held, and is never sent to peers.
+
+## Spec 004 additions (additive; older peers ignore them)
+
+- **`hello.lanes`** (B-1): optional `number[]` of lane magics (0x80..0xFF) the sender understands. Peers that do not know the field ignore it and are never sent lane messages.
+- **Binary lane framing**: a message whose first byte is a registered lane magic is not JSON (JSON messages begin with `{` = 0x7B). It goes to that lane's handler, never to the sync decoder or the per-peer packet queue. A lane message larger than `limits.maxMessageBytes` is dropped and reported; the connection stays open. Messages larger than a transport's `maxMessageBytes` are framed by the transport as always. The blob lane is `0xB1` (see `specs/004-blob-sync/contracts/blob-protocol.md`).
+- **Peer info** (B-2): `core.peers()` entries also carry `spaces`, `relay`, `maxMessageBytes`, `bulk`, `lanes`, and the core emits `peer:ready` / `peer:gone`.
+- **`onApplied`** (B-3): events carry the post-apply `object`.

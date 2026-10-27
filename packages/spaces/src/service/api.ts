@@ -1,6 +1,7 @@
 /** App-facing API of @sync/spaces (see specs/002-spaces-security-identity/contracts/spaces-api.ts). */
 
 import type { SyncCore, SyncableObject, JSONValue } from '@sync/core';
+import type { BlobKeys } from './blobKeys';
 import type {
   IdentityProvider,
   InviteArtifact,
@@ -60,6 +61,8 @@ export interface SpacesOptions {
 }
 
 export interface Spaces {
+  /** Spec 004 S-1: per-scope keys for blob encryption, derived so the blob engine never sees an epoch key. */
+  readonly blobKeys: BlobKeys;
   /** 'unsupported' when Web Crypto lacks Ed25519 or X25519: nothing is created and nothing falls back to plaintext. */
   readonly state: 'ready' | 'unsupported';
   session(): UserSession | undefined;

@@ -26,6 +26,8 @@ export default {
             fields: {
               title: { type: 'string', required: true, maxLength: 200 },
               done: { type: 'boolean', default: false },
+              // an optional photo; stored as a reference, the bytes sync separately and on demand
+              photo: { type: 'blob', accept: ['image/*'], maxBytes: 20 * 1024 * 1024 },
             },
           },
         ],
@@ -59,6 +61,21 @@ export default {
               const del = el('button', { text: 'Remove' });
               del.addEventListener('click', () => void ctx.data.remove(r.id));
               li.append(box, el('span', { text: String(r.fields.title ?? '') }), del);
+              if (r.fields.photo) {
+                const photo = document.createElement('sync-blob') as HTMLElement & { ref?: unknown };
+                photo.ref = r.fields.photo;
+                li.append(photo);
+              }
+              if (ctx.blobs) {
+                const pick = el('input', { type: 'file', accept: 'image/*' });
+                pick.addEventListener('change', async () => {
+                  const file = pick.files?.[0];
+                  if (!file) return;
+                  const ref = await ctx.blobs!.attach(file, { space: r.space, obj: r.id });
+                  await ctx.data.update(r.id, { photo: ref as never });
+                });
+                li.append(pick);
+              }
               list.append(li);
             }
             root.replaceChildren(el('div', {}), list);

@@ -84,6 +84,8 @@ export interface BlobsConfig {
   window?: number;
   /** Serve chunks to peers. Default true. */
   serve?: boolean;
+  /** A chunk asked of a peer and not answered within this time counts as a miss from that peer. Default 30 s. */
+  requestTimeoutMs?: number;
   now?: () => number;
 }
 
@@ -170,6 +172,8 @@ export interface StoredBlob {
   origin: 'local' | 'remote';
   replicas: string[];
   pinned: boolean;
+  /** Every chunk is present and verified. Added during implementation so offers and status need no chunk scan. */
+  complete?: boolean;
   createdAt: number;
   lastAccessAt: number;
   unreferencedAt: number | null;
@@ -188,6 +192,8 @@ export interface BlobStorage {
   /** Indexes of chunks present, ascending. */
   presentChunks(id: string): Promise<number[]>;
   deleteChunks(id: string): Promise<number>;       // bytes freed; keeps the record (eviction)
+  /** Added during implementation (T036): a finished attach renames its partial chunks to the final ID. A chunk `to` already holds is kept. */
+  moveChunks(from: string, to: string): Promise<void>;
 
   getRefs(id: string): Promise<string[]>;
   setRefs(id: string, objects: string[]): Promise<void>;

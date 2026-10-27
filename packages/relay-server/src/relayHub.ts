@@ -43,6 +43,9 @@ interface Peer {
 export class RelayHub {
   private spaces = new Map<string, SpaceStore>();
   private peers = new Map<string, Peer>();
+  /** Binary lanes (spec 004, B-1): messages whose first byte is a registered magic bypass the sync protocol. */
+  private lanes = new Map<number, (peerId: string, bytes: Uint8Array) => void>();
+  private laneGone = new Set<(peerId: string) => void>();
   private readonly o: Required<RelayHubOptions>;
 
   constructor(
@@ -68,13 +71,34 @@ export class RelayHub {
     this.send(peerId, encodeMessage(m));
   }
 
+  /** Register a lane handler (for example the blob relay). Peers that connect afterwards are told the lane exists. */
+  onLane(magic: number, handler: (peerId: string, bytes: Uint8Array) => void): void {
+    if (!Number.isInteger(magic) || magic < 0x80 || magic > 0xff) throw new RangeError(`lane magic must be 0x80..0xff, got ${magic}`);
+    this.lanes.set(magic, handler);
+  }
+  /** Called when a peer disconnects, so a lane handler can drop its state for it. */
+  onLanePeerGone(cb: (peerId: string) => void): () => void {
+    this.laneGone.add(cb);
+    return () => void this.laneGone.delete(cb);
+  }
+  /** Send raw bytes to a connected peer (a lane message). */
+  sendLane(peerId: string, bytes: Uint8Array): void {
+    if (this.peers.has(peerId)) this.send(peerId, bytes);
+  }
+  /** The Spaces a peer declared in its hello. */
+  peerSpaces(peerId: string): ReadonlySet<string> {
+    return this.peers.get(peerId)?.spaces ?? new Set();
+  }
+
   onConnect(peerId: string): void {
     this.peers.set(peerId, { spaces: new Set(), peerHeld: new Map(), dead: false });
-    this.emit(peerId, { t: 'hello', protocol: { ...PROTOCOL }, device: this.o.deviceName, spaces: [ANY_SPACE], relay: true });
+    const lanes = [...this.lanes.keys()].sort((a, b) => a - b);
+    this.emit(peerId, { t: 'hello', protocol: { ...PROTOCOL }, device: this.o.deviceName, spaces: [ANY_SPACE], relay: true, ...(lanes.length ? { lanes } : {}) });
   }
 
   onDisconnect(peerId: string): void {
     this.peers.delete(peerId);
+    for (const cb of [...this.laneGone]) cb(peerId);
   }
 
   /** Everything the hub currently stores, for audits (for example the plaintext scan, SC-002). Read-only copies. */
@@ -93,6 +117,10 @@ export class RelayHub {
   onMessage(peerId: string, bytes: Uint8Array): void {
     const peer = this.peers.get(peerId);
     if (!peer || peer.dead) return;
+    if (bytes.length > 0 && bytes[0]! >= 0x80) {
+      if (bytes.length <= this.o.maxMessageBytes) this.lanes.get(bytes[0]!)?.(peerId, bytes);
+      return; // a lane message never reaches the sync decoder
+    }
     const d = decodeMessage(bytes, this.o.maxMessageBytes);
     if (!d.ok || 'unknown' in d) return; // malformed or from the future: ignore
     const m = d.msg;

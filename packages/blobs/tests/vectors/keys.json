@@ -1,0 +1,8 @@
+{
+  "epochKey": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "scopeId": "a0a1a2a3a4a5a6a7a8a9aaabacadaeaf",
+  "keyId": "630dcd2966c43366",
+  "encKey": "7344032b43231ca9316bce057a83d799d21193494f462705292d1a9e1efcf467",
+  "macKey": "a86a36ac6e1cc246d5b0d58b9f1790f03b94947c06e454182dee98004615d81f",
+  "info": "sync-blob/1 || scopeId(16) || keyId(8), salt = 32 zero bytes, L = 64"
+}

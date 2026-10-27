@@ -119,6 +119,8 @@ docs/blobs.md                # using blobs in a module, config, relay setup, lim
 
 **Structure Decision**: A new package keeps blob logic out of the core (Principle VI) and lets apps that need no attachments ship without it. The only core change is the generic lane, which other bulk-data plugins could reuse. Storage is a separate database with its own contract so large binary data cannot interfere with packet storage, quota handling, or compaction. The relay extension lives in `relay-server` because it needs Node file access; it imports no key code.
 
+**As built:** the implementation followed this plan with the small differences, additions to the contracts, defects found and measured budgets recorded in [validation.md](./validation.md).
+
 ## Complexity Tracking
 
 | Item | Why Needed | Simpler Alternative Rejected Because |

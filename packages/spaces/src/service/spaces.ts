@@ -44,6 +44,7 @@ import {
   type SpacesOptions,
 } from './api';
 import type { SecurityEvent } from './events';
+import { createBlobKeys, type BlobKeys } from './blobKeys';
 import { createKeyAccess } from './keyAccess';
 
 const BINDING_TAG = Array.from(new TextEncoder().encode('sync-binding/'));
@@ -59,6 +60,7 @@ const maxSeq = (held: Record<string, Array<[number, number]>>, device: string): 
 
 export class SpacesService implements Spaces {
   readonly state = 'ready' as const;
+  blobKeys!: BlobKeys;
   private readonly core: SyncCore;
   private readonly keystore: Keystore;
   private readonly provider: IdentityProvider;
@@ -95,6 +97,7 @@ export class SpacesService implements Spaces {
       rotationGate: (scope) => this.rotating.get(scope),
       onKeyWornOut: (scope) => this.enqueue(() => this.rotateScope(scope, 'key-exhausted')),
     });
+    this.blobKeys = createBlobKeys({ keystore: this.keystore, keys });
     this.hub.onControl = (c) => this.onControl(c);
     this.hub.onGrant = (space, ev, local) => {
       if (!local) this.enqueue(() => this.handleGrant(space, ev));

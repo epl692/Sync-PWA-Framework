@@ -167,6 +167,13 @@ versions: [
 Rules the lint enforces: a field name keeps one type forever (a different shape needs a new name), version 2 and later
 need `up`, and need `down` or `breaking: true` (when a change cannot be shown to older peers).
 
+## 6b. Attachments
+
+A field of type `blob` holds a reference to a photo or file; the bytes are encrypted, synced separately and fetched on
+request. Declare it (`photo: { type: 'blob', accept: ['image/*'] }`), attach with `ctx.blobs.attach(file, { space, obj })`
+(works offline), store the returned reference in the field, and show it with `<sync-blob>`. `ctx.blobs` exists when the app
+enables attachments. Details, limits and configuration: [blobs.md](blobs.md).
+
 ## 7. Shipping it without rebuilding the app
 
 Put the module under `packages/sample-app/runtime-modules/recipes/index.ts` instead (same file, no value imports from

@@ -5,7 +5,8 @@
 
 import type { Emitter } from '../events';
 import type { Extensions } from '../extension/registry';
-import type { ChannelHub } from './channel';
+import type { ChannelHub, PeerSummary } from './channel';
+import type { LaneRegistry } from './lane';
 import { b64urlDecode, b64urlEncode, canonicalBytes } from '../packet/canonical';
 import type { Snapshot } from '../history/snapshot';
 import type { Applier, PacketRecord } from '../store/apply';
@@ -27,6 +28,7 @@ export interface SyncEnv {
   deviceId: string;
   ext: Extensions;
   channels: ChannelHub;
+  lanes: LaneRegistry;
   spaces(): Promise<string[]>;
   relayFor(space: string): boolean;
 }
@@ -38,6 +40,9 @@ export class PeerSession {
   private inbox: Promise<void> = Promise.resolve();
   private dead = false;
   private peerSpaces: string[] | undefined;
+  private peerRelay = false;
+  private peerLanes: number[] = [];
+  private ready = false;
   private shared = new Set<string>();
   private summarised = new Set<string>();
   private peerHeld = new Map<string, Held>();
@@ -59,6 +64,49 @@ export class PeerSession {
 
   close(): void {
     this.dead = true;
+    if (this.ready) {
+      this.ready = false;
+      this.env.lanes.peerGone(this.key);
+      this.env.events.emit({ kind: 'peer:gone', peer: this.summary() });
+    }
+  }
+
+  summary(): PeerSummary {
+    return {
+      key: this.key,
+      transport: this.transport.id,
+      peerId: this.peer.id,
+      label: this.peer.label,
+      spaces: [...(this.peerSpaces ?? [])],
+      relay: this.peerRelay,
+      maxMessageBytes: this.transport.capabilities.maxMessageBytes,
+      bulk: this.transport.capabilities.blobs,
+      lanes: [...this.peerLanes],
+    };
+  }
+
+  /** B-1: a lane message from this peer. Never touches the JSON decoder or the packet queue. */
+  onLane(bytes: Uint8Array): void {
+    // Deliver after everything this peer sent before (its hello, which names its lanes), without joining the queue:
+    // later sync messages never wait for the lane handler.
+    void this.inbox.then(() => this.deliverLane(bytes));
+  }
+
+  private deliverLane(bytes: Uint8Array): void {
+    if (this.dead) return;
+    if (bytes.byteLength > this.env.cfg.limits.maxMessageBytes) {
+      this.env.events.emit({ kind: 'packet:rejected', id: '', reason: `${this.key}: lane message too large` });
+      return;
+    }
+    if (!this.env.lanes.dispatch(bytes[0]!, this.key, bytes)) {
+      this.env.events.emit({ kind: 'packet:rejected', id: '', reason: `${this.key}: no lane registered for 0x${bytes[0]!.toString(16)}` });
+    }
+  }
+
+  /** B-1: write straight to the transport, outside the packet queue. Rejects if the peer is gone. */
+  async sendRaw(bytes: Uint8Array): Promise<void> {
+    if (this.dead) throw new Error(`peer ${this.key} is not connected`);
+    await this.transport.send(this.peer.id, bytes);
   }
 
   /** A-4: send a plugin channel message to this peer. */
@@ -114,6 +162,7 @@ export class PeerSession {
       device: this.env.deviceId,
       spaces: await this.env.spaces(),
       relay: true,
+      ...(this.env.lanes.magics().length ? { lanes: this.env.lanes.magics() } : {}),
     });
   }
 
@@ -177,6 +226,13 @@ export class PeerSession {
       return;
     }
     this.peerSpaces = m.spaces;
+    this.peerRelay = m.relay;
+    this.peerLanes = m.lanes ?? [];
+    this.env.lanes.peerHello(this.summary());
+    if (!this.ready) {
+      this.ready = true;
+      this.env.events.emit({ kind: 'peer:ready', peer: this.summary() });
+    }
     await this.syncSharedSpaces();
   }
 

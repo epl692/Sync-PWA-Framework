@@ -13,7 +13,8 @@
     "@sync/core": "*",
     "@sync/spaces": "*",
     "@sync/relay-server": "*",
-    "@sync/modules": "*"
+    "@sync/modules": "*",
+    "@sync/blobs": "*"
   },
   "scripts": {
     "test": "vitest run",

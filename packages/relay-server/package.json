@@ -10,6 +10,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@sync/blobs": "*",
     "@sync/core": "*",
     "ws": "^8.18.0"
   },

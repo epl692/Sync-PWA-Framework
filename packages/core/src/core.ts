@@ -33,6 +33,7 @@ import {
 } from './types';
 import type { CompactionPin, PacketSigner, PacketValidator, PayloadCodec, SnapshotGuard } from './extension/types';
 import { ChannelHub, type Channel, type PeerSummary } from './sync/channel';
+import { LaneRegistry, type Lane } from './sync/lane';
 
 class CoreImpl implements SyncCore {
   constructor(
@@ -47,6 +48,7 @@ class CoreImpl implements SyncCore {
       events: Emitter<CoreEvent>;
       manager: TransportManager;
       channels: ChannelHub;
+      lanes: LaneRegistry;
       history: History;
       summaries: SummaryCache;
       stopTimers: () => void;
@@ -72,7 +74,7 @@ class CoreImpl implements SyncCore {
   rebuildSpace(space: SpaceId): Promise<{ reapplied: number; rejected: number }> {
     return this.parts.applier.rebuildSpace(space);
   }
-  onApplied(cb: (e: { env: DataPacketEnvelope; body: PacketBody; source: string }) => void): () => void {
+  onApplied(cb: (e: { env: DataPacketEnvelope; body: PacketBody; source: string; object?: SyncableObject }) => void): () => void {
     return this.parts.applier.applied.on(cb);
   }
   scanApplied(space: SpaceId, opts?: { typePrefix?: string }) {
@@ -90,6 +92,9 @@ class CoreImpl implements SyncCore {
   }
   channel(name: string): Channel {
     return this.parts.channels.channel(name);
+  }
+  lane(magic: number): Lane {
+    return this.parts.lanes.lane(magic);
   }
   peers(): PeerSummary[] {
     return this.parts.manager.peers();
@@ -231,6 +236,7 @@ export async function createSyncCore(config: Config): Promise<SyncCore> {
   });
   const writer = new LocalWriter({ applier, ext, cfg, hlc, cache, quota, getState: () => state });
   const channels = new ChannelHub();
+  const lanes = new LaneRegistry();
   const knownSpaces = async (): Promise<string[]> => {
     const s = new Set<string>(cfg.spaces);
     await cfg.storage.transaction(['summary'], 'readonly', async (tx) => {
@@ -240,7 +246,7 @@ export async function createSyncCore(config: Config): Promise<SyncCore> {
     return [...s].sort();
   };
   const relayFor = (space: string) => (typeof cfg.relay === 'boolean' ? cfg.relay : (cfg.relay[space] ?? true));
-  const env: SyncEnv = { storage: cfg.storage, summaries, applier, cfg, events, deviceId: state.deviceId, ext, channels, spaces: knownSpaces, relayFor };
+  const env: SyncEnv = { storage: cfg.storage, summaries, applier, cfg, events, deviceId: state.deviceId, ext, channels, lanes, spaces: knownSpaces, relayFor };
   const manager = new TransportManager(env);
   manager.markKnown(await knownSpaces());
   applier.accepted.on((a) => manager.onAccepted(a));
@@ -266,5 +272,5 @@ export async function createSyncCore(config: Config): Promise<SyncCore> {
     timers.push(first, every);
   }
   const stopTimers = () => timers.forEach((t) => clearTimeout(t));
-  return new CoreImpl(state.deviceId, { cfg, ext, cache, queries, applier, writer, events, manager, channels, history, summaries, stopTimers });
+  return new CoreImpl(state.deviceId, { cfg, ext, cache, queries, applier, writer, events, manager, channels, lanes, history, summaries, stopTimers });
 }

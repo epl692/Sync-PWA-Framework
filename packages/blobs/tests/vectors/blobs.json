@@ -1,0 +1,65 @@
+{
+  "chunkBytes": 262144,
+  "cases": [
+    {
+      "name": "size-1",
+      "size": 1,
+      "pattern": "plain[i] = (i * 7 + 3) & 0xff",
+      "chunks": [
+        {
+          "index": 0,
+          "plainLength": 1,
+          "nonce": "a2e777093ded068c0cf8e1ed",
+          "storedLength": 29,
+          "storedSha256": "0ce739e1d3c6ccab8235070ce8eb91722a25c49e8d0b2f3fa0ae417a1c18f2ec",
+          "storedPrefix": "a2e777093ded068c0cf8e1ed8b2e1b88213b49d7ae8573438560c9b8f2",
+          "stored": "a2e777093ded068c0cf8e1ed8b2e1b88213b49d7ae8573438560c9b8f2"
+        }
+      ],
+      "manifest": "01a0a1a2a3a4a5a6a7a8a9aaabacadaeaf630dcd2966c43366000000000000000100040000000000010ce739e1d3c6ccab8235070ce8eb91722a25c49e8d0b2f3fa0ae417a1c18f2ec",
+      "id": "LMc2_O2VIV_rkD8M03Ur1_U2gZGAukg0zF3soXTJUX0"
+    },
+    {
+      "name": "size-262144",
+      "size": 262144,
+      "pattern": "plain[i] = (i * 7 + 3) & 0xff",
+      "chunks": [
+        {
+          "index": 0,
+          "plainLength": 262144,
+          "nonce": "c4a6aee033939f31e67cde94",
+          "storedLength": 262172,
+          "storedSha256": "ae6b1a0f5581c5e4c99992bb712d9df4d25cab6203a11e114071f9378e1c6fec",
+          "storedPrefix": "c4a6aee033939f31e67cde9458604cbb60107ce74ecdcb2fc105f86492244567b67bf5b48aa10ebfbe5863fce87ba7ea"
+        }
+      ],
+      "manifest": "01a0a1a2a3a4a5a6a7a8a9aaabacadaeaf630dcd2966c4336600000000000400000004000000000001ae6b1a0f5581c5e4c99992bb712d9df4d25cab6203a11e114071f9378e1c6fec",
+      "id": "TfUz8cCd5XisRiyEr-xzvE9m9MHMCmRDvlWE8LwNEuE"
+    },
+    {
+      "name": "size-262145",
+      "size": 262145,
+      "pattern": "plain[i] = (i * 7 + 3) & 0xff",
+      "chunks": [
+        {
+          "index": 0,
+          "plainLength": 262144,
+          "nonce": "c4a6aee033939f31e67cde94",
+          "storedLength": 262172,
+          "storedSha256": "f66b321427ca88e2fb5d02fe0d769c77440304c42c1fcff0fa8a8cc8315b7fbc",
+          "storedPrefix": "c4a6aee033939f31e67cde9458604cbb60107ce74ecdcb2fc105f86492244567b67bf5b48aa10ebfbe5863fce87ba7ea"
+        },
+        {
+          "index": 1,
+          "plainLength": 1,
+          "nonce": "70a270b5cb2c79703bbb02ba",
+          "storedLength": 29,
+          "storedSha256": "22f8557cbbc7407bdd3560726d7b02b892ab32b205ec9ea241556881e265860f",
+          "storedPrefix": "70a270b5cb2c79703bbb02ba5b355c7bb772fa03e1d5804bd19fdf3960"
+        }
+      ],
+      "manifest": "01a0a1a2a3a4a5a6a7a8a9aaabacadaeaf630dcd2966c4336600000000000400010004000000000002f66b321427ca88e2fb5d02fe0d769c77440304c42c1fcff0fa8a8cc8315b7fbc22f8557cbbc7407bdd3560726d7b02b892ab32b205ec9ea241556881e265860f",
+      "id": "3zPwSRhOQWS-f4mBNC93To96onNBHn1V7-eje85j4PQ"
+    }
+  ]
+}

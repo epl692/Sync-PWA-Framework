@@ -16,6 +16,6 @@ export default defineConfig({
   },
   webServer: [
     { command: 'node scripts/e2e-server.mjs', port: 4173, reuseExistingServer: true },
-    { command: 'npx tsx packages/relay-server/src/server.ts', port: 8787, reuseExistingServer: true, env: { PORT: '8787' } },
+    { command: 'npx tsx packages/relay-server/src/server.ts', port: 8787, reuseExistingServer: true, env: { PORT: '8787', BLOB_DIR: 'test-results/blob-relay' } },
   ],
 });

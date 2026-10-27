@@ -12,6 +12,12 @@ function unsupported(reason: string): Spaces {
   };
   return {
     state: 'unsupported',
+    blobKeys: {
+      scopeFor: () => fail(),
+      forWrite: async () => fail(),
+      forRead: async () => fail(),
+      onKeysChanged: () => () => undefined,
+    },
     session: () => undefined,
     signUp: async () => fail(),
     create: async () => fail(),

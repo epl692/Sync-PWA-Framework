@@ -27,6 +27,12 @@ export class TransportManager {
       return all.length;
     };
     env.channels.onRoutesChanged = () => this.sessions().forEach((s) => s.announce());
+    env.lanes.listPeers = () => this.peers();
+    env.lanes.sendRaw = (peerKey, bytes) => {
+      const s = this.session(peerKey);
+      return s ? s.sendRaw(bytes) : Promise.reject(new Error(`peer ${peerKey} is not connected`));
+    };
+    env.lanes.onChange = () => this.sessions().forEach((s) => s.announce());
   }
 
   private sessions(): PeerSession[] {
@@ -38,7 +44,7 @@ export class TransportManager {
   }
 
   peers(): PeerSummary[] {
-    return this.sessions().map((s) => ({ key: s.key, transport: s.key.slice(0, s.key.length - s.peer.id.length - 1), peerId: s.peer.id, label: s.peer.label }));
+    return this.sessions().map((s) => s.summary());
   }
 
   add(transport: Transport): void {
@@ -59,7 +65,13 @@ export class TransportManager {
         entry.sessions.get(peerId)?.close();
         entry.sessions.delete(peerId);
       }),
-      transport.on('message', (peerId, bytes) => entry.sessions.get(peerId)?.onMessage(bytes)),
+      transport.on('message', (peerId, bytes) => {
+        const s = entry.sessions.get(peerId);
+        if (!s) return;
+        // Lane messages (first byte >= 0x80, never JSON) bypass the sync decoder and the packet queue.
+        if (bytes.length > 0 && bytes[0]! >= 0x80) s.onLane(bytes);
+        else s.onMessage(bytes);
+      }),
       transport.on('error', (err) => this.env.events.emit({ kind: 'packet:rejected', id: '', reason: `${transport.id}: ${err.code}: ${err.message}` })),
     );
 

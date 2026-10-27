@@ -2,7 +2,9 @@
 
 import type { JSONValue, SpaceId, SyncCore } from '@sync/core';
 import type { Spaces } from '@sync/spaces';
+import type { Blobs } from '@sync/blobs';
 import { Bindings } from '../access/bindings';
+import { createBlobsFacade } from '../access/blobs';
 import { createFacade } from '../access/facade';
 import { createGuard } from '../access/guard';
 import { normalizeAccess } from '../definition/access';
@@ -19,6 +21,8 @@ import { resolveModules, type Known, type ResolveEntry } from './resolve';
 export interface HostOptions {
   core: SyncCore;
   spaces?: Spaces;
+  /** The blob engine (spec 004). Modules reach it only through `ctx.blobs`, checked against their declared Spaces. */
+  blobs?: Blobs;
   entries: readonly ResolveEntry[];
   settings?: Record<string, Record<string, JSONValue>>;
   /** Transports to create, as `<moduleId>.<id>`. Others declared by modules are ignored. */
@@ -126,13 +130,17 @@ export function createHost(o: HostOptions): Host {
   };
 
   const contextFor = (def: ModuleDefinition): ModuleContext => {
-    const guard = createGuard({ moduleId: def.id, access: normalizeAccess(def), bindings, emit: state.emit });
+    const access = normalizeAccess(def);
+    const guard = createGuard({ moduleId: def.id, access, bindings, emit: state.emit });
+    // a module with no type to read or write has nothing to attach to
+    const hasData = access.types.read.length > 0 || access.types.write.length > 0;
     const ctx = makeContext({
       moduleId: def.id,
       version: def.version,
       settings: o.settings?.[def.id],
       data: createFacade({ core, registry, moduleId: def.id, emit: state.emit, guard }),
       spaces: spacesFacade(def),
+      blobs: o.blobs && hasData ? createBlobsFacade(o.blobs, guard) : undefined,
       log,
     });
     contexts.set(def.id, ctx);

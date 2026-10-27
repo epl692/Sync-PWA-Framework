@@ -40,6 +40,13 @@ export type SecurityEvent =
   | { kind: 'security:unsupported'; reason: string };
 
 export interface SpacesConfig {
+  /** Spec 004 S-1: per-scope keys for blob encryption, derived so the blob engine never sees an epoch key. See specs/004-blob-sync/contracts/amendments.md. */
+  readonly blobKeys: {
+    scopeFor(space: string, obj: string): string;
+    forWrite(scope: string): Promise<{ scopeId: Uint8Array; epoch: number; keyId: string; enc: CryptoKey; mac: CryptoKey } | undefined>;
+    forRead(scope: string, keyId: string): Promise<{ scopeId: Uint8Array; enc: CryptoKey; mac: CryptoKey } | undefined>;
+    onKeysChanged(handler: (scope: string) => void): () => void;
+  };
   core: SyncCore;
   provider: IdentityProvider;
   /** IndexedDB name for keys. Default "sync-keys". */
