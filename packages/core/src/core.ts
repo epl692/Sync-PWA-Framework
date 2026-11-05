@@ -11,6 +11,7 @@ import { ObjectCache } from './store/cache';
 import { stateHash } from './store/hash';
 import { isVisible, toSyncable } from './store/objects';
 import { SummaryCache } from './store/summaries';
+import { listOutbox } from './store/outbox';
 import { LocalWriter } from './store/write';
 import { TransportManager } from './sync/manager';
 import type { SyncEnv } from './sync/session';
@@ -98,6 +99,10 @@ class CoreImpl implements SyncCore {
   }
   peers(): PeerSummary[] {
     return this.parts.manager.peers();
+  }
+  async unconfirmed(): Promise<{ count: number; oldestAt?: number }> {
+    const list = await listOutbox(this.parts.cfg.storage);
+    return { count: list.length, ...(list.length ? { oldestAt: Math.min(...list.map((e) => e.createdAt)) } : {}) };
   }
   revalidate(opts?: { space?: string }): Promise<{ applied: number; stillParked: number }> {
     return this.parts.applier.revalidate(opts);
