@@ -1,7 +1,7 @@
 /** App Config and start options (specs/003-modules-app-assembly/contracts/app-config.ts). Build-only fields live in @sync/app-build. */
 
 import type { JSONValue, StorageAdapter, SyncCore } from '@sync/core';
-import type { KeyDb, Spaces } from '@sync/spaces';
+import type { KeyDb, SecureCoreOptions, Spaces } from '@sync/spaces';
 import type { Blobs } from '@sync/blobs';
 import type { ModuleDefinition, ModuleHost } from '../types';
 
@@ -48,6 +48,12 @@ export interface AppConfig {
    * This is app code, not module code, so `@sync/modules` never imports `@sync/blobs` at runtime. Overridden by `StartOptions.blobs`.
    */
   blobs?: (deps: { core: SyncCore; spaces?: Spaces }) => Promise<Blobs>;
+  /**
+   * Human approval of a new member (invite with approval 'required') or a new device of the same user. Passed to
+   * openSecureCore. Without them the Spaces defaults apply: both are REFUSED, so such invites and links cannot complete.
+   */
+  approveJoin?: SecureCoreOptions['approveJoin'];
+  approveLink?: SecureCoreOptions['approveLink'];
   /** Called once after the bundled modules are active: sign up, create or select Spaces, bind Spaces to modules. Errors are reported, not fatal. */
   onReady?(host: ModuleHost, spaces: Spaces): void | Promise<void>;
   /** Extra origins for the CSP `connect-src` (transport servers). Default none: `'self'` only. */

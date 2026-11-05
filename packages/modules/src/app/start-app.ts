@@ -52,7 +52,7 @@ export async function startApp(config: AppConfig, options: StartOptions = {}): P
   } else {
     const provider = await createProvider(config, resolved.order);
     const storage = options.storage ?? (await createIndexedDbStorage());
-    ({ core, spaces } = await openSecureCore({ provider, keyDb: options.keyDb, now: options.now, core: { storage, now: options.now } }));
+    ({ core, spaces } = await openSecureCore({ provider, keyDb: options.keyDb, now: options.now, approveJoin: config.approveJoin, approveLink: config.approveLink, core: { storage, now: options.now } }));
   }
   if (config.security !== 'plaintext-for-tests') assertSecureCore(core);
   const blobsFactory = options.blobs ?? config.blobs;
