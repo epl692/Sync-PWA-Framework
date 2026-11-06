@@ -251,6 +251,11 @@ export interface SyncCore extends ExtensionRegistry {
   codecs(): { default?: string; ids: string[] };
   /** Currently connected peers across all transports. */
   peers(): PeerSummary[];
+  /**
+   * Changes written on this device that peers have not confirmed yet (the outbox): what a "syncing (n)" indicator counts. A packet leaves
+   * the count once `confirmThreshold` peers (a relay counts) have acknowledged it. Zero means everything this device wrote is safe elsewhere.
+   */
+  unconfirmed(): Promise<{ count: number; oldestAt?: number }>;
 
   stateHash(space: SpaceId): Promise<string>;
   on(cb: (e: CoreEvent) => void): () => void;
