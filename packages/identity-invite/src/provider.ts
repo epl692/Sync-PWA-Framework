@@ -361,7 +361,10 @@ export function createInviteProvider(opts: InviteProviderOptions = {}): Identity
     async beginLink(session: UserSession) {
       const d = me();
       const nonce = b64urlEncode(host.random(16));
-      const code = `sync-link:${b64urlEncode(json({ v: 1, n: nonce, user: session.user, d: d.deviceId, sp: b64urlEncode(d.signPub), ap: b64urlEncode(d.agreePub) }))}`;
+      // A Space this device holds. The new device has no Spaces yet, and a relay only forwards messages from a device that has
+      // announced one, so it announces this one (`r`) before it sends its offer. Absent on codes made by older versions.
+      const r = await host.routeSpace?.();
+      const code = `sync-link:${b64urlEncode(json({ v: 1, n: nonce, user: session.user, d: d.deviceId, sp: b64urlEncode(d.signPub), ap: b64urlEncode(d.agreePub), ...(r ? { r } : {}) }))}`;
       const done = new Promise<{ device: string }>((resolve, reject) => {
         const timer = setTimeout(() => {
           openLinks.delete(nonce);
@@ -429,6 +432,7 @@ export function createInviteProvider(opts: InviteProviderOptions = {}): Identity
       const d = me();
       o?.onSas?.(await sasOf(d.signPub, existingSign)); // the same words the existing device shows for approval
       const waitFor = expect(c.n, o?.timeoutMs ?? 30_000);
+      if (typeof c.r === 'string') host.channel.setRoutes([c.r]); // so a relay will carry our offer to the existing device
       const sealed = await sealTo(
         b64urlDecode(c.ap),
         json({ kind: 'link-offer', nonce: c.n, device: wireDevice(meta(d)) }),

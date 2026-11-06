@@ -665,6 +665,7 @@ export class SpacesService implements Spaces {
       secrets: { get: (id) => this.keystore.getInvite(id), put: (id, v) => this.keystore.putInvite(id, v) },
       store: { get: (k) => this.keystore.getLocal(k), put: (k, v) => this.keystore.putLocal(k, v) },
       approveLink: async (device, sas) => (await this.d.approveLink?.(device, sas)) ?? false,
+      routeSpace: async () => (await this.list())[0]?.id,
       approve: async (req: JoinRequestView) => {
         this.events.emit({ kind: 'join:request', req });
         return (await this.d.approveJoin?.(req)) ?? false;

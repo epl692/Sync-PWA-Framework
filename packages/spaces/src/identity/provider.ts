@@ -142,6 +142,8 @@ export interface ProviderHost {
   approve(req: JoinRequestView): Promise<boolean>;
   /** Ask whether a new device may be linked to this user (shown with a short authentication string). */
   approveLink(device: DevicePublic, sas: string): Promise<boolean>;
+  /** A Space this device holds, put in the device link code so the new device can announce it to a relay. */
+  routeSpace?(): Promise<string | undefined>;
 
   // Owner side
   registerInvite(spec: {
