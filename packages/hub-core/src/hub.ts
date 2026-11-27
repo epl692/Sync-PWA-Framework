@@ -3,12 +3,14 @@
  * packets, a persistent store, the Bluetooth link server, and the owner's control surface. It never holds a content key.
  */
 
+import type { Transport } from '@sync/core';
 import { LinkServer, type PeerHandle, type Timers } from './link/server';
 import type { EnforceResult } from './store/types';
 import { applyServeCode, parseServeCode, pruneExpiredKeys, ServeCodeError } from './access/codes';
 import { claimAutoSpace } from './access/autoSpaces';
 import { ClientRegistry } from './clients';
 import { Retention } from './retention';
+import { HubToHub } from './hubToHub';
 import type { BleBridge } from './bridge';
 import { loadOrCreateHubIdentity, type HubIdentity } from './identity';
 import { RelayHub, type RelayHubOptions } from './relay/relayHub';
@@ -35,6 +37,13 @@ export interface Hub extends HubControl {
   /** The relay, for tests and for attaching other transports (spec 005 US4). */
   readonly relay: RelayHub;
   readonly link: LinkServer;
+  /**
+   * Attach another transport (WebSocket to a relay server, for example). Its peers sync through the same relay as Bluetooth clients,
+   * for the Spaces this Hub serves only, and packets pass between the two worlds without loops. Returns a function that detaches it.
+   */
+  attachTransport(t: Transport): Promise<() => void>;
+  /** Linking to other Hubs over Bluetooth (needs a link code for a Space). */
+  readonly hubs: HubToHub;
   readonly identity: HubIdentity;
   /** Apply retention and the storage limit right now (it also runs at start, hourly, and after packets arrive). */
   enforceNow(): Promise<EnforceResult>;
@@ -82,12 +91,21 @@ export async function createHub(o: HubOptions): Promise<Hub> {
   let retention: Retention;
   const pendingDelivered = new Map<SpaceId, Set<string>>();
   let deliveredFlush: unknown;
+  // eslint-disable-next-line prefer-const
+  let hubs: HubToHub;
+  const others = new Map<string, Transport>();
+  const sendOther = (peerId: string, bytes: Uint8Array): Promise<void> => {
+    const [, tid, ...rest] = peerId.split(':');
+    const t = others.get(tid!);
+    return t ? t.send(rest.join(':'), bytes) : Promise.reject(new Error('no such transport'));
+  };
   const relay = new RelayHub(
-    (peerId, bytes) => void link.send(peerId, bytes).catch(() => undefined),
+    (peerId, bytes) => void (peerId.startsWith('h:') ? hubs.send(peerId, bytes) : peerId.startsWith('t:') ? sendOther(peerId, bytes) : link.send(peerId, bytes)).catch(() => undefined),
     {
       ...(o.relay ?? {}),
       deviceName: settings.displayName,
-      admit: (peerId, space) => peerSpaces.get(peerId)?.has(space) === true,
+      // clients and linked Hubs may use the Spaces they proved; peers of an attached transport may use any Space this Hub serves
+      admit: (peerId, space) => (peerId.startsWith('t:') ? records.has(space) : peerSpaces.get(peerId)?.has(space) === true),
       onStore: (space, id, raw) => {
         const used = bytesPerSpace.get(space) ?? 0;
         // an automatically added Space may not use more than its share of the storage (spec FR-031)
@@ -148,6 +166,16 @@ export async function createHub(o: HubOptions): Promise<Hub> {
     onCore: (peer, bytes) => relay.onMessage(peer.id, bytes),
   });
 
+  hubs = new HubToHub({
+    bridge: o.bridge,
+    identity,
+    settings: () => settings,
+    records: () => records.values(),
+    relay,
+    now,
+    setPeerSpaces: (peerId, spaces) => (spaces ? peerSpaces.set(peerId, spaces) : peerSpaces.delete(peerId)),
+    onLinked: (fingerprint, spaces) => emit({ type: 'hub-linked', fingerprint, spaces }),
+  });
   retention = new Retention({
     store,
     relay,
@@ -200,6 +228,7 @@ export async function createHub(o: HubOptions): Promise<Hub> {
   const hub: Hub = {
     relay,
     link,
+    hubs,
     identity,
     fingerprint: identity.fingerprintText,
 
@@ -208,10 +237,27 @@ export async function createHub(o: HubOptions): Promise<Hub> {
       await retention.run().catch(() => undefined);
       retention.start();
       await link.start();
+      void hubs.start().catch(() => undefined);
     },
     enforceNow: () => retention.run(),
+    async attachTransport(t) {
+      others.set(t.id, t);
+      const pid = (id: string) => `t:${t.id}:${id}`;
+      const offs = [
+        t.on('peerConnected', (p) => relay.onConnect(pid(p.id))),
+        t.on('peerDisconnected', (id) => relay.onDisconnect(pid(id))),
+        t.on('message', (id, bytes) => relay.onMessage(pid(id), bytes)),
+      ];
+      await t.start();
+      return () => {
+        for (const off of offs) off();
+        others.delete(t.id);
+        void t.stop();
+      };
+    },
     async stop() {
       retention.stop();
+      await hubs.stop().catch(() => undefined);
       await link.stop();
       await store.close();
     },

@@ -191,12 +191,68 @@ export class HubAccess extends HubElement {
   }
 }
 
+const fmtBytes = (n: number): string => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)} GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} bytes`);
+
+/** `<hub-storage>`: what the Hub has stored, how long it keeps it, and warnings when space runs short. */
+export class HubStorage extends HubElement {
+  private usage: { usedBytes: number; limitBytes: number; perSpace: Record<string, number>; oldestPacketAt?: number } | undefined;
+  private warning = '';
+  private error = '';
+
+  protected override onEvent(e: HubEvent): void {
+    if (e.type === 'storage-warning') {
+      this.warning = e.level === 'evicting-undelivered' ? 'Storage is full: the Hub is deleting changes that no other device has received yet. Free up space or raise the limit.' : 'Storage is nearly full.';
+    }
+    void this.refresh();
+  }
+
+  async refresh(): Promise<void> {
+    if (!this.hub) return;
+    this.usage = await this.hub.storage();
+    this.render();
+  }
+
+  override connectedCallback(): void {
+    void this.refresh();
+  }
+
+  async save(patch: { retentionDays?: number; storageLimitBytes?: number }): Promise<void> {
+    try {
+      this.error = '';
+      await this.hub?.updateSettings(patch);
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : 'That value is not allowed.';
+    }
+    await this.refresh();
+  }
+
+  protected render(): void {
+    const h = this.hub;
+    if (!h) return void (this.innerHTML = '');
+    const s = h.settings();
+    const u = this.usage;
+    const names = new Map(h.spaces().map((x) => [x.space, x.name ?? x.space]));
+    const rows = u ? Object.entries(u.perSpace).map(([sp, n]) => `<li data-space="${esc(sp)}">${esc(names.get(sp) ?? sp)}: ${fmtBytes(n)}</li>`).join('') : '';
+    this.innerHTML = `<section aria-labelledby="hst-h"><h2 id="hst-h">Storage</h2>
+      ${this.warning ? `<p class="st-warning" role="alert">${esc(this.warning)}</p>` : ''}
+      <p class="st-used">${u ? `${fmtBytes(u.usedBytes)} of ${fmtBytes(u.limitBytes)} used` : 'Counting…'}${u?.oldestPacketAt ? `. Oldest change: ${new Date(u.oldestPacketAt).toISOString().slice(0, 10)}` : ''}</p>
+      ${rows ? `<ul class="st-spaces">${rows}</ul>` : ''}
+      <label>Keep changes for <input type="number" name="days" min="1" max="365" value="${s.retentionDays}"> days</label>
+      <label>Storage limit (MB) <input type="number" name="limit" min="1" value="${Math.round(s.storageLimitBytes / 1024 ** 2)}"></label>
+      ${this.error ? `<p class="st-error" role="alert">${esc(this.error)}</p>` : ''}
+    </section>`;
+    this.querySelector('input[name="days"]')?.addEventListener('change', (e) => void this.save({ retentionDays: Number((e.target as HTMLInputElement).value) }));
+    this.querySelector('input[name="limit"]')?.addEventListener('change', (e) => void this.save({ storageLimitBytes: Math.round(Number((e.target as HTMLInputElement).value) * 1024 ** 2) }));
+  }
+}
+
 export function defineHubUi(): void {
   for (const [tag, ctor] of [
     ['hub-status', HubStatus],
     ['hub-spaces', HubSpaces],
     ['hub-clients', HubClients],
     ['hub-access', HubAccess],
+    ['hub-storage', HubStorage],
   ] as const) {
     if (!customElements.get(tag)) customElements.define(tag, ctor as unknown as CustomElementConstructor);
   }

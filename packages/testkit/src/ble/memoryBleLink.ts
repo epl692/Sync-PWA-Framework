@@ -42,6 +42,8 @@ export interface PeripheralEndpoint {
 }
 
 export interface PeripheralHandle {
+  /** What a central uses to connect to this peripheral. */
+  readonly address: string;
   setAdvertising(adv: Advertising | null): void;
   /** Rejects with `code: 'frame-too-large'` above `mtu - 3`, or `'not-connected'`. */
   notify(connId: string, frame: Uint8Array): Promise<void>;
@@ -242,6 +244,7 @@ export class MemoryBleLink {
   private readonly conns = new Set<Conn>();
   private readonly adapters = new Set<Adapter>();
   private readonly powerListeners = new Set<(on: boolean) => void>();
+  private readonly advListeners = new Set<(a: { address: string; name: string; serviceUuid: string }) => void>();
   private nextConn = 0;
   private rand: () => number;
 
@@ -255,6 +258,7 @@ export class MemoryBleLink {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const link = this;
     return {
+      address: `dev-${p.index}`,
       setAdvertising(adv) {
         p.adv = adv;
         if (adv) link._advertised(p);
@@ -298,7 +302,8 @@ export class MemoryBleLink {
       if (!d) adapter.devices.set(p.index, (d = new FakeDevice(link, adapter, p)));
       return d;
     };
-    const api: BluetoothLikeSim = {
+    const api: BluetoothLikeSim & { __adapter: Adapter } = {
+      __adapter: adapter,
       async requestDevice(opts) {
         if (!link.power) throw dom('NotFoundError', 'Bluetooth adapter is not available.');
         const wanted = opts.filters?.flatMap((f) => f.services ?? []) ?? [];
@@ -324,6 +329,58 @@ export class MemoryBleLink {
       if (f.lossRate !== undefined) a.o.lossRate = f.lossRate;
       if (f.duplicateRate !== undefined) a.o.duplicateRate = f.duplicateRate;
     }
+  }
+
+  /** Peripherals that are advertising a service right now (for a central that scans). */
+  advertisers(serviceUuid?: string): Array<{ address: string; name: string }> {
+    if (!this.power) return [];
+    return this.periph.filter((p) => p.adv && p.inRange && (!serviceUuid || p.adv.serviceUuid === serviceUuid)).map((p) => ({ address: `dev-${p.index}`, name: p.adv!.name }));
+  }
+
+  /** A peripheral started (or resumed) advertising. */
+  onAdvertise(h: (a: { address: string; name: string; serviceUuid: string }) => void): () => void {
+    this.advListeners.add(h);
+    return () => void this.advListeners.delete(h);
+  }
+
+  /**
+   * Act as a Bluetooth central: connect to the peripheral at `address` the way a browser would (service, INFO, TX, RX), for a Hub
+   * that links to another Hub. `exclude` keeps a peripheral from finding itself.
+   */
+  async central(over: BleAirOptions = {}): Promise<{
+    connect(address: string): Promise<{ mtu: number; info: Uint8Array; write(f: Uint8Array): Promise<void>; onNotify(cb: (f: Uint8Array) => void): void; onDisconnect(cb: () => void): void; close(): void }>;
+  }> {
+    const bt = this.bluetooth(over);
+    const adapterOf = (bt as unknown as { __adapter: Adapter }).__adapter;
+    return {
+      connect: async (address) => {
+        const idx = Number(address.replace('dev-', ''));
+        const p = this.periph[idx];
+        if (!p?.adv) throw new SimError('out-of-range', 'GATT Error: device not found or out of range.');
+        let d = adapterOf.devices.get(idx);
+        if (!d) adapterOf.devices.set(idx, (d = new FakeDevice(this, adapterOf, p)));
+        const server = await d.gatt.connect();
+        const svc = await server.getPrimaryService(p.adv.serviceUuid);
+        const [infoC, txC, rxC] = await Promise.all([svc.getCharacteristic(p.adv.infoUuid), svc.getCharacteristic(p.adv.txUuid), svc.getCharacteristic(p.adv.rxUuid)]);
+        const info = await infoC.readValue();
+        const cbs: Array<(f: Uint8Array) => void> = [];
+        rxC.addEventListener('characteristicvaluechanged', (ev) => {
+          const v = (ev.target as FakeChar).value!;
+          const b = new Uint8Array(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength));
+          for (const cb of cbs) cb(b);
+        });
+        await rxC.startNotifications();
+        const dev = d;
+        return {
+          mtu: dev.conn!.mtu,
+          info: new Uint8Array(info.buffer.slice(info.byteOffset, info.byteOffset + info.byteLength)),
+          write: (f) => txC.writeValueWithoutResponse(f as unknown as BufferSource),
+          onNotify: (cb) => void cbs.push(cb),
+          onDisconnect: (cb) => dev.addEventListener('gattserverdisconnected', () => cb()),
+          close: () => dev.gatt.disconnect(),
+        };
+      },
+    };
   }
 
   setPower(on: boolean): void {
@@ -421,6 +478,7 @@ export class MemoryBleLink {
 
   _advertised(p: Peripheral): void {
     if (!this.power || !p.inRange) return;
+    if (p.adv) for (const l of [...this.advListeners]) l({ address: `dev-${p.index}`, name: p.adv.name, serviceUuid: p.adv.serviceUuid });
     for (const a of this.adapters) {
       const d = a.devices.get(p.index);
       if (d?.watching) setTimeout(() => d.dispatchEvent(new Event('advertisementreceived')), 0);

@@ -25,10 +25,10 @@ describe('release surface (hub-core)', () => {
     for (const f of sources) expect(readFileSync(f, 'utf8'), f).not.toMatch(/@sync\/testkit/);
   });
 
-  it('imports the link codec only through the pure ./link subpath', () => {
+  it('imports the transport only through its pure ./link and ./client subpaths (no browser API)', () => {
     for (const f of sources) {
       for (const m of readFileSync(f, 'utf8').matchAll(/from\s+'(@sync\/transport-bluetooth[^']*)'/g)) {
-        expect(m[1], f).toBe('@sync/transport-bluetooth/link');
+        expect(['@sync/transport-bluetooth/link', '@sync/transport-bluetooth/client'], f).toContain(m[1]);
       }
     }
   });

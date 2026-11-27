@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ClientInfo, HubControl, HubEvent, HubSettings, ServedSpaceInfo } from '@sync/hub-core';
-import { HubAccess, HubClients, HubSpaces, HubStatus, defineHubUi } from '../src';
+import { HubAccess, HubClients, HubSpaces, HubStatus, HubStorage, defineHubUi } from '../src';
 
 beforeAll(() => defineHubUi());
 
@@ -26,7 +26,11 @@ function fakeHub(over: Partial<{ spaces: ServedSpaceInfo[]; clients: ClientInfo[
     deny: async (d: string) => void calls.acts.push(['deny', d]),
     block: async (d: string) => void calls.acts.push(['block', d]),
     unblock: async (d: string) => void calls.acts.push(['unblock', d]),
-    updateSettings: async (p: Partial<HubSettings>) => void calls.settings.push(p),
+    updateSettings: async (p: Partial<HubSettings>) => {
+      if (p.retentionDays === 0) throw new Error('retentionDays must be an integer from 1 to 365');
+      calls.settings.push(p);
+    },
+    storage: async () => ({ usedBytes: 5 * 1024 ** 2, limitBytes: 1024 ** 3, perSpace: { S1: 3 * 1024 ** 2 }, oldestPacketAt: Date.UTC(2026, 10, 20) }),
     on: (h: (e: HubEvent) => void) => (handlers.add(h), () => void handlers.delete(h)),
   } as unknown as HubControl;
   return { hub, calls, state, emit: (e: HubEvent) => handlers.forEach((h) => h(e)) };
@@ -147,5 +151,29 @@ describe('<hub-access>', () => {
     auto.dispatchEvent(new Event('change'));
     expect(f.calls.settings).toEqual([{ accessMode: 'approval' }, { autoSpaces: true }]);
     expect(el.textContent).toMatch(/can fill the Hub's storage/);
+  });
+});
+
+describe('<hub-storage>', () => {
+  it('shows usage per Space, the oldest change, and the retention and limit controls', async () => {
+    const f = fakeHub({ spaces: [{ space: 'S1', name: 'Family', source: 'code', epochs: [1], link: false, bytesStored: 0, addedAt: 0 }] });
+    const el = mount<HubStorage>('hub-storage', f.hub);
+    await el.refresh();
+    expect(el.querySelector('.st-used')!.textContent).toBe('5.0 MB of 1.0 GB used. Oldest change: 2026-11-20');
+    expect(el.querySelector('.st-spaces')!.textContent).toBe('Family: 3.0 MB');
+    expect((el.querySelector('input[name="days"]') as HTMLInputElement).value).toBe('14');
+    expect((el.querySelector('input[name="limit"]') as HTMLInputElement).value).toBe('1024');
+  });
+  it('saves a new retention period, shows an error for a value the Hub refuses, and warns when storage runs short', async () => {
+    const f = fakeHub();
+    const el = mount<HubStorage>('hub-storage', f.hub);
+    await el.refresh();
+    await el.save({ retentionDays: 30 });
+    await el.save({ retentionDays: 0 });
+    expect(f.calls.settings).toEqual([{ retentionDays: 30 }]);
+    expect(el.querySelector('.st-error')!.textContent).toMatch(/1 to 365/);
+    f.emit({ type: 'storage-warning', level: 'evicting-undelivered', bytes: 1 });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(el.querySelector('.st-warning')!.textContent).toMatch(/deleting changes that no other device has received/);
   });
 });

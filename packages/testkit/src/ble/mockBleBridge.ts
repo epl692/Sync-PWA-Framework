@@ -78,7 +78,7 @@ export class MockBleBridge implements BleBridge {
     return (
       this.o.support ?? {
         peripheral: { ok: true, maxConnections: 7 },
-        central: { ok: false, reason: 'the mock bridge has no central role yet', code: 'bridge-failed' },
+        central: { ok: true },
       }
     );
   }
@@ -113,18 +113,57 @@ export class MockBleBridge implements BleBridge {
   }
 
   async disconnect(conn: BleConnId): Promise<void> {
+    const out = this.outgoing.get(conn);
+    if (out) {
+      this.outgoing.delete(conn);
+      out.close();
+      this.emit('disconnected', conn, undefined);
+      return;
+    }
     await this.handle.disconnect(conn);
   }
 
-  async startScan(): Promise<void> {
-    throw new BleError('unsupported', 'central role not implemented in the mock bridge');
+  // ---- central role (Hub-to-Hub) ----
+
+  private offScan: (() => void) | undefined;
+  private readonly outgoing = new Map<BleConnId, { write(f: Uint8Array): Promise<void>; close(): void }>();
+  private nextOut = 0;
+
+  async startScan(serviceUuid: string): Promise<void> {
+    this.offScan?.();
+    const see = (a: { address: string; name: string }) => {
+      if (this.closed || a.address === this.handle.address) return; // not ourselves
+      this.emit('seen', { address: a.address, name: a.name });
+    };
+    for (const a of this.link.advertisers(serviceUuid)) see(a);
+    const off = this.link.onAdvertise((a) => a.serviceUuid === serviceUuid && see(a));
+    this.offScan = off;
   }
-  async stopScan(): Promise<void> {}
-  async connect(): Promise<{ conn: BleConnId; mtu: number; info: Uint8Array }> {
-    throw new BleError('unsupported', 'central role not implemented in the mock bridge');
+  async stopScan(): Promise<void> {
+    this.offScan?.();
+    this.offScan = undefined;
   }
-  async write(): Promise<void> {
-    throw new BleError('unsupported', 'central role not implemented in the mock bridge');
+  async connect(address: string): Promise<{ conn: BleConnId; mtu: number; info: Uint8Array }> {
+    if (this.closed) throw new BleError('bridge-failed', 'bridge is closed');
+    const central = await this.link.central({ mtu: 185 });
+    let c;
+    try {
+      c = await central.connect(address);
+    } catch (e) {
+      throw new BleError('bridge-failed', (e as Error).message);
+    }
+    const conn = `o${++this.nextOut}`;
+    this.outgoing.set(conn, c);
+    c.onNotify((f) => this.emit('notify', conn, f));
+    c.onDisconnect(() => {
+      if (this.outgoing.delete(conn)) this.emit('disconnected', conn, undefined);
+    });
+    return { conn, mtu: c.mtu, info: c.info };
+  }
+  async write(conn: BleConnId, frame: Uint8Array): Promise<void> {
+    const c = this.outgoing.get(conn);
+    if (!c) throw new BleError('not-connected', 'no such connection');
+    await c.write(frame);
   }
 
   on<K extends keyof BleBridgeEvents>(event: K, handler: BleBridgeEvents[K]): () => void {
@@ -136,6 +175,9 @@ export class MockBleBridge implements BleBridge {
     if (this.closed) return;
     this.closed = true;
     this.offPower();
+    this.offScan?.();
+    for (const [, c] of this.outgoing) c.close();
+    this.outgoing.clear();
     this.adv = undefined;
     this.handle.unregister();
     for (const k of Object.keys(this.h) as Array<keyof BleBridgeEvents>) this.h[k].clear();

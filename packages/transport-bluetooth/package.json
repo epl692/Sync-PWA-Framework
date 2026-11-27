@@ -10,7 +10,8 @@
     ".": "./src/index.ts",
     "./link": "./src/link/index.ts",
     "./module": "./src/module.ts",
-    "./ui": "./src/ui/index.ts"
+    "./ui": "./src/ui/index.ts",
+    "./client": "./src/clientEntry.ts"
   },
   "dependencies": {
     "@sync/core": "*"

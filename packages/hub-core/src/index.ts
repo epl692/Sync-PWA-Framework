@@ -16,3 +16,4 @@ export { createSegmentStore, SegmentFormatError } from './store/segmentStore';
 export { createMemoryFs, type FsPort, type MemoryFs } from './store/fsPort';
 export { Retention, RETENTION_INTERVAL_MS, NEAR_LIMIT_FRACTION } from './retention';
 export type { EnforceResult } from './store/types';
+export { HubToHub } from './hubToHub';
