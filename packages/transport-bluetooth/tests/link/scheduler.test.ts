@@ -187,7 +187,9 @@ describe('end to end', () => {
   it('two framers deliver messages on both streams over a lossless pipe', async () => {
     const aIn: Uint8Array[] = [];
     const bIn: Uint8Array[] = [];
+    // eslint-disable-next-line prefer-const
     let a!: LinkFramer;
+    // eslint-disable-next-line prefer-const
     let b!: LinkFramer;
     const pump = async () => {
       while (aIn.length || bIn.length) {

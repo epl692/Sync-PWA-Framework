@@ -40,7 +40,7 @@ async function hubIdentity(seedByte = 7) {
   const priv = await crypto.subtle.importKey('pkcs8', pkcs8, { name: 'Ed25519' }, true, ['sign']);
   const jwk = await crypto.subtle.exportKey('jwk', priv);
   const pub = Uint8Array.from(atob(jwk.x!.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-  return { publicKey: pub, sign: async (m: Uint8Array) => new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, priv, m)) };
+  return { publicKey: pub, sign: async (m: Uint8Array) => new Uint8Array(await crypto.subtle.sign({ name: 'Ed25519' }, priv, m as unknown as BufferSource)) };
 }
 
 describe('known-answer vectors', () => {

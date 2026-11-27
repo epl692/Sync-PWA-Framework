@@ -103,9 +103,8 @@ describe('splitMessage and Reassembler', () => {
     const r = rea();
     const lane = splitMessage(new Uint8Array(100).fill(5), 20, 1, 0);
     const ctrl = splitMessage(Uint8Array.of(1, 2, 3), 20, 0, 0);
-    let got: Uint8Array | undefined;
     for (let i = 0; i < lane.length - 1; i++) r.push(lane[i]!, 0);
-    got = r.push(ctrl[0]!, 0).message; // a control message completes in the middle of a lane message
+    const got = r.push(ctrl[0]!, 0).message; // a control message completes in the middle of a lane message
     expect(got).toEqual(Uint8Array.of(1, 2, 3));
     expect(r.push(lane.at(-1)!, 0).message).toEqual(new Uint8Array(100).fill(5));
   });
