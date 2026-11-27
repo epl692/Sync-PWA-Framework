@@ -59,3 +59,34 @@ export function describeStatus(s: BluetoothTransportStatus): string {
       return `${s.hub} is full right now. Trying again in ${Math.ceil(s.retryAfterMs / 1000)} seconds.`;
   }
 }
+
+/** A sentence for the user for anything that can go wrong while finding or joining a Hub. */
+export function errorMessage(e: unknown): string {
+  const code = (e as { code?: string })?.code;
+  switch (code) {
+    case 'cancelled':
+      return 'No Hub was chosen. Make sure a Hub is running nearby and Bluetooth is on, then try again.';
+    case 'denied':
+      return 'Bluetooth is blocked for this page. Allow it in your browser settings, then try again.';
+    case 'no-service':
+      return 'That device is not a Hub.';
+    case 'connect-failed':
+      return 'Could not connect to the Hub. Move closer and try again.';
+    case 'update-needed':
+      return 'This Hub and this app need matching versions. Update the one that is older and try again.';
+    case 'busy':
+      return 'That Hub is full right now. It will be tried again shortly.';
+    case 'identity-changed':
+      return 'This Hub has a different identity than the one you trusted before. Check that it is the right Hub before connecting.';
+    case 'declined':
+      return 'You chose not to trust this Hub.';
+    case 'not-served':
+      return 'This Hub does not serve your Spaces. Ask the Hub owner to add them.';
+    case 'rejected':
+      return 'The Hub refused the connection.';
+    case 'timeout':
+      return 'The Hub did not answer in time. Move closer and try again.';
+    default:
+      return e instanceof Error && e.message ? e.message : 'Something went wrong while connecting to the Hub.';
+  }
+}

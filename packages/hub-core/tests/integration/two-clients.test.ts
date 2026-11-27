@@ -97,6 +97,26 @@ describe('two clients and a Hub, no network', () => {
     expect(w.hub.clients().map((c) => c.spaces)).toEqual([[w.access.space], [w.access.space]]);
   });
 
+  it('a client limited to one Space (the module\'s enabledSpaces) proves only that Space', async () => {
+    const w = await world();
+    const other = await createSpaceAccess({ seed: 9, keyByte: 0x33 });
+    await w.hub.addServeCode(other.serveCode);
+    const t = await createTestCore({ spaces: [w.access.space, other.space] });
+    const transport = createBluetoothTransport({
+      proofs: await memberProofs([w.access, other], 'limited'),
+      spaces: [w.access.space],
+      confirmHub: async () => true,
+      trustStore: createMemoryTrustStore(),
+      bluetooth: w.link.bluetooth() as never,
+      isSecureContext: true,
+    });
+    t.core.addTransport(transport);
+    cleanups.push(async () => void (await t.core.close()));
+    const info = await transport.chooseHub();
+    expect(info.acceptedSpaces).toEqual([w.access.space]);
+    expect(w.hub.clients().map((c) => c.spaces)).toEqual([[w.access.space]]);
+  });
+
   it('the Hub stores only what it was sent and never a content key (the guard test covers imports)', async () => {
     const w = await world();
     const a = await w.client('alice');

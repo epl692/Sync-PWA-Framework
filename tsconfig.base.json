@@ -28,6 +28,8 @@
       "@sync/blobs/ref": ["packages/blobs/src/ref.ts"],
       "@sync/transport-bluetooth": ["packages/transport-bluetooth/src/index.ts"],
       "@sync/transport-bluetooth/link": ["packages/transport-bluetooth/src/link/index.ts"],
+      "@sync/transport-bluetooth/ui": ["packages/transport-bluetooth/src/ui/bluetooth-panel.ts"],
+      "@sync/transport-bluetooth/module": ["packages/transport-bluetooth/src/module.ts"],
       "@sync/hub-core": ["packages/hub-core/src/index.ts"],
       "@sync/hub-ui": ["packages/hub-ui/src/index.ts"]
     }

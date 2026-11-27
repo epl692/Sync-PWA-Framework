@@ -229,3 +229,4 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
   };
   return t;
 }
+export { errorMessage } from './status';
