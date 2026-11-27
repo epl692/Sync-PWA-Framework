@@ -47,7 +47,7 @@ export class HubCode extends HTMLElement {
     </section>`;
     this.querySelector('input[name="link"]')?.addEventListener('change', (e) => void this.show((e.target as HTMLInputElement).checked));
     this.querySelector('[data-act="make"]')?.addEventListener('click', () => void this.show());
-    this.querySelector('[data-act="copy"]')?.addEventListener('click', () => void navigator.clipboard?.writeText(this.code));
+    this.querySelector('[data-act="copy"]')?.addEventListener('click', () => void (globalThis as { navigator?: { clipboard?: { writeText(t: string): Promise<void> } } }).navigator?.clipboard?.writeText(this.code));
   }
 }
 
