@@ -44,7 +44,6 @@ describe('first sync of a 1,000-object Space', () => {
     const up = link.stats.bytesToPeripheral - before.bytesToPeripheral;
     const total = down + up;
     const at = (rate: number) => Math.round(down / rate);
-    // eslint-disable-next-line no-console
     console.log(`1000 objects: ${down} bytes down, ${up} bytes up, ${link.stats.framesToCentral - before.framesToCentral} frames down; at 20 KB/s ${at(20_000)} s, at 100 KB/s ${at(100_000)} s; CPU wall ${cpuMs} ms`);
     expect(total).toBeGreaterThan(100_000);
     expect(at(20_000)).toBeLessThan(120); // under 2 minutes at 20 KB/s (research R-17)

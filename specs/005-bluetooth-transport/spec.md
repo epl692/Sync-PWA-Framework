@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-27
 
-**Status**: Draft
+**Status**: Core implemented and tested on a simulated radio; native Hub apps and hardware validation pending (see validation.md)
 
 **Input**: User description: "Build a transport plugin that uses Bluetooth to sync and communicate locally between clients to support offline usage."
 

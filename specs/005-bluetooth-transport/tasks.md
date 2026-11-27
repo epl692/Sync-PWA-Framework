@@ -23,6 +23,12 @@ description: "Task list for Bluetooth Local Transport (005-bluetooth-transport)"
 - `specs/005-bluetooth-transport/contracts/*` is the source of truth for names, byte layouts, and signatures; copy types from `transport-bluetooth.ts` and `hub-core.ts` rather than redesigning. `bluetooth-link.md`, `hub-access.md` and `hub-ble-bridge.md` are normative.
 - "Existing" test helpers (`testCore`, `peers`, `memoryTransport`, `secureNode`, `hubTransport`, `plaintextScan`) live in `packages/testkit/src/`.
 
+## Implementation status (2026-11-27)
+
+88 of 109 tasks are done. The unchecked ones are the native and hardware work: the four spikes, the Android and desktop Hub shells and bridges, the
+Capacitor filesystem adapter, the native central-role methods, the Playwright demo and end-to-end tests, the `hub:dev` harness, and the hardware
+soak and device matrix. Several checked tasks differ in detail from their text; `validation.md` lists what was and was not built.
+
 ---
 
 ## Phase 1: Setup (Shared Infrastructure)
@@ -254,8 +260,8 @@ description: "Task list for Bluetooth Local Transport (005-bluetooth-transport)"
 - [X] T105 [P] Write `docs/bluetooth.md` (how to get and run a Hub, serve codes, open vs approval mode, automatic Spaces, retention, supported browsers and platforms, troubleshooting) and READMEs for `packages/transport-bluetooth`, `packages/hub-core`, `packages/hub-ui`, `hubs/desktop`, `hubs/android`; link from the root `README.md`
 - [ ] T106 **MANUAL, hardware.** 8-hour soak script `hubs/tools/soak.mjs` and run: 8 clients taking turns connecting and disconnecting against one Hub; 0 undelivered packets lost (SC-009); record battery and resource use in `specs/005-bluetooth-transport/validation.md`
 - [ ] T107 **MANUAL, hardware.** Run the real-device matrix rows 1 to 10 in `specs/005-bluetooth-transport/quickstart.md` section 3 and record each result with device, OS and browser in `specs/005-bluetooth-transport/validation.md`; map each Success Criterion SC-001 to SC-011 to its evidence
-- [ ] T108 Run `npm run typecheck`, `npm run lint`, `npm run build`, `npm test`, `npm run test:bluetooth`, `npm run test:hub`, the Playwright suite `npm run e2e`, and confirm the existing 001 to 004 suites are unchanged and green (depends on all previous implementation tasks)
-- [ ] T109 Update `specs/005-bluetooth-transport/plan.md` (Constitution Check, Risks, any spike-driven changes), `specs/005-bluetooth-transport/spec.md` status to Implemented, and the Sync Impact notes in `.specify/memory/constitution.md` only if a principle needed interpretation (do not amend principles without the governance process)
+- [X] T108 Run `npm run typecheck`, `npm run lint`, `npm run build`, `npm test`, `npm run test:bluetooth`, `npm run test:hub`, the Playwright suite `npm run e2e`, and confirm the existing 001 to 004 suites are unchanged and green (depends on all previous implementation tasks)
+- [X] T109 Update `specs/005-bluetooth-transport/plan.md` (Constitution Check, Risks, any spike-driven changes), `specs/005-bluetooth-transport/spec.md` status to Implemented, and the Sync Impact notes in `.specify/memory/constitution.md` only if a principle needed interpretation (do not amend principles without the governance process)
 
 
 ---

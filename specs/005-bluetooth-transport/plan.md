@@ -73,6 +73,13 @@ Technical approach (details in [research.md](./research.md)):
 5. *Automatic Space mode is trust-on-first-use* and can be squatted (RK-3); bounded by caps, owner visibility, and approval mode.
 6. *Capacity is bounded by radios, not by software.* Default 7 concurrent clients; the spec's "at least 8" was reworded to rely on short connections plus store-and-forward (R-11).
 
+### Implementation notes (2026-11-27)
+
+Built as planned except where `validation.md` says otherwise. Deviations worth knowing: the sidecar protocol client lives in `@sync/hub-core`
+(shared by the desktop shell); `BlobRelay` moved to `@sync/hub-core` next to `RelayHub`; the blob engine got an additive `sourceFilter` hook (amendment B-4);
+the relay keeps stored packets in memory as well as on disk (RK-8 below); the link gained acknowledged `resync` messages and ACK-timeout loss detection.
+No principle needed reinterpretation, so the constitution is unchanged.
+
 ### Risks
 
 | ID | Risk | Mitigation |
@@ -83,6 +90,7 @@ Technical approach (details in [research.md](./research.md)):
 | RK-4 | Web Bluetooth write limits and `getDevices()` support vary | Probing and halving fallback (R-03); chooser fallback (R-13); spikes S-2 and S-4 |
 | RK-5 | Throughput limits large content | Blob ceiling and wait-for-faster-transport message (R-05) |
 | RK-6 | Platform kills background Hub | Foreground service, keep-awake option, first-run guidance (R-12); documented limits |
+| RK-8 | Hub memory grows with what it stores (the relay keeps packets in memory as well as on disk) | Lower the default storage limit for phones or serve packets from disk before shipping the Android Hub |
 | RK-7 | Rogue Hub spoofing a known name | Hub key pinned after first confirmation; mismatch blocks until confirmed (data-model `TrustedHubRecord`) |
 
 ## Project Structure
