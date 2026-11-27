@@ -12,24 +12,21 @@ async function pair(faults: Array<'ok' | 'drop' | 'dup'>, frameBytes: number) {
   const lost: string[] = [];
   const strikes: string[] = [];
   let i = 0;
-  // eslint-disable-next-line prefer-const
-  let a!: LinkChannel;
-  // eslint-disable-next-line prefer-const
-  let b!: LinkChannel;
+  const hold = {} as { a: LinkChannel; b: LinkChannel };
   const wire = (to: () => LinkChannel) => async (frame: Uint8Array) => {
     const f = faults[i++ % Math.max(1, faults.length)] ?? 'ok';
     if (f === 'drop') return;
     const copies = f === 'dup' ? 2 : 1;
     for (let k = 0; k < copies; k++) void to().onFrame(frame.slice());
   };
-  a = new LinkChannel({ maxMessageBytes: 1 << 20, frameBytes, now: () => 0, write: wire(() => b), handlers: { control: () => undefined, core: () => undefined, strike: () => undefined } });
-  b = new LinkChannel({
+  const a = (hold.a = new LinkChannel({ maxMessageBytes: 1 << 20, frameBytes, now: () => 0, write: wire(() => hold.b), handlers: { control: () => undefined, core: () => undefined, strike: () => undefined } }));
+  const b = (hold.b = new LinkChannel({
     maxMessageBytes: 1 << 20,
     frameBytes,
     now: () => 0,
-    write: wire(() => a),
+    write: wire(() => hold.a),
     handlers: { control: () => undefined, core: (bytes, stream) => void received.push({ stream, bytes }), strike: (r) => void strikes.push(r), lost: (r) => void lost.push(r) },
-  });
+  }));
   a.setSession(await LinkSession.create(keys.c2h, keys.h2c));
   b.setSession(await LinkSession.create(keys.h2c, keys.c2h));
   return { a, b, received, lost, strikes };
