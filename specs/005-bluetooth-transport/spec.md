@@ -17,7 +17,7 @@ This spec adds a Bluetooth transport plugin implementing the Transport contract 
 - Q: Where must the Bluetooth transport work? → A: Browser PWAs cannot connect to each other over Bluetooth, so the transport uses a **Hub** model. A Hub is a separate app for **Android** or **desktop** (Windows, macOS, Linux). Browser clients connect to a Hub over Bluetooth and need no helper installed on the client device. Browsers that cannot use Bluetooth report the transport as unavailable.
 - Q: Is the helper on the same device as the app, or elsewhere? → A: The Hub is a shared, always-on device that many clients connect to, for example a laptop or phone left at a campsite, during an internet outage, or at an event. Clients do not each need their own helper.
 - Q: By default, does a Hub accept any client in a served Space or only owner-approved clients? → A: Open by default: any client that proves membership in a Space the Hub serves can connect with no owner approval. The Hub owner can switch the Hub to approval-required mode, and can block any client at any time.
-- Q: How does a Hub owner choose which Spaces the Hub serves? → A: Both. The owner adds Spaces explicitly by exporting a "serve this Space" code (QR or pasted, carrying no keys) from their browser app. The owner can also turn on automatic mode, in which the Hub stores packets for any Space a connecting client brings, up to its storage limit; automatic mode is off by default.
+- Q: How does a Hub owner choose which Spaces the Hub serves? → A: Both. The owner adds Spaces explicitly by exporting a "serve this Space" code (QR or pasted, carrying no content keys) from their browser app. The owner can also turn on automatic mode, in which the Hub stores packets for any Space a connecting client brings, up to its storage limit; automatic mode is off by default.
 - Q: How long does a Hub keep a stored packet by default? → A: 14 days, with the oldest already-delivered packets dropped first if storage fills sooner. The owner can change the period.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -150,7 +150,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 
 **Discovery and connection**
 
-- **FR-013**: A Hub MUST start serving a Space when the owner provides a "serve this Space" code exported from a member's app; the code MUST carry no keys and MUST NOT let the Hub read content. With automatic Space mode off (the default), a Hub MUST NOT store packets for Spaces the owner has not added.
+- **FR-013**: A Hub MUST start serving a Space when the owner provides a "serve this Space" code exported from a member's app; the code MUST carry no content keys (no key that can decrypt packets or blobs) and MUST NOT let the Hub read content. A separate "link code" used only for Hub-to-Hub linking MAY also carry a membership-proof secret that cannot decrypt anything, and MUST be shown with a warning. With automatic Space mode off (the default), a Hub MUST NOT store packets for Spaces the owner has not added.
 - **FR-014**: With automatic Space mode on, a Hub MUST store packets for Spaces its connecting clients bring, up to its storage limit, with a per-Space cap so one Space cannot use all storage, and MUST show the owner which Spaces were added automatically and let them remove any.
 - **FR-015**: A client MUST be able to discover nearby Hubs and connect to one without internet access.
 - **FR-016**: Discovery MUST NOT disclose Space contents, object data, or membership lists to devices that have not proven membership in a shared Space.
@@ -202,13 +202,13 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - **SC-006**: A client that was never connected at the same time as another client receives that client's changes through the Hub, and every packet is applied exactly once with no loops.
 - **SC-007**: The transport passes 100% of the Transport contract test suite, and no core code changes are required.
 - **SC-008**: Where Bluetooth or a Hub is unavailable, 100% of app functions continue to work with no error dialogs beyond a single status message.
-- **SC-009**: A Hub left running unattended for 8 hours with a typical group (8 clients connecting and disconnecting) loses 0 undelivered packets, and its battery or resource use is documented.
+- **SC-009**: A Hub left running unattended for 8 hours with a typical group (8 clients taking turns connecting and disconnecting) loses 0 undelivered packets, and its battery or resource use is documented.
 - **SC-010**: A person can install and start a Hub on Android or desktop in under 5 minutes, following on-screen guidance only.
 - **SC-011**: Clients on an Android Hub and clients on a desktop Hub converge when the two Hubs connect, in 100% of interoperability tests.
 
 ## Assumptions
 
-- The target scenarios are small groups (roughly 2–8 clients per Hub) at camps, outings, events, and during outages, not large crowds. A Hub serves at least 8 clients at once.
+- The target scenarios are small groups (roughly 2–8 clients per Hub) at camps, outings, events, and during outages, not large crowds. A Hub serves at least 5 clients at once and up to the limit of its radio (commonly about 7). Larger groups still work because connections are short and the Hub stores and forwards.
 - Bluetooth throughput is far below Wi-Fi or internet, so text and structured data are the primary use; large blobs are best-effort.
 - Spaces, keys, and signing from spec 002 already exist, and clients share a Space with the Hub's served Spaces before connecting; the transport does not create identity or Space membership. A Hub learns which Spaces to serve from keyless serve-Space codes or, in automatic mode, from routing identifiers, never from Space keys.
 - In open mode, a stranger who is a member of a served Space can connect and download that Space's encrypted packets; this is acceptable because members are already allowed to hold them, and non-members never connect. Owners who want tighter control use approval-required mode.
