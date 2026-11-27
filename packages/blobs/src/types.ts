@@ -61,6 +61,11 @@ export interface BlobsConfig {
   orphanGraceMs?: number;
   /** Fetch automatically when true for a reference seen in an applied packet. Default: never (on demand only). */
   prefetch?: (ref: BlobRef) => boolean;
+  /**
+   * Which peers may serve a blob (spec 005 R-05): return false to keep a slow transport out of a big transfer. The transfer then
+   * waits, and goes ahead by itself when an eligible peer is connected. Default: every peer that shares the Space.
+   */
+  sourceFilter?: (peer: { transport: string; bulk: boolean }, ref: BlobRef) => boolean;
   /** Peers asked in parallel for one blob. Default 2. */
   maxSources?: number;
   /** Outstanding chunk messages per peer. Default 8 (32 on bulk transports). */

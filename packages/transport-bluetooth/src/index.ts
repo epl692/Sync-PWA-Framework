@@ -6,6 +6,7 @@
 import type { PeerInfo, Transport, TransportCapabilities, TransportEvents, TransportState } from '@sync/core';
 import { ClientLink, HubLinkError, type ClientTimers, type HubCandidate, type HubConnectionInfo } from './clientLink';
 import type { HubProofProvider } from './proofs';
+import { DEFAULT_BLOB_CEILING_BYTES } from './blobPolicy';
 import { checkSupport, toTransportState, type BluetoothTransportStatus } from './status';
 import { createIndexedDbTrustStore, createMemoryTrustStore, type TrustedHub, type TrustedHubStore } from './trustStore';
 import { defaultBluetooth, openGattLink, requestHub, GattError, type BluetoothLike } from './webBluetooth';
@@ -21,7 +22,6 @@ export { defaultBluetooth, openGattLink, requestHub, GattError, type BluetoothLi
 export const UNFRAMED_MESSAGE_BYTES = 512 * 1024;
 /** Hard limit a peer may send (the 001 default of 4 MiB); over-limit messages are rejected. */
 export const DEFAULT_MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
-export const DEFAULT_BLOB_CEILING_BYTES = 5 * 1024 * 1024;
 
 export interface BluetoothTransportOptions {
   proofs: HubProofProvider;
@@ -320,3 +320,4 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
   return t;
 }
 export { errorMessage } from './status';
+export { bluetoothBlobFilter, blobWaitMessage, DEFAULT_BLOB_CEILING_BYTES } from './blobPolicy';

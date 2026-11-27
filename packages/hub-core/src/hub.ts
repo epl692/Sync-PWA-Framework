@@ -13,6 +13,8 @@ import { Retention } from './retention';
 import { HubToHub } from './hubToHub';
 import type { BleBridge } from './bridge';
 import { loadOrCreateHubIdentity, type HubIdentity } from './identity';
+import type { BlobStorage } from '@sync/blobs';
+import { BlobRelay, type BlobRelayOptions } from './relay/blobRelay';
 import { RelayHub, type RelayHubOptions } from './relay/relayHub';
 import { defaultSettings, mergeSettings } from './settings';
 import type { HubStore } from './store/types';
@@ -27,6 +29,11 @@ export interface HubOptions {
   now?: () => number;
   timers?: Timers;
   maxMessageBytes?: number;
+  /**
+   * Keep blob ciphertext for the devices that talk to this Hub (spec 004 over Bluetooth). Omit to leave blobs to other holders.
+   * The Hub's own storage limit applies to packets; blob caps are set here.
+   */
+  blobs?: { storage: BlobStorage } & Omit<BlobRelayOptions, 'storage'>;
   /** Tuning for the relay (batch sizes, limits). */
   relay?: Pick<RelayHubOptions, 'batchPackets' | 'batchBytes' | 'maxEnvelopeBytes'>;
 }
@@ -45,6 +52,8 @@ export interface Hub extends HubControl {
   /** Linking to other Hubs over Bluetooth (needs a link code for a Space). */
   readonly hubs: HubToHub;
   readonly identity: HubIdentity;
+  /** Present when the Hub stores blobs. */
+  readonly blobRelay?: BlobRelay;
   /** Apply retention and the storage limit right now (it also runs at start, hourly, and after packets arrive). */
   enforceNow(): Promise<EnforceResult>;
 }
@@ -176,6 +185,7 @@ export async function createHub(o: HubOptions): Promise<Hub> {
     setPeerSpaces: (peerId, spaces) => (spaces ? peerSpaces.set(peerId, spaces) : peerSpaces.delete(peerId)),
     onLinked: (fingerprint, spaces) => emit({ type: 'hub-linked', fingerprint, spaces }),
   });
+  const blobRelay = o.blobs ? new BlobRelay(relay, o.blobs) : undefined;
   retention = new Retention({
     store,
     relay,
@@ -229,6 +239,7 @@ export async function createHub(o: HubOptions): Promise<Hub> {
     relay,
     link,
     hubs,
+    ...(blobRelay ? { blobRelay } : {}),
     identity,
     fingerprint: identity.fingerprintText,
 
@@ -257,6 +268,7 @@ export async function createHub(o: HubOptions): Promise<Hub> {
     },
     async stop() {
       retention.stop();
+      blobRelay?.close();
       await hubs.stop().catch(() => undefined);
       await link.stop();
       await store.close();

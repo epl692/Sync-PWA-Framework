@@ -230,16 +230,16 @@ description: "Task list for Bluetooth Local Transport (005-bluetooth-transport)"
 
 ### Tests for User Story 5 (write first, confirm they FAIL)
 
-- [ ] T094 [P] [US5] `packages/transport-bluetooth/tests/link/fairness.test.ts`: under a continuous stream-1 flood, stream-0 frames are sent at least once per 4 stream-1 frames and packet latency p95 stays at most 2x idle in the simulator
-- [ ] T095 [P] [US5] `packages/hub-core/tests/integration/blob-over-bluetooth.test.ts`: a blob attached on A reaches B through the Hub with manifest, chunk, tag and size verified (spec 004 rules), progress events emitted, and resumes after an interruption requesting only missing chunks; the Hub's `BlobRelay` stores ciphertext only
-- [ ] T096 [P] [US5] `packages/transport-bluetooth/tests/blob-ceiling.test.ts`: a 20 MiB blob with the default 5 MiB ceiling is not auto-transferred over Bluetooth, the user is told it waits for a faster transport, and it transfers automatically once a faster transport connects (spec US5 scenario 3); the ceiling is configurable per app through `blobCeilingBytes`
+- [X] T094 [P] [US5] `packages/transport-bluetooth/tests/link/fairness.test.ts`: under a continuous stream-1 flood, stream-0 frames are sent at least once per 4 stream-1 frames and packet latency p95 stays at most 2x idle in the simulator
+- [X] T095 [P] [US5] `packages/hub-core/tests/integration/blob-over-bluetooth.test.ts`: a blob attached on A reaches B through the Hub with manifest, chunk, tag and size verified (spec 004 rules), progress events emitted, and resumes after an interruption requesting only missing chunks; the Hub's `BlobRelay` stores ciphertext only
+- [X] T096 [P] [US5] `packages/transport-bluetooth/tests/blob-ceiling.test.ts`: a 20 MiB blob with the default 5 MiB ceiling is not auto-transferred over Bluetooth, the user is told it waits for a faster transport, and it transfers automatically once a faster transport connects (spec US5 scenario 3); the ceiling is configurable per app through `blobCeilingBytes`
 
 ### Implementation for User Story 5
 
-- [ ] T097 [US5] Map lane messages (first byte a registered lane magic such as `0xB1`) to stream 1 in `packages/transport-bluetooth/src/clientLink.ts` and `packages/hub-core/src/link/server.ts`; confirm `laneContract()` still passes (depends on T094)
-- [ ] T098 [US5] Implement `blobCeilingBytes` (default 5 MiB, per spec research R-05) in `packages/transport-bluetooth/src/index.ts`; wire it into the `@sync/blobs` policy module in `packages/blobs/src/policy/` as an additive, non-breaking per-transport ceiling option (look up the existing policy API first and extend it rather than adding a new path) with a unit test in `packages/blobs/tests/unit/transport-ceiling.test.ts` (depends on T096)
-- [ ] T099 [US5] Wire `BlobRelay` and `createFileBlobStorage` into `packages/hub-core/src/hub.ts` through `HubOptions.blobDir`, with the Hub-level storage limit and per-Space caps applied to blobs too, TTL/LRU from the existing relay options (depends on T095, T088)
-- [ ] T100 [US5] Show blob transfer progress and the "waits for a faster transport" message in `packages/transport-bluetooth/src/ui/bluetooth-panel.ts` using the progress events from `@sync/blobs`; jsdom test in `packages/transport-bluetooth/tests/ui/bluetooth-panel.blob.test.ts`
+- [X] T097 [US5] Map lane messages (first byte a registered lane magic such as `0xB1`) to stream 1 in `packages/transport-bluetooth/src/clientLink.ts` and `packages/hub-core/src/link/server.ts`; confirm `laneContract()` still passes (depends on T094)
+- [X] T098 [US5] Implement `blobCeilingBytes` (default 5 MiB, per spec research R-05) in `packages/transport-bluetooth/src/index.ts`; wire it into the `@sync/blobs` policy module in `packages/blobs/src/policy/` as an additive, non-breaking per-transport ceiling option (look up the existing policy API first and extend it rather than adding a new path) with a unit test in `packages/blobs/tests/unit/transport-ceiling.test.ts` (depends on T096)
+- [X] T099 [US5] Wire `BlobRelay` and `createFileBlobStorage` into `packages/hub-core/src/hub.ts` through `HubOptions.blobDir`, with the Hub-level storage limit and per-Space caps applied to blobs too, TTL/LRU from the existing relay options (depends on T095, T088)
+- [X] T100 [US5] Show blob transfer progress and the "waits for a faster transport" message in `packages/transport-bluetooth/src/ui/bluetooth-panel.ts` using the progress events from `@sync/blobs`; jsdom test in `packages/transport-bluetooth/tests/ui/bluetooth-panel.blob.test.ts`
 
 **Checkpoint**: All five user stories pass.
 

@@ -14,6 +14,7 @@ export interface ResolvedConfig {
   retentionMs: number;
   orphanGraceMs: number;
   prefetch: ((ref: BlobRef) => boolean) | undefined;
+  sourceFilter: ((peer: { transport: string; bulk: boolean }, ref: BlobRef) => boolean) | undefined;
   maxSources: number;
   /** Explicit window, or undefined to use 8 (32 on bulk transports) per peer. */
   window: number | undefined;
@@ -40,6 +41,7 @@ export function resolveConfig(c: BlobsConfig = {}): ResolvedConfig {
     retentionMs: positive(c.retentionMs, 30 * DAY, 'retentionMs'),
     orphanGraceMs: positive(c.orphanGraceMs, DAY, 'orphanGraceMs'),
     prefetch: c.prefetch,
+    sourceFilter: c.sourceFilter,
     maxSources: Math.max(1, Math.floor(c.maxSources ?? 2)),
     window: c.window === undefined ? undefined : Math.max(1, Math.floor(c.window)),
     serve: c.serve ?? true,

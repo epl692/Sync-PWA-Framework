@@ -443,9 +443,23 @@ export class Scheduler {
       .ready()
       .filter((p) => p.hello?.serve !== false && this.e.peers.shares(p.key, t.ref.space))
       .map((p) => p.key)
+      .filter((k) => this.allowed(k, t.ref))
       .filter((k) => !t.peers.get(k)?.excluded && (this.e.peers.state(k)?.strikes.get(t.id) ?? 0) < STRIKES)
       .filter((k) => ignoreBackoff || (t.peers.get(k)?.retryAt ?? 0) <= Date.now());
     return keys.sort((a, b) => Number(t.offerers.has(b)) - Number(t.offerers.has(a)));
+  }
+
+  /** The app's `sourceFilter`: a throwing filter counts as "allowed" so it can never stall transfers. */
+  private allowed(key: string, ref: BlobRef): boolean {
+    const f = this.e.cfg.sourceFilter;
+    if (!f) return true;
+    const info = this.e.peers.info(key);
+    if (!info) return true;
+    try {
+      return f({ transport: info.transport, bulk: info.bulk }, ref) !== false;
+    } catch {
+      return true;
+    }
   }
 
   private pumpAll(): void {

@@ -5,6 +5,14 @@
 
 import { describeStatus, errorMessage, type BluetoothTransportStatus } from '../status';
 import type { HubConnectionInfo, HubConnectionState } from '../clientLink';
+import { blobWaitMessage } from '../blobPolicy';
+
+export interface BlobNotice {
+  name: string;
+  size: number;
+  /** Bytes received so far, for a blob that is downloading. */
+  bytesDone?: number;
+}
 
 export interface PanelTransport {
   status(): BluetoothTransportStatus;
@@ -35,6 +43,15 @@ export class BluetoothPanel extends HTMLElement {
   private offs: Array<() => void> = [];
   private message = '';
   private busy = false;
+  private blobList: BlobNotice[] = [];
+  private ceiling: number | undefined;
+
+  /** Blobs to show: progress for ones that are coming, and a plain message for ones too big for Bluetooth. */
+  setBlobs(list: BlobNotice[], ceilingBytes?: number): void {
+    this.blobList = list;
+    this.ceiling = ceilingBytes;
+    this.render();
+  }
 
   /** Give the panel the transport to show. */
   set transport(t: PanelTransport | undefined) {
@@ -73,6 +90,17 @@ export class BluetoothPanel extends HTMLElement {
     }
   }
 
+  private blobsHtml(): string {
+    if (!this.blobList.length) return '';
+    const items = this.blobList.map((b) => {
+      const wait = blobWaitMessage({ name: b.name, size: b.size, ...(this.ceiling !== undefined ? { ceilingBytes: this.ceiling } : {}) });
+      if (wait) return `<li class="bt-blob-wait">${esc(wait)}</li>`;
+      const pct = b.bytesDone !== undefined ? Math.min(100, Math.round((b.bytesDone / Math.max(1, b.size)) * 100)) : 0;
+      return `<li class="bt-blob"><span>${esc(b.name)}</span> <progress max="100" value="${pct}" aria-label="Downloading ${esc(b.name)}">${pct}%</progress> <span class="bt-pct">${pct}%</span></li>`;
+    });
+    return `<ul class="bt-blobs" aria-label="Files">${items.join('')}</ul>`;
+  }
+
   private render(): void {
     const t = this.t;
     if (!t) {
@@ -100,6 +128,7 @@ export class BluetoothPanel extends HTMLElement {
               ? ''
               : '<p class="bt-help">Someone nearby needs to be running a Hub (an Android or desktop app). Ask them to start it, then press the button.</p>'
         }
+        ${this.blobsHtml()}
         <button type="button" data-act="find" ${unsupported || this.busy ? 'disabled' : ''}>${this.busy ? 'Looking for Hubs…' : conns.length ? 'Connect to another Hub' : 'Find a Hub'}</button>
       </section>`;
     this.querySelector('[data-act="find"]')?.addEventListener('click', () => void this.find());
