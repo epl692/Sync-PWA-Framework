@@ -15,10 +15,10 @@ async function twoHubs(codes: { a: 'link' | 'serve'; b: 'link' | 'serve' }) {
   const mk = async (name: string, kind: 'link' | 'serve') => {
     const bridge = new MockBleBridge(link);
     const hub = await createHub({ bridge, store: createMemoryStore(), settings: { displayName: name } });
+    const events: HubEvent[] = [];
+    hub.on((e) => events.push(e)); // before anything can happen
     await hub.start();
     await hub.addServeCode(kind === 'link' ? access.linkCode : access.serveCode);
-    const events: HubEvent[] = [];
-    hub.on((e) => events.push(e));
     cleanups.push(async () => void (await hub.stop().catch(() => undefined), await bridge.close()));
     return { hub, bridge, events, name };
   };
@@ -43,7 +43,7 @@ describe('Hub-to-Hub', () => {
     const initiator = w.a.hub.hubs.linkedFingerprints().length === 1 ? w.a : w.b;
     const other = initiator === w.a ? w.b : w.a;
     expect(initiator.hub.fingerprint < other.hub.fingerprint).toBe(true);
-    expect(initiator.events.some((e) => e.type === 'hub-linked')).toBe(true);
+    await waitFor(() => initiator.events.some((e) => e.type === 'hub-linked'), 5000, 'the hub-linked event');
 
     const ca = await w.client('alice', 'Camp A');
     const cb = await w.client('bob', 'Camp B');

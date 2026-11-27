@@ -279,6 +279,7 @@ export async function createHub(o: HubOptions): Promise<Hub> {
       const was = settings.accessMode;
       settings = mergeSettings(settings, patch);
       await store.saveSettings(settings);
+      if (patch.hubToHub === true) void hubs.rescan();
       void retention.run().catch(() => undefined); // a new retention period or storage limit takes effect now
       // switching to open mode lets devices that were waiting for approval in (members only: they already proved a Space)
       if (was === 'approval' && settings.accessMode === 'open') for (const r of registry.all()) if (r.state === 'pending') registry.approve(r.device);
@@ -299,6 +300,7 @@ export async function createHub(o: HubOptions): Promise<Hub> {
       await store.putSpace(rec);
       const info = spaceInfo(rec);
       emit({ type: 'space-added', space: info, auto: false });
+      void hubs.rescan(); // a link code may now allow linking to a Hub that is already in range
       return info;
     },
     async removeSpace(space, opts) {

@@ -78,6 +78,12 @@ export class HubToHub {
     await this.o.bridge.startScan(LINK_UUIDS.serviceUuid).catch(() => undefined);
   }
 
+  /** Look again for Hubs already in range (a link code was just added, or linking was just switched on). */
+  async rescan(): Promise<void> {
+    if (this.stopped || !this.offSeen) return;
+    await this.o.bridge.startScan(LINK_UUIDS.serviceUuid).catch(() => undefined);
+  }
+
   async stop(): Promise<void> {
     this.stopped = true;
     this.offSeen?.();
