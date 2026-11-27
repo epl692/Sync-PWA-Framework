@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ClientInfo, HubControl, HubEvent, HubSettings, ServedSpaceInfo } from '@sync/hub-core';
-import { HubClients, HubSpaces, HubStatus, defineHubUi } from '../src';
+import { HubAccess, HubClients, HubSpaces, HubStatus, defineHubUi } from '../src';
 
 beforeAll(() => defineHubUi());
 
 function fakeHub(over: Partial<{ spaces: ServedSpaceInfo[]; clients: ClientInfo[] }> = {}) {
   const handlers = new Set<(e: HubEvent) => void>();
-  const calls = { added: [] as string[], removed: [] as Array<[string, boolean]>, left: [] as string[] };
+  const calls = { added: [] as string[], removed: [] as Array<[string, boolean]>, left: [] as string[], acts: [] as Array<[string, string]>, settings: [] as Array<Partial<HubSettings>> };
   const state = { spaces: over.spaces ?? [], clients: over.clients ?? [] };
   const settings: HubSettings = { displayName: 'Camp <hub>', accessMode: 'open', autoSpaces: false, maxClients: 7, retentionDays: 14, storageLimitBytes: 1 << 30, perSpaceCapBytes: 1 << 28, hubToHub: true, keepAwake: false };
   const hub = {
@@ -22,6 +22,11 @@ function fakeHub(over: Partial<{ spaces: ServedSpaceInfo[]; clients: ClientInfo[
     },
     removeSpace: async (s: string, o: { deleteStored: boolean }) => void calls.removed.push([s, o.deleteStored]),
     disconnect: async (d: string) => void calls.left.push(d),
+    approve: async (d: string) => void calls.acts.push(['approve', d]),
+    deny: async (d: string) => void calls.acts.push(['deny', d]),
+    block: async (d: string) => void calls.acts.push(['block', d]),
+    unblock: async (d: string) => void calls.acts.push(['unblock', d]),
+    updateSettings: async (p: Partial<HubSettings>) => void calls.settings.push(p),
     on: (h: (e: HubEvent) => void) => (handlers.add(h), () => void handlers.delete(h)),
   } as unknown as HubControl;
   return { hub, calls, state, emit: (e: HubEvent) => handlers.forEach((h) => h(e)) };
@@ -99,5 +104,48 @@ describe('<hub-clients>', () => {
     f.state.clients = [{ device: 'D', name: 'x', state: 'trusted', connected: true, spaces: [], lastSeen: 0 }];
     f.emit({ type: 'client-connected', client: f.state.clients[0]! });
     expect(el.querySelector('li')).not.toBeNull();
+  });
+});
+
+describe('<hub-clients> owner actions', () => {
+  const mk = (state: ClientInfo['state'], connected = true): ClientInfo => ({ device: 'D', name: 'Maya', state, connected, spaces: [], lastSeen: 0 });
+  const click = (el: HTMLElement, act: string) => (el.querySelector(`[data-act="${act}"]`) as HTMLElement).click();
+
+  it('a pending device can be approved or denied, and the owner is told how many are waiting', async () => {
+    const f = fakeHub({ clients: [mk('pending')] });
+    const el = mount<HubClients>('hub-clients', f.hub);
+    expect(el.querySelector('.cl-pending')!.textContent).toBe('1 device is waiting for your approval.');
+    click(el, 'approve');
+    click(el, 'deny');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(f.calls.acts).toEqual([['approve', 'D'], ['deny', 'D']]);
+  });
+  it('a trusted device can be blocked, a blocked one unblocked; disconnect only when connected', async () => {
+    const f = fakeHub({ clients: [mk('trusted', false)] });
+    const el = mount<HubClients>('hub-clients', f.hub);
+    expect(el.querySelector('[data-act="disconnect"]')).toBeNull();
+    click(el, 'block');
+    const f2 = fakeHub({ clients: [mk('blocked', false)] });
+    const el2 = mount<HubClients>('hub-clients', f2.hub);
+    click(el2, 'unblock');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(f.calls.acts).toEqual([['block', 'D']]);
+    expect(f2.calls.acts).toEqual([['unblock', 'D']]);
+  });
+});
+
+describe('<hub-access>', () => {
+  it('switches between open and approval mode and toggles automatic Spaces', () => {
+    const f = fakeHub();
+    const el = mount<HubAccess>('hub-access', f.hub);
+    expect((el.querySelector('input[value="open"]') as HTMLInputElement).checked).toBe(true);
+    const approval = el.querySelector('input[value="approval"]') as HTMLInputElement;
+    approval.checked = true;
+    approval.dispatchEvent(new Event('change'));
+    const auto = el.querySelector('input[name="auto"]') as HTMLInputElement;
+    auto.checked = true;
+    auto.dispatchEvent(new Event('change'));
+    expect(f.calls.settings).toEqual([{ accessMode: 'approval' }, { autoSpaces: true }]);
+    expect(el.textContent).toMatch(/can fill the Hub's storage/);
   });
 });

@@ -15,7 +15,7 @@ export type { HubCandidate, HubConnectionInfo, HubConnectionState, ClientTimers 
 export type { HubProofProvider } from './proofs';
 export { checkSupport, describeStatus, toTransportState, type BluetoothTransportStatus } from './status';
 export { createIndexedDbTrustStore, createMemoryTrustStore, type TrustedHub, type TrustedHubStore, type PinnedHub } from './trustStore';
-export { defaultBluetooth, GattError, type BluetoothLike, type DeviceLike } from './webBluetooth';
+export { defaultBluetooth, openGattLink, requestHub, GattError, type BluetoothLike, type DeviceLike, type GattLink } from './webBluetooth';
 
 /** Preferred message size: the core batches to this (capabilities.maxMessageBytes). Larger messages are framed and still carried. */
 export const UNFRAMED_MESSAGE_BYTES = 512 * 1024;
@@ -74,6 +74,8 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
   const links = new Map<string, { link: ClientLink; peerId: string }>();
   /** Radio links that are closing: a new connection to the same device waits, or it would be torn down by the old close. */
   const releasing = new Map<string, Promise<void>>();
+  /** Links still being set up (securing, waiting for owner approval): shown to the user like connected ones. */
+  const connecting = new Set<ClientLink>();
   let state: TransportState = 'idle';
   let status: BluetoothTransportStatus = { kind: 'needs-hub', message: 'Find a Hub to sync with.' };
 
@@ -91,7 +93,7 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
     }
     for (const h of [...statusChange]) h(s);
   };
-  const connections = () => [...links.values()].map((l) => l.link.info);
+  const connections = () => [...links.values()].map((l) => l.link.info).concat([...connecting].map((l) => l.info));
   const notifyConns = () => {
     const c = connections();
     for (const h of [...connChange]) h(c);
@@ -130,9 +132,14 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
       },
     });
     let info: HubConnectionInfo;
+    connecting.add(link);
+    notifyConns();
     try {
       info = await link.connect();
+      connecting.delete(link);
     } catch (e) {
+      connecting.delete(link);
+      notifyConns();
       if (e instanceof HubLinkError) {
         if (e.code === 'busy') setStatus({ kind: 'full', hub: gatt.name, retryAfterMs: e.retryMs ?? 5000 });
         emit('error', { code: e.code, message: e.message });
@@ -180,6 +187,7 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
 
     async stop() {
       for (const { link } of [...links.values()]) link.close('stopped');
+    for (const link of [...connecting]) link.close('stopped');
       links.clear();
       if (state !== 'unsupported') {
         state = 'idle';

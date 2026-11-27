@@ -5,6 +5,8 @@
 
 import { LinkServer, type PeerHandle, type Timers } from './link/server';
 import { applyServeCode, parseServeCode, pruneExpiredKeys, ServeCodeError } from './access/codes';
+import { claimAutoSpace } from './access/autoSpaces';
+import { ClientRegistry } from './clients';
 import type { BleBridge } from './bridge';
 import { loadOrCreateHubIdentity, type HubIdentity } from './identity';
 import { RelayHub } from './relay/relayHub';
@@ -56,6 +58,8 @@ export async function createHub(o: HubOptions): Promise<Hub> {
   const emit = (e: HubEvent) => {
     for (const h of [...handlers]) h(e);
   };
+  const registry = new ClientRegistry(store, () => settings, now);
+  await registry.load();
   const peerSpaces = new Map<string, Set<string>>();
   const connected = new Map<DeviceId, PeerHandle>();
   const bytesPerSpace = new Map<SpaceId, number>();
@@ -68,7 +72,13 @@ export async function createHub(o: HubOptions): Promise<Hub> {
       deviceName: settings.displayName,
       admit: (peerId, space) => peerSpaces.get(peerId)?.has(space) === true,
       onStore: (space, id, raw) => {
-        bytesPerSpace.set(space, (bytesPerSpace.get(space) ?? 0) + raw.length);
+        const used = bytesPerSpace.get(space) ?? 0;
+        // an automatically added Space may not use more than its share of the storage (spec FR-031)
+        if (records.get(space)?.source === 'auto' && used + raw.length > settings.perSpaceCapBytes) {
+          relay.dropPacket(space, id);
+          return;
+        }
+        bytesPerSpace.set(space, used + raw.length);
         void store.addPacket(space, id, raw, now()).catch(() => undefined);
       },
     },
@@ -78,6 +88,15 @@ export async function createHub(o: HubOptions): Promise<Hub> {
     identity,
     settings: () => settings,
     records: () => records.values(),
+    gate: registry,
+    claim: async (a) => {
+      const rec = await claimAutoSpace({ settings, records, claim: a.claim, entry: a.entry, hubFingerprint: a.hubFingerprint, nc: a.nc, nh: a.nh, now: now() });
+      if (!rec) return false;
+      records.set(rec.space, rec);
+      await store.putSpace(rec);
+      emit({ type: 'space-added', space: spaceInfo(rec), auto: true });
+      return true;
+    },
     now,
     ...(o.timers ? { timers: o.timers } : {}),
     ...(o.maxMessageBytes ? { maxMessageBytes: o.maxMessageBytes } : {}),
@@ -97,6 +116,17 @@ export async function createHub(o: HubOptions): Promise<Hub> {
   });
 
   const clientInfo = (p: PeerHandle): ClientInfo => ({ device: p.device, name: p.name, state: 'trusted', connected: true, spaces: [...p.spaces], lastSeen: now() });
+  const recordInfo = (r: { device: string; name: string; state: 'pending' | 'trusted' | 'blocked'; blockedUntil?: number; lastSeen: number; spaces: string[] }, on: Set<string>): ClientInfo => ({
+    device: r.device,
+    name: r.name,
+    state: r.state === 'trusted' && r.blockedUntil !== undefined && r.blockedUntil > now() ? 'blocked' : r.state,
+    connected: on.has(r.device),
+    spaces: [...r.spaces],
+    lastSeen: r.lastSeen,
+  });
+  registry.on((e) => {
+    if (e.type === 'pending') emit({ type: 'approval-needed', client: recordInfo(e.record, link.connectedDevices()) });
+  });
   const spaceInfo = (r: ServedSpaceRecord): ServedSpaceInfo => ({
     space: r.space,
     ...(r.name ? { name: r.name } : {}),
@@ -122,10 +152,6 @@ export async function createHub(o: HubOptions): Promise<Hub> {
     }
   }
 
-  const notImplemented = (what: string): never => {
-    throw new HubError('not-implemented', `${what} is not available yet`);
-  };
-
   const hub: Hub = {
     relay,
     link,
@@ -143,8 +169,11 @@ export async function createHub(o: HubOptions): Promise<Hub> {
 
     settings: () => ({ ...settings }),
     async updateSettings(patch) {
+      const was = settings.accessMode;
       settings = mergeSettings(settings, patch);
       await store.saveSettings(settings);
+      // switching to open mode lets devices that were waiting for approval in (members only: they already proved a Space)
+      if (was === 'approval' && settings.accessMode === 'open') for (const r of registry.all()) if (r.state === 'pending') registry.approve(r.device);
       await link.refreshInfo();
     },
 
@@ -174,11 +203,24 @@ export async function createHub(o: HubOptions): Promise<Hub> {
     },
     spaces: () => [...records.values()].map(spaceInfo),
 
-    clients: () => [...connected.values()].map(clientInfo),
-    approve: async () => notImplemented('approval mode'),
-    deny: async () => notImplemented('approval mode'),
-    block: async () => notImplemented('blocking'),
-    unblock: async () => notImplemented('blocking'),
+    clients: () => {
+      const on = link.connectedDevices();
+      return registry.all().map((r) => recordInfo(r, on));
+    },
+    async approve(device) {
+      if (!registry.approve(device)) throw new HubError('unknown-device', 'That device is not known to this Hub.');
+    },
+    async deny(device) {
+      if (!registry.deny(device)) throw new HubError('unknown-device', 'That device is not known to this Hub.');
+      await link.disconnectDevice(device);
+    },
+    async block(device) {
+      if (!registry.block(device)) throw new HubError('unknown-device', 'That device is not known to this Hub.');
+      await link.disconnectDevice(device);
+    },
+    async unblock(device) {
+      registry.unblock(device);
+    },
     async disconnect(device) {
       const p = connected.get(device);
       if (p) await link.disconnect(p.id, 'owner');

@@ -10,7 +10,7 @@
     ".": "./src/index.ts",
     "./link": "./src/link/index.ts",
     "./module": "./src/module.ts",
-    "./ui": "./src/ui/bluetooth-panel.ts"
+    "./ui": "./src/ui/index.ts"
   },
   "dependencies": {
     "@sync/core": "*"

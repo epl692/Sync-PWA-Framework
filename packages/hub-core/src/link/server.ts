@@ -22,6 +22,9 @@ import {
   type HubInfo,
 } from '@sync/transport-bluetooth/link';
 import { verifyMembership, type AuthEntry } from '../access/verify';
+import type { Claim } from '../access/autoSpaces';
+import type { ClientGate } from '../clients';
+import { HandshakeLimiter } from './limits';
 import type { BleBridge, BleConnId } from '../bridge';
 import type { HubIdentity } from '../identity';
 import type { HubSettings, ServedSpaceRecord } from '../types';
@@ -54,6 +57,10 @@ export interface LinkServerOptions {
   /** A client authenticated and may sync. */
   onPeerReady(peer: PeerHandle): void;
   onPeerGone(peer: PeerHandle): void;
+  /** Approval, blocking and strikes (spec US2). Default: every proven member is trusted. */
+  gate?: ClientGate;
+  /** Automatic Space mode: register a claimed Space if allowed. Returns true if the Space is now served. */
+  claim?(c: { claim: Claim; entry: AuthEntry | undefined; hubFingerprint: Uint8Array; nc: Uint8Array; nh: Uint8Array }): Promise<boolean>;
   /** A core message from an admitted client. */
   onCore(peer: PeerHandle, bytes: Uint8Array): void;
 }
@@ -65,13 +72,17 @@ const KEEPALIVE_TICK_MS = 5_000;
 const PING_AFTER_MS = 15_000;
 const DEAD_AFTER_MS = 45_000;
 const BUSY_RETRY_MS = 5_000;
+const PENDING_MS = 10 * 60_000;
+const STRIKE_WINDOW_MS = 10 * 60_000;
 const DEV_LABEL = new TextEncoder().encode('sync-hub-dev/1');
 
 interface Conn {
   id: BleConnId;
   mtu: number;
   channel: LinkChannel;
-  state: 'hello' | 'auth' | 'ready' | 'closing';
+  state: 'hello' | 'auth' | 'pending' | 'ready' | 'closing';
+  /** Set once the device is proven (never from a claim alone). */
+  device?: string;
   slot: boolean;
   nc?: Uint8Array;
   nh?: Uint8Array;
@@ -101,6 +112,7 @@ export class LinkServer {
   private readonly now: () => number;
   private readonly timers: Timers;
   private readonly maxMessageBytes: number;
+  private readonly limiter = new HandshakeLimiter();
 
   constructor(private readonly o: LinkServerOptions) {
     this.now = o.now ?? (() => Date.now());
@@ -174,6 +186,17 @@ export class LinkServer {
     await this.close(c, reason);
   }
 
+  /** Devices with a live connection that has been proven, including ones waiting for approval. */
+  connectedDevices(): Set<string> {
+    return new Set([...this.conns.values()].filter((c) => c.device && c.state !== 'closing').map((c) => c.device!));
+  }
+
+  /** Close every connection of a device (owner block or deny). */
+  async disconnectDevice(device: string): Promise<void> {
+    // a connection waiting for approval answers `denied` and closes itself; closing it here would cut that answer off
+    for (const c of [...this.conns.values()]) if (c.device === device && c.state !== 'pending') await this.close(c, 'owner');
+  }
+
   peers(): PeerHandle[] {
     return [...this.byPeer.values()].filter((c) => c.state === 'ready').map((c) => c.peer!);
   }
@@ -189,7 +212,7 @@ export class LinkServer {
       probes: new ProbeCollector(),
       probeSent: false,
       lastRx: this.now(),
-      strikes: new StrikeWindow(3, 10_000),
+      strikes: new StrikeWindow(3, STRIKE_WINDOW_MS),
       channel: undefined as unknown as LinkChannel,
     };
     conn.channel = new LinkChannel({
@@ -208,7 +231,7 @@ export class LinkServer {
     });
     this.conns.set(id, conn);
     conn.authTimer = this.timers.setTimeout(() => {
-      if (conn.state !== 'ready') void this.close(conn, 'auth-timeout');
+      if (conn.state === 'hello' || conn.state === 'auth') void this.close(conn, 'auth-timeout');
     }, AUTH_DEADLINE_MS);
   }
 
@@ -231,6 +254,7 @@ export class LinkServer {
     this.timers.clearTimeout(c.probeTimer);
     const wasSlot = c.slot;
     c.slot = false;
+    if (c.device) this.o.gate?.seen(c.device, []);
     if (c.peer && this.byPeer.get(c.peer.id) === c) {
       this.byPeer.delete(c.peer.id);
       this.o.onPeerGone(c.peer);
@@ -247,7 +271,9 @@ export class LinkServer {
 
   private strike(c: Conn, _reason: string): void {
     if (c.state === 'closing') return;
-    if (c.strikes.record(this.now())) void this.close(c, 'too-many-strikes');
+    // a strike before the device is proven counts against the connection only: a claimed ID is not evidence of who it is
+    const blocked = c.device && this.o.gate ? this.o.gate.strike(c.device) : false;
+    if (c.strikes.record(this.now()) || blocked) void this.close(c, 'too-many-strikes');
   }
 
   private tick(): void {
@@ -266,7 +292,7 @@ export class LinkServer {
     c.lastRx = this.now();
     if (c.state !== 'hello' || msg[0] !== Kind.HELLO) return this.strike(c, 'unexpected-hello');
     const s = this.o.settings();
-    if (this.active >= s.maxClients) {
+    if (!this.limiter.allowHello(this.now()) || this.active >= s.maxClients) {
       c.channel.sendPlain(busyAck(LINK_VERSIONS[1], BUSY_RETRY_MS));
       this.timers.setTimeout(() => void this.close(c, 'busy'), 500);
       return;
@@ -295,6 +321,12 @@ export class LinkServer {
       else if (msg.t !== 'ping' && msg.t !== 'pong') this.strike(c, 'before-auth');
       return;
     }
+    if (c.state === 'pending') {
+      if (msg.t === 'bye') await this.close(c, 'bye');
+      else if (msg.t !== 'ping' && msg.t !== 'pong') this.strike(c, 'while-pending');
+      else if (msg.t === 'ping') await c.channel.sendControl({ t: 'pong' }).catch(() => undefined);
+      return;
+    }
     if (c.state !== 'ready') return;
     switch (msg.t) {
       case 'ping':
@@ -321,11 +353,27 @@ export class LinkServer {
     // the device ID is self-certifying: it must be the hash of the key that signed the session binding
     const id = base32(new Uint8Array(await crypto.subtle.digest('SHA-256', pub as unknown as BufferSource)).slice(0, 16));
     if (id !== device || !(await verifyDevice(pub, devSig, concat(DEV_LABEL, c.hubFingerprint, c.nc, c.nh)))) return this.strike(c, 'bad-auth');
+    if (c.state !== 'auth') return;
+    c.device = device; // proven: from here strikes count against the device
+    if (!this.limiter.allowDevice(device, this.now())) {
+      await c.channel.sendControl({ t: 'reject', code: 'busy', retryMs: 60_000 }).catch(() => undefined);
+      this.timers.setTimeout(() => void this.close(c, 'rate-limited'), 300);
+      return;
+    }
 
     const entries: AuthEntry[] = [];
     for (const e of spaces) {
       const o = e as Partial<AuthEntry>;
       if (typeof o?.space === 'string' && typeof o.epoch === 'number' && typeof o.sig === 'string') entries.push({ space: o.space, epoch: o.epoch, sig: o.sig });
+    }
+    // automatic Space mode: honor claims for Spaces not served yet (each must prove it holds the claimed key)
+    if (this.o.claim && Array.isArray(m.claim)) {
+      for (const cl of (m.claim as unknown[]).slice(0, 64)) {
+        const claim = cl as Partial<Claim>;
+        if (typeof claim?.space !== 'string' || typeof claim.epoch !== 'number' || typeof claim.accessPublicKey !== 'string') continue;
+        const entry = entries.find((e) => e.space === claim.space && e.epoch === claim.epoch);
+        await this.o.claim({ claim: claim as Claim, entry, hubFingerprint: c.hubFingerprint, nc: c.nc, nh: c.nh });
+      }
     }
     const { accepted, rejected } = await verifyMembership({ records: this.o.records(), entries, hubFingerprint: c.hubFingerprint, nc: c.nc, nh: c.nh, now: this.now() });
     if (c.state !== 'auth') return;
@@ -334,15 +382,41 @@ export class LinkServer {
       this.timers.setTimeout(() => void this.close(c, 'not-served'), 300);
       return;
     }
+    const name = typeof m.name === 'string' ? m.name.slice(0, 64) : 'device';
+
+    // the owner's access rules: open mode trusts a proven member; approval mode holds a new device until the owner decides
+    const verdict = this.o.gate ? await this.o.gate.decide({ device, name, spaces: accepted }) : 'trusted';
+    if (c.state !== 'auth') return;
+    if (verdict === 'blocked') {
+      await c.channel.sendControl({ t: 'reject', code: 'blocked' }).catch(() => undefined);
+      this.timers.setTimeout(() => void this.close(c, 'blocked'), 300);
+      return;
+    }
+    if (verdict === 'pending') {
+      c.state = 'pending';
+      await c.channel.sendControl({ t: 'pending' }).catch(() => undefined);
+      const outcome = await Promise.race([
+        this.o.gate!.decision(device),
+        new Promise<'timeout'>((resolve) => this.timers.setTimeout(() => resolve('timeout'), PENDING_MS)),
+      ]);
+      if (c.state !== 'pending') return; // the connection went away while it waited
+      if (outcome !== 'approved') {
+        await c.channel.sendControl({ t: 'reject', code: 'denied' }).catch(() => undefined);
+        this.timers.setTimeout(() => void this.close(c, outcome), 300);
+        return;
+      }
+    }
+
     // one logical connection per device: a newer connection replaces an older one
     const peerId = `c:${device}`;
     const older = this.byPeer.get(peerId);
     if (older && older !== c) await this.close(older, 'replaced');
-    const peer: PeerHandle = { id: peerId, conn: c.id, device, name: typeof m.name === 'string' ? m.name.slice(0, 64) : 'device', spaces: accepted };
+    const peer: PeerHandle = { id: peerId, conn: c.id, device, name, spaces: accepted };
     c.peer = peer;
     c.state = 'ready';
     this.timers.clearTimeout(c.authTimer);
     this.byPeer.set(peerId, c);
+    this.o.gate?.seen(device, accepted);
     await c.channel.sendControl({ t: 'auth-ok', state: 'trusted', accepted, rejected });
     this.o.onPeerReady(peer);
   }

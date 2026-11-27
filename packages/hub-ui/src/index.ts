@@ -138,19 +138,56 @@ export class HubSpaces extends HubElement {
   }
 }
 
-/** `<hub-clients>`: who is connected. */
+/** `<hub-clients>`: every known device with what the owner can do about it (approve, deny, block, unblock, disconnect). */
 export class HubClients extends HubElement {
   private row(c: ClientInfo): string {
-    return `<li data-device="${esc(c.device)}"><span class="cl-name">${esc(c.name)}</span> <span class="cl-state" data-state="${c.state}">${c.connected ? 'connected' : 'not connected'}, ${c.state}</span>
-      <button type="button" data-act="disconnect" data-device="${esc(c.device)}">Disconnect</button></li>`;
+    const acts: string[] = [];
+    if (c.state === 'pending') acts.push(`<button type="button" data-act="approve" data-device="${esc(c.device)}">Approve</button>`, `<button type="button" data-act="deny" data-device="${esc(c.device)}">Deny</button>`);
+    if (c.state === 'trusted') acts.push(`<button type="button" data-act="block" data-device="${esc(c.device)}">Block</button>`);
+    if (c.state === 'blocked') acts.push(`<button type="button" data-act="unblock" data-device="${esc(c.device)}">Unblock</button>`);
+    if (c.connected) acts.push(`<button type="button" data-act="disconnect" data-device="${esc(c.device)}">Disconnect</button>`);
+    const label = c.state === 'pending' ? 'waiting for approval' : c.state;
+    return `<li data-device="${esc(c.device)}"><span class="cl-name">${esc(c.name)}</span> <span class="cl-state" data-state="${c.state}">${c.connected ? 'connected' : 'not connected'}, ${label}</span> ${acts.join(' ')}</li>`;
   }
   protected render(): void {
     const h = this.hub;
     if (!h) return void (this.innerHTML = '');
     const list = h.clients();
+    const pending = list.filter((c) => c.state === 'pending').length;
     this.innerHTML = `<section aria-labelledby="hc-h"><h2 id="hc-h">Devices</h2>
+      ${pending ? `<p class="cl-pending" role="status" aria-live="polite">${pending} ${pending === 1 ? 'device is' : 'devices are'} waiting for your approval.</p>` : ''}
       ${list.length ? `<ul>${list.map((c) => this.row(c)).join('')}</ul>` : '<p class="cl-empty">No devices are connected right now.</p>'}</section>`;
-    for (const b of this.querySelectorAll('[data-act="disconnect"]')) b.addEventListener('click', () => void h.disconnect((b as HTMLElement).dataset.device!));
+    const acts: Record<string, (d: string) => Promise<void>> = {
+      approve: (d) => h.approve(d),
+      deny: (d) => h.deny(d),
+      block: (d) => h.block(d),
+      unblock: (d) => h.unblock(d),
+      disconnect: (d) => h.disconnect(d),
+    };
+    for (const b of this.querySelectorAll('button[data-act]')) {
+      const el = b as HTMLElement;
+      el.addEventListener('click', () => void acts[el.dataset.act!]!(el.dataset.device!).then(() => this.render()));
+    }
+  }
+}
+
+/** `<hub-access>`: who may connect (open or approval) and whether Spaces are added automatically. */
+export class HubAccess extends HubElement {
+  protected render(): void {
+    const h = this.hub;
+    if (!h) return void (this.innerHTML = '');
+    const s = h.settings();
+    this.innerHTML = `<section aria-labelledby="ha-h"><h2 id="ha-h">Who can connect</h2>
+      <fieldset><legend>Access</legend>
+        <label><input type="radio" name="mode" value="open" ${s.accessMode === 'open' ? 'checked' : ''}> Anyone who belongs to a Space this Hub serves</label>
+        <label><input type="radio" name="mode" value="approval" ${s.accessMode === 'approval' ? 'checked' : ''}> Only devices I approve</label>
+      </fieldset>
+      <label><input type="checkbox" name="auto" ${s.autoSpaces ? 'checked' : ''}> Serve any Space a connecting device brings (for events; can fill the Hub's storage)</label>
+      </section>`;
+    for (const r of this.querySelectorAll('input[name="mode"]')) {
+      r.addEventListener('change', () => void h.updateSettings({ accessMode: (r as HTMLInputElement).value as 'open' | 'approval' }));
+    }
+    this.querySelector('input[name="auto"]')?.addEventListener('change', (e) => void h.updateSettings({ autoSpaces: (e.target as HTMLInputElement).checked }));
   }
 }
 
@@ -159,6 +196,7 @@ export function defineHubUi(): void {
     ['hub-status', HubStatus],
     ['hub-spaces', HubSpaces],
     ['hub-clients', HubClients],
+    ['hub-access', HubAccess],
   ] as const) {
     if (!customElements.get(tag)) customElements.define(tag, ctor as unknown as CustomElementConstructor);
   }

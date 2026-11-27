@@ -9,3 +9,6 @@ export * from './access/codes';
 export * from './access/verify';
 export { LinkServer, type LinkServerOptions, type PeerHandle, type Timers } from './link/server';
 export { createHub, HubError, type Hub, type HubOptions } from './hub';
+export { ClientRegistry, type ClientGate, type Verdict, BLOCK_MS, STRIKE_LIMIT, STRIKE_WINDOW_MS } from './clients';
+export { claimAutoSpace, MAX_AUTO_SPACES } from './access/autoSpaces';
+export { HandshakeLimiter, SlidingCounter } from './link/limits';
