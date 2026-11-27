@@ -17,6 +17,7 @@ This spec adds a Bluetooth transport plugin implementing the Transport contract 
 - Q: Where must the Bluetooth transport work? → A: Browser PWAs cannot connect to each other over Bluetooth, so the transport uses a **Hub** model. A Hub is a separate app for **Android** or **desktop** (Windows, macOS, Linux). Browser clients connect to a Hub over Bluetooth and need no helper installed on the client device. Browsers that cannot use Bluetooth report the transport as unavailable.
 - Q: Is the helper on the same device as the app, or elsewhere? → A: The Hub is a shared, always-on device that many clients connect to, for example a laptop or phone left at a campsite, during an internet outage, or at an event. Clients do not each need their own helper.
 - Q: By default, does a Hub accept any client in a served Space or only owner-approved clients? → A: Open by default: any client that proves membership in a Space the Hub serves can connect with no owner approval. The Hub owner can switch the Hub to approval-required mode, and can block any client at any time.
+- Q: How does a Hub owner choose which Spaces the Hub serves? → A: Both. The owner adds Spaces explicitly by exporting a "serve this Space" code (QR or pasted, carrying no keys) from their browser app. The owner can also turn on automatic mode, in which the Hub stores packets for any Space a connecting client brings, up to its storage limit; automatic mode is off by default.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -78,7 +79,7 @@ Alice edits on her tablet and leaves the campsite area. Later Bob connects his l
 
 **Why this priority**: A hub that only forwards live traffic would force everyone to be present at once. Store-and-forward is what makes a hub useful for outings and outages.
 
-**Independent Test**: Client A connects, writes, and disconnects. Client B then connects and verifies it receives A's changes from the Hub. Then connect two Hubs and verify clients on each converge.
+**Independent Test**: The Hub owner adds the Space with a serve-Space code. Client A connects, writes, and disconnects. Client B then connects and verifies it receives A's changes from the Hub. Then connect two Hubs and verify clients on each converge.
 
 **Acceptance Scenarios**:
 
@@ -119,6 +120,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - A client or Hub identity changes, or a stale cached peer is encountered: it is re-verified before any exchange.
 - A blocked client reconnects or a client proves membership in no served Space: the Hub rejects it without revealing which Spaces it serves or what it stores.
 - Several Hubs are in range of one client: the user picks which to use, and the client may connect to more than one at once.
+- A client brings a Space the Hub is not set to serve while automatic mode is off: the Hub rejects it with a message that says the owner must add that Space, without revealing what the Hub stores.
 - The Hub's storage fills up: the oldest already-delivered packets are dropped first and the Hub owner is warned; no undelivered packet is silently lost.
 - Message sizes exceed what one Bluetooth transmission can carry: large packets are split and reassembled transparently, and an incomplete message is discarded on timeout.
 
@@ -142,36 +144,38 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - **FR-009**: A Hub MUST persist its stored packets across restarts, and MUST apply a size limit and retention policy that a Hub owner can configure. When full, it MUST drop already-delivered packets first and warn the owner.
 - **FR-010**: Hubs in range of each other MUST be able to sync with each other so that clients on different Hubs converge. Android and desktop Hubs MUST interoperate.
 - **FR-011**: A Hub MUST NOT hold Space keys or be able to read packet content. It MUST be treated as an untrusted relay (Constitution Principles IV and V), seeing only routing metadata.
-- **FR-012**: A Hub owner MUST be able to see connected clients, choose which Spaces the Hub serves, switch between open mode (default) and approval-required mode, and disconnect or block any client.
+- **FR-012**: A Hub owner MUST be able to see connected clients, choose which Spaces the Hub serves, switch between open mode (default) and approval-required mode, switch automatic Space mode on or off, and disconnect or block any client.
 
 **Discovery and connection**
 
-- **FR-013**: A client MUST be able to discover nearby Hubs and connect to one without internet access.
-- **FR-014**: Discovery MUST NOT disclose Space contents, object data, or membership lists to devices that have not proven membership in a shared Space.
-- **FR-015**: In open mode (the default), a Hub MUST accept any client that proves membership in a Space the Hub serves, with no owner approval. In approval-required mode, a new client MUST be approved by the Hub owner before any packets are exchanged. Either way, the client MUST confirm on first use which Hub it is connecting to.
-- **FR-016**: Users MUST see a recognizable name for each Hub and MUST be able to disconnect from or forget a Hub at any time.
-- **FR-017**: A client MUST be able to reconnect automatically to a previously trusted Hub that comes back in range, if the user has allowed it.
-- **FR-018**: A client MUST be able to be connected to more than one Hub at the same time.
+- **FR-013**: A Hub MUST start serving a Space when the owner provides a "serve this Space" code exported from a member's app; the code MUST carry no keys and MUST NOT let the Hub read content. With automatic Space mode off (the default), a Hub MUST NOT store packets for Spaces the owner has not added.
+- **FR-014**: With automatic Space mode on, a Hub MUST store packets for Spaces its connecting clients bring, up to its storage limit, with a per-Space cap so one Space cannot use all storage, and MUST show the owner which Spaces were added automatically and let them remove any.
+- **FR-015**: A client MUST be able to discover nearby Hubs and connect to one without internet access.
+- **FR-016**: Discovery MUST NOT disclose Space contents, object data, or membership lists to devices that have not proven membership in a shared Space.
+- **FR-017**: In open mode (the default), a Hub MUST accept any client that proves membership in a Space the Hub serves, with no owner approval. In approval-required mode, a new client MUST be approved by the Hub owner before any packets are exchanged. Either way, the client MUST confirm on first use which Hub it is connecting to.
+- **FR-018**: Users MUST see a recognizable name for each Hub and MUST be able to disconnect from or forget a Hub at any time.
+- **FR-019**: A client MUST be able to reconnect automatically to a previously trusted Hub that comes back in range, if the user has allowed it.
+- **FR-020**: A client MUST be able to be connected to more than one Hub at the same time.
 
 **Sync behavior**
 
-- **FR-019**: On connect, client and Hub MUST exchange sync state and send only the packets the other lacks, then stream new packets as they are created.
-- **FR-020**: After an interrupted connection, sync MUST resume by exchanging only missing packets; partial packets MUST be discarded and re-requested.
-- **FR-021**: Packets and messages larger than a single Bluetooth transmission MUST be split and reassembled transparently, with timeouts for incomplete messages.
-- **FR-022**: Configurable size limits from spec 001 MUST apply to data received over Bluetooth, and over-limit input MUST be rejected.
-- **FR-023**: The transport MUST support relaying packets between Bluetooth and other transports per the Framework's relay rules, without loops.
-- **FR-024**: Blobs MUST transfer using the blob rules from spec 004 (chunked, verified, resumable), at a priority that does not block ordinary packet sync, and the user MUST see progress.
+- **FR-021**: On connect, client and Hub MUST exchange sync state and send only the packets the other lacks, then stream new packets as they are created.
+- **FR-022**: After an interrupted connection, sync MUST resume by exchanging only missing packets; partial packets MUST be discarded and re-requested.
+- **FR-023**: Packets and messages larger than a single Bluetooth transmission MUST be split and reassembled transparently, with timeouts for incomplete messages.
+- **FR-024**: Configurable size limits from spec 001 MUST apply to data received over Bluetooth, and over-limit input MUST be rejected.
+- **FR-025**: The transport MUST support relaying packets between Bluetooth and other transports per the Framework's relay rules, without loops.
+- **FR-026**: Blobs MUST transfer using the blob rules from spec 004 (chunked, verified, resumable), at a priority that does not block ordinary packet sync, and the user MUST see progress.
 
 **Security**
 
-- **FR-025**: Packets received over Bluetooth MUST go through the same signature, role, and decryption checks as on any other transport; the transport MUST NOT grant authority to any peer or Hub.
-- **FR-026**: A client or Hub that repeatedly sends invalid data MUST be disconnected and temporarily blocked.
-- **FR-027**: A Hub MUST limit concurrent clients and connection-attempt rates, tell clients that cannot be served that the Hub is full, and not let a nearby device flood it.
+- **FR-027**: Packets received over Bluetooth MUST go through the same signature, role, and decryption checks as on any other transport; the transport MUST NOT grant authority to any peer or Hub.
+- **FR-028**: A client or Hub that repeatedly sends invalid data MUST be disconnected and temporarily blocked.
+- **FR-029**: A Hub MUST limit concurrent clients and connection-attempt rates, tell clients that cannot be served that the Hub is full, and not let a nearby device flood it.
 
 **Status and feedback**
 
-- **FR-028**: The app MUST be able to show connection state per Hub (searching, connecting, syncing, idle, disconnected, full, error) and the number of packets pending in each direction.
-- **FR-029**: Platform requirements (permissions, browser and device support) MUST be documented, and failure to meet them MUST produce clear, user-friendly messages. This includes telling the user when their browser cannot use Bluetooth at all.
+- **FR-030**: The app MUST be able to show connection state per Hub (searching, connecting, syncing, idle, disconnected, full, error) and the number of packets pending in each direction.
+- **FR-031**: Platform requirements (permissions, browser and device support) MUST be documented, and failure to meet them MUST produce clear, user-friendly messages. This includes telling the user when their browser cannot use Bluetooth at all.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -179,6 +183,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - **Client**: A browser app connecting to a Hub over Bluetooth. Attributes: display name, device identity, shared Spaces, trust state (unknown, trusted, blocked).
 - **Hub Connection**: A live logical link between one client (or Hub) and one Hub, with its sync state, pending packet counts, and transfer progress.
 - **Trusted Hub Record**: A user's saved decision to trust a Hub, enabling reconnection; can be forgotten at any time.
+- **Serve-Space Code**: A keyless code exported from a member's app that tells a Hub to store and forward one Space. Attributes: Space identifier, optional expiry.
 - **Stored Packet Set**: The encrypted packets and blobs a Hub holds per Space for later delivery, with delivery state per client.
 - **Fragmented Message**: A packet or blob chunk split for transmission, with enough information to reassemble it or discard it on timeout.
 - **Transport Status**: The reportable state of the transport (available, unsupported, unavailable, permission needed, Hub full), plus the reason.
@@ -203,7 +208,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 
 - The target scenarios are small groups (roughly 2–8 clients per Hub) at camps, outings, events, and during outages, not large crowds. A Hub serves at least 8 clients at once.
 - Bluetooth throughput is far below Wi-Fi or internet, so text and structured data are the primary use; large blobs are best-effort.
-- Spaces, keys, and signing from spec 002 already exist, and clients share a Space with the Hub's served Spaces before connecting; the transport does not create identity or Space membership. A Hub learns which Spaces to serve from routing identifiers only, not from Space keys.
+- Spaces, keys, and signing from spec 002 already exist, and clients share a Space with the Hub's served Spaces before connecting; the transport does not create identity or Space membership. A Hub learns which Spaces to serve from keyless serve-Space codes or, in automatic mode, from routing identifiers, never from Space keys.
 - In open mode, a stranger who is a member of a served Space can connect and download that Space's encrypted packets; this is acceptable because members are already allowed to hold them, and non-members never connect. Owners who want tighter control use approval-required mode.
 - Users grant the Bluetooth and nearby-device permissions the platform requires.
 - Clients are within normal short-range Bluetooth distance of the Hub (a room, a tent area, or a building floor, not a campus).
