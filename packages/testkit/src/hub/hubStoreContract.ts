@@ -155,7 +155,8 @@ export function hubStoreContract(name: string, harness: HubStoreHarness): void {
       await store.addPacket('S', 'old:2', bytes(10, 1), T0 - 20 * DAY + 1000);
       await store.addPacket('S', 'new:1', bytes(10, 1), T0 - 3 * DAY);
       const r = await store.enforce({ now: T0, retentionDays: 14, limitBytes: 1 << 30 });
-      expect(r).toEqual({ expired: 2, evictedDelivered: 0, evictedUndelivered: 0 });
+      expect(r).toMatchObject({ expired: 2, evictedDelivered: 0, evictedUndelivered: 0 });
+      expect(r.dropped.map((d) => d.id).sort()).toEqual(['old:1', 'old:2']);
       expect((await ids(store, 'S')).map((x) => x.id)).toEqual(['new:1']);
       // changing the retention takes effect on the next enforcement
       const r2 = await store.enforce({ now: T0, retentionDays: 1, limitBytes: 1 << 30 });
@@ -172,11 +173,12 @@ export function hubStoreContract(name: string, harness: HubStoreHarness): void {
       await store.addPacket('S', 'd2:1', bytes(100, 1), T0 - 1 * DAY);
       await store.markDelivered('S', ['d1:1', 'd2:1']);
       let r = await store.enforce({ now: T0, retentionDays: 365, limitBytes: 300 });
-      expect(r).toEqual({ expired: 0, evictedDelivered: 1, evictedUndelivered: 0 });
+      expect(r).toMatchObject({ expired: 0, evictedDelivered: 1, evictedUndelivered: 0 });
+      expect(r.dropped).toEqual([{ space: 'S', id: 'd1:1' }]);
       expect((await ids(store, 'S')).map((x) => x.id)).toEqual(['u1:1', 'u2:1', 'd2:1']);
       r = await store.enforce({ now: T0, retentionDays: 365, limitBytes: 100 });
       // d2 goes first (the only delivered one left), then the OLDEST undelivered
-      expect(r).toEqual({ expired: 0, evictedDelivered: 1, evictedUndelivered: 1 });
+      expect(r).toMatchObject({ expired: 0, evictedDelivered: 1, evictedUndelivered: 1 });
       expect((await ids(store, 'S')).map((x) => x.id)).toEqual(['u2:1']);
       expect((await store.usage()).total).toBe(100);
     });
@@ -184,7 +186,7 @@ export function hubStoreContract(name: string, harness: HubStoreHarness): void {
     it('enforce does nothing when under every limit', async () => {
       const { store } = await open();
       await store.addPacket('S', 'a:1', bytes(10, 1), T0);
-      expect(await store.enforce({ now: T0, retentionDays: 14, limitBytes: 1000 })).toEqual({ expired: 0, evictedDelivered: 0, evictedUndelivered: 0 });
+      expect(await store.enforce({ now: T0, retentionDays: 14, limitBytes: 1000 })).toEqual({ expired: 0, evictedDelivered: 0, evictedUndelivered: 0, dropped: [] });
     });
 
     it('a torn last record is discarded on reopen and earlier records are intact', async () => {

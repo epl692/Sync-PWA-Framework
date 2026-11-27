@@ -107,6 +107,7 @@ export function createMemoryStore(): HubStore {
     },
 
     async enforce({ now, retentionDays, limitBytes }) {
+      const dropped: Array<{ space: SpaceId; id: PacketId }> = [];
       let expired = 0;
       let evictedDelivered = 0;
       let evictedUndelivered = 0;
@@ -115,6 +116,7 @@ export function createMemoryStore(): HubStore {
         for (const [id, r] of [...m]) {
           if (shardExpired(r.receivedAt, now, retentionDays)) {
             m.delete(id);
+            dropped.push({ space: s, id });
             expired++;
           } else {
             total += r.bytes.length;
@@ -132,18 +134,20 @@ export function createMemoryStore(): HubStore {
         for (const x of delivered) {
           if (total <= limitBytes) break;
           packets.get(x.s)!.delete(x.id);
+          dropped.push({ space: x.s, id: x.id });
           total -= x.r.bytes.length;
           evictedDelivered++;
         }
         for (const x of undelivered) {
           if (total <= limitBytes) break;
           packets.get(x.s)!.delete(x.id);
+          dropped.push({ space: x.s, id: x.id });
           total -= x.r.bytes.length;
           evictedUndelivered++;
         }
         for (const [s, m] of packets) if (!m.size) packets.delete(s);
       }
-      return { expired, evictedDelivered, evictedUndelivered };
+      return { expired, evictedDelivered, evictedUndelivered, dropped };
     },
   };
 }

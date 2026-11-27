@@ -12,3 +12,7 @@ export { createHub, HubError, type Hub, type HubOptions } from './hub';
 export { ClientRegistry, type ClientGate, type Verdict, BLOCK_MS, STRIKE_LIMIT, STRIKE_WINDOW_MS } from './clients';
 export { claimAutoSpace, MAX_AUTO_SPACES } from './access/autoSpaces';
 export { HandshakeLimiter, SlidingCounter } from './link/limits';
+export { createSegmentStore, SegmentFormatError } from './store/segmentStore';
+export { createMemoryFs, type FsPort, type MemoryFs } from './store/fsPort';
+export { Retention, RETENTION_INTERVAL_MS, NEAR_LIMIT_FRACTION } from './retention';
+export type { EnforceResult } from './store/types';

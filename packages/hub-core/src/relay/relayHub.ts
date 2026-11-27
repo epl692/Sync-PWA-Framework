@@ -29,6 +29,8 @@ export interface RelayHubOptions {
   admit?: (peerId: string, space: string) => boolean;
   /** Called once for each newly stored packet with its original bytes (write-behind persistence). Duplicates never call it. */
   onStore?: (space: string, id: string, raw: Uint8Array) => void;
+  /** Called when packets were sent to a peer that did not author them (it is now holding a copy somewhere else). */
+  onDelivered?: (space: string, ids: string[], toPeer: string) => void;
   maxMessageBytes?: number;
   maxEnvelopeBytes?: number;
   batchPackets?: number;
@@ -53,9 +55,10 @@ export class RelayHub {
   /** Binary lanes (spec 004, B-1): messages whose first byte is a registered magic bypass the sync protocol. */
   private lanes = new Map<number, (peerId: string, bytes: Uint8Array) => void>();
   private laneGone = new Set<(peerId: string) => void>();
-  private readonly o: Required<Omit<RelayHubOptions, 'admit' | 'onStore'>>;
+  private readonly o: Required<Omit<RelayHubOptions, 'admit' | 'onStore' | 'onDelivered'>>;
   private readonly admit: (peerId: string, space: string) => boolean;
   private readonly onStore: ((space: string, id: string, raw: Uint8Array) => void) | undefined;
+  private readonly onDelivered: ((space: string, ids: string[], toPeer: string) => void) | undefined;
 
   constructor(
     private readonly send: (peerId: string, bytes: Uint8Array) => void,
@@ -70,6 +73,7 @@ export class RelayHub {
     };
     this.admit = opts.admit ?? (() => true);
     this.onStore = opts.onStore;
+    this.onDelivered = opts.onDelivered;
   }
 
   private store(space: string): SpaceStore {
@@ -225,6 +229,7 @@ export class RelayHub {
       if (!items.length) return;
       this.emit(peerId, { t: 'packets', space, items });
       for (const id of ids) this.markHeld(peer, space, id);
+      this.onDelivered?.(space, ids, peerId);
       items = [];
       ids = [];
       size = 0;
@@ -284,6 +289,7 @@ export class RelayHub {
         if (containsValue(known, seq)) continue;
         this.emit(otherId, { t: 'packets', space, items: [item] });
         this.markHeld(other, space, id);
+        this.onDelivered?.(space, [id], otherId);
       }
     }
     if (accepted.length) this.emit(from, { t: 'ack', space, ids: accepted });

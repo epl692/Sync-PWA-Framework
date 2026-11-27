@@ -4,9 +4,11 @@
  */
 
 import { LinkServer, type PeerHandle, type Timers } from './link/server';
+import type { EnforceResult } from './store/types';
 import { applyServeCode, parseServeCode, pruneExpiredKeys, ServeCodeError } from './access/codes';
 import { claimAutoSpace } from './access/autoSpaces';
 import { ClientRegistry } from './clients';
+import { Retention } from './retention';
 import type { BleBridge } from './bridge';
 import { loadOrCreateHubIdentity, type HubIdentity } from './identity';
 import { RelayHub, type RelayHubOptions } from './relay/relayHub';
@@ -34,6 +36,8 @@ export interface Hub extends HubControl {
   readonly relay: RelayHub;
   readonly link: LinkServer;
   readonly identity: HubIdentity;
+  /** Apply retention and the storage limit right now (it also runs at start, hourly, and after packets arrive). */
+  enforceNow(): Promise<EnforceResult>;
 }
 
 export class HubError extends Error {
@@ -66,8 +70,18 @@ export async function createHub(o: HubOptions): Promise<Hub> {
   const connected = new Map<DeviceId, PeerHandle>();
   const bytesPerSpace = new Map<SpaceId, number>();
 
+  const timers: Timers = o.timers ?? {
+    setTimeout: (fn, ms) => setTimeout(fn, ms),
+    clearTimeout: (h) => clearTimeout(h as never),
+    setInterval: (fn, ms) => setInterval(fn, ms),
+    clearInterval: (h) => clearInterval(h as never),
+  };
   // eslint-disable-next-line prefer-const
   let link: LinkServer;
+  // eslint-disable-next-line prefer-const
+  let retention: Retention;
+  const pendingDelivered = new Map<SpaceId, Set<string>>();
+  let deliveredFlush: unknown;
   const relay = new RelayHub(
     (peerId, bytes) => void link.send(peerId, bytes).catch(() => undefined),
     {
@@ -83,6 +97,18 @@ export async function createHub(o: HubOptions): Promise<Hub> {
         }
         bytesPerSpace.set(space, used + raw.length);
         void store.addPacket(space, id, raw, now()).catch(() => undefined);
+        retention.poke();
+      },
+      // a packet sent on to a peer that did not author it is no longer only here: it may be evicted before one that nobody has
+      onDelivered: (space, ids) => {
+        const set = pendingDelivered.get(space) ?? new Set<string>();
+        for (const id of ids) set.add(id);
+        pendingDelivered.set(space, set);
+        deliveredFlush ??= timers.setTimeout(() => {
+          deliveredFlush = undefined;
+          for (const [sp, set2] of [...pendingDelivered]) void store.markDelivered(sp, [...set2]).catch(() => undefined);
+          pendingDelivered.clear();
+        }, 0);
       },
     },
   );
@@ -101,7 +127,7 @@ export async function createHub(o: HubOptions): Promise<Hub> {
       return true;
     },
     now,
-    ...(o.timers ? { timers: o.timers } : {}),
+    timers,
     ...(o.maxMessageBytes ? { maxMessageBytes: o.maxMessageBytes } : {}),
     onPeerReady: (peer) => {
       peerSpaces.set(peer.id, new Set(peer.spaces));
@@ -122,6 +148,18 @@ export async function createHub(o: HubOptions): Promise<Hub> {
     onCore: (peer, bytes) => relay.onMessage(peer.id, bytes),
   });
 
+  retention = new Retention({
+    store,
+    relay,
+    settings: () => settings,
+    records: () => records.values(),
+    now,
+    timers,
+    emit,
+    onUsage: (perSpace) => {
+      for (const k of [...bytesPerSpace.keys()]) bytesPerSpace.set(k, perSpace[k] ?? 0);
+    },
+  });
   const clientInfo = (p: PeerHandle): ClientInfo => ({ device: p.device, name: p.name, state: 'trusted', connected: true, spaces: [...p.spaces], lastSeen: now() });
   const recordInfo = (r: { device: string; name: string; state: 'pending' | 'trusted' | 'blocked'; blockedUntil?: number; lastSeen: number; spaces: string[] }, on: Set<string>): ClientInfo => ({
     device: r.device,
@@ -167,9 +205,13 @@ export async function createHub(o: HubOptions): Promise<Hub> {
 
     async start() {
       await preload();
+      await retention.run().catch(() => undefined);
+      retention.start();
       await link.start();
     },
+    enforceNow: () => retention.run(),
     async stop() {
+      retention.stop();
       await link.stop();
       await store.close();
     },
@@ -179,6 +221,7 @@ export async function createHub(o: HubOptions): Promise<Hub> {
       const was = settings.accessMode;
       settings = mergeSettings(settings, patch);
       await store.saveSettings(settings);
+      void retention.run().catch(() => undefined); // a new retention period or storage limit takes effect now
       // switching to open mode lets devices that were waiting for approval in (members only: they already proved a Space)
       if (was === 'approval' && settings.accessMode === 'open') for (const r of registry.all()) if (r.state === 'pending') registry.approve(r.device);
       await link.refreshInfo();

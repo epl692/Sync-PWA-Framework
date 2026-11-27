@@ -35,9 +35,13 @@ export interface HubStore {
 
   usage(): Promise<{ total: number; perSpace: Record<SpaceId, number> }>;
   /** Delete expired day shards, then evict by policy until under `limitBytes`. Reports what was dropped. */
-  enforce(args: { now: number; retentionDays: number; limitBytes: number }): Promise<{
-    expired: number;
-    evictedDelivered: number;
-    evictedUndelivered: number;
-  }>;
+  enforce(args: { now: number; retentionDays: number; limitBytes: number }): Promise<EnforceResult>;
+}
+
+export interface EnforceResult {
+  expired: number;
+  evictedDelivered: number;
+  evictedUndelivered: number;
+  /** Every packet that was removed, so the caller can forget its bytes too. */
+  dropped: Array<{ space: SpaceId; id: PacketId }>;
 }

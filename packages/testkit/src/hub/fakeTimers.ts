@@ -19,13 +19,18 @@ export function createFakeTimers(start = 1_800_000_000_000): FakeTimers {
     now: () => t,
     async advance(ms) {
       const end = t + ms;
+      const fired = new Map<number, number>();
       for (;;) {
         const due = [...q.entries()].filter(([, v]) => v.at <= end).sort((a, b) => a[1].at - b[1].at)[0];
         if (!due) break;
         const [id, v] = due;
         t = Math.max(t, v.at);
-        if (v.every) v.at += v.every;
-        else q.delete(id);
+        if (v.every) {
+          // a very long advance would fire a short interval millions of times: after 200 firings spread the rest out
+          const n = (fired.get(id) ?? 0) + 1;
+          fired.set(id, n);
+          v.at += n > 200 ? Math.max(v.every, Math.ceil((end - t) / 50)) : v.every;
+        } else q.delete(id);
         v.fn();
         // let promise continuations run between timers
         await new Promise((r) => setTimeout(r, 0));
