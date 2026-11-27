@@ -87,6 +87,10 @@ npm run bench -w @sync/core             # compaction of 100k packets
 
 Validation scenarios are in `specs/001-sync-core/quickstart.md`, `specs/002-spaces-security-identity/quickstart.md` and `specs/004-blob-sync/quickstart.md`; results in the matching `validation.md`. Browser tests in a sandbox without `playwright install`: set `PW_CHROMIUM_PATH` to an installed Chromium.
 
+## Bluetooth Hubs
+
+Nearby devices can sync with no network through a **Hub** (an Android or desktop app) over Bluetooth, end-to-end encrypted so the Hub cannot read anything. See [docs/bluetooth.md](docs/bluetooth.md). Status: the transport, Hub logic and screens are implemented and tested on a simulated radio; the native Hub apps are not built yet.
+
 ## Writing a transport
 
 Implement the `Transport` interface (`specs/001-sync-core/contracts/transport.ts`) and run the contract suite:
