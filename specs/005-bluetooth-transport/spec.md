@@ -212,6 +212,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - Bluetooth throughput is far below Wi-Fi or internet, so text and structured data are the primary use; large blobs are best-effort.
 - Spaces, keys, and signing from spec 002 already exist, and clients share a Space with the Hub's served Spaces before connecting; the transport does not create identity or Space membership. A Hub learns which Spaces to serve from keyless serve-Space codes or, in automatic mode, from routing identifiers, never from Space keys.
 - In open mode, a stranger who is a member of a served Space can connect and download that Space's encrypted packets; this is acceptable because members are already allowed to hold them, and non-members never connect. Owners who want tighter control use approval-required mode.
+- Out of scope for v1: direct client-to-client Bluetooth between two browsers (browsers cannot accept Bluetooth connections), iOS clients and Hubs, and any Hub feature that reads Space content.
 - Users grant the Bluetooth and nearby-device permissions the platform requires.
 - Clients are within normal short-range Bluetooth distance of the Hub (a room, a tent area, or a building floor, not a campus).
 - The Hub is a local relay, not a cloud server: it needs no internet and no account.
