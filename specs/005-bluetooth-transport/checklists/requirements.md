@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (1 open: runtime scope, FR-022 / Clarifications)
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,5 +31,6 @@
 
 ## Notes
 
+- Runtime scope resolved 2026-11-27: option B, companion helper for Android and desktop.
 - SC-009 uses "small, documented share"; tighten once the plan sets a budget.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`

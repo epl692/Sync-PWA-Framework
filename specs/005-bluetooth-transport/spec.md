@@ -14,7 +14,7 @@ This spec adds a Bluetooth transport plugin implementing the Transport contract 
 
 ### Session 2026-11-27
 
-- Q: Where must the Bluetooth transport work? → A: [NEEDS CLARIFICATION: Browsers can only act as Bluetooth clients, so two browser-only PWAs cannot connect directly. Spec 001 dropped Bluetooth from v1 for this reason. Which runtime scope applies?]
+- Q: Where must the Bluetooth transport work? → A: The app stays a plain browser PWA, and a separate **companion helper** app does the Bluetooth radio work for it. v1 helpers: **Android** and **desktop**. Browser-only devices with no helper report the transport as unavailable.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -31,7 +31,8 @@ A user with an app built on the Framework is in a place with no internet (a fiel
 1. **Given** two devices in the same Space with no internet, **When** the users connect them over Bluetooth, **Then** all packets one device has and the other lacks are exchanged until both hold the same state.
 2. **Given** two connected devices, **When** a user edits an object, **Then** the change appears on the other device within a few seconds with no user action.
 3. **Given** two devices that have never met, **When** they connect, **Then** neither user needs to enter an address, code, or account information beyond an on-screen confirmation.
-4. **Given** a connection is established, **When** the app is also connected to another transport, **Then** both run simultaneously and packets are deduplicated by ID.
+4. **Given** an app with no helper installed, **When** the user opens the Bluetooth screen, **Then** they are told a helper is needed and how to get it, and the app works normally on other transports.
+5. **Given** a connection is established, **When** the app is also connected to another transport, **Then** both run simultaneously and packets are deduplicated by ID.
 
 ---
 
@@ -103,6 +104,8 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 ### Edge Cases
 
 - Bluetooth is turned off, permission is denied, or the device has no Bluetooth: the transport reports itself unsupported or unavailable and the app continues on other transports or fully offline.
+- The helper is stopped, crashes, or is uninstalled: the transport reports "unavailable", queued packets stay safe in the app's outbox, and sync resumes when the helper returns.
+- The app and helper are on different versions: they negotiate a compatible version or report a clear "update needed" message.
 - Many devices are nearby: the number of simultaneous connections is limited, and the user is told when a limit prevents another connection.
 - A peer sends corrupted, truncated, or over-limit data: it is rejected without affecting other packets or other peers.
 - The app is in the background or the device is asleep: sync is paused or continues according to platform limits, and resumes on return with no data loss.
@@ -153,7 +156,12 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 
 **Runtime scope**
 
-- **FR-022**: The transport MUST work on [NEEDS CLARIFICATION: runtime scope — browser-only PWAs cannot connect to each other over Bluetooth; options are browser as client to a native/companion peer, an installable native wrapper on both ends, or a hybrid with graceful "unsupported" on browsers lacking support].
+- **FR-022**: The Bluetooth transport MUST let a browser-based app use Bluetooth through a companion helper running on the same device or on a device the user controls. v1 MUST ship helpers for Android and for desktop (Windows, macOS, Linux).
+- **FR-023**: The app MUST detect whether a helper is present and paired with it; with no helper, the transport MUST report "unavailable" with a reason that tells the user how to get a helper.
+- **FR-024**: The link between the app and its helper MUST be authenticated so that other apps, pages, or devices cannot use the helper to read or inject packets. The helper MUST be treated as untrusted for content (packets stay encrypted and signed end to end) and MUST NOT hold Space keys.
+- **FR-025**: The helper MUST keep carrying Bluetooth sync when the app is closed or in the background, within platform limits, and hand packets to the app when it next opens.
+- **FR-026**: One helper MUST be able to serve more than one app or Space on its device, keeping each app's data separated.
+- **FR-027**: Android and desktop helpers MUST interoperate: any helper-equipped device can sync with any other, regardless of platform.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -161,6 +169,8 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - **Peer Connection**: A live logical link to one peer, with its sync state, pending packet counts, and transfer progress.
 - **Trusted Peer Record**: A user's saved decision to trust a peer, enabling reconnection; can be forgotten at any time.
 - **Fragmented Message**: A packet or blob chunk split for transmission, with enough information to reassemble it or discard it on timeout.
+- **Companion Helper**: The Android or desktop program that performs Bluetooth discovery and data exchange on behalf of a browser app. Attributes: platform, version, pairing state with the app, apps served.
+- **App–Helper Pairing**: The authenticated, user-approved link between one app and one helper; can be revoked at any time.
 - **Transport Status**: The reportable state of the whole transport (available, unsupported, unavailable, permission needed), plus the reason.
 
 ## Success Criteria *(mandatory)*
@@ -176,6 +186,8 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - **SC-007**: The transport passes 100% of the Transport contract test suite, and no core code changes are required.
 - **SC-008**: Where Bluetooth is unavailable, 100% of app functions continue to work with no error dialogs beyond a single status message.
 - **SC-009**: Keeping a trusted connection idle for one hour uses no more than a small, documented share of battery compared to the app with the transport off.
+- **SC-010**: A user can install a helper and pair it with the app in under 5 minutes, following on-screen guidance only.
+- **SC-011**: An Android helper device and a desktop helper device sync with each other successfully in 100% of interoperability tests.
 
 ## Assumptions
 
@@ -185,4 +197,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - Users grant the Bluetooth and nearby-device permissions the platform requires.
 - Devices are within normal short-range Bluetooth distance (a room or building, not across a campus).
 - The transport has no server component and does not rely on a cloud service for discovery or pairing.
-- Supporting multiple operating systems equally is the goal, but platform differences in Bluetooth behavior are documented rather than hidden.
+- Browser-only PWAs cannot reach each other over Bluetooth, so a companion helper is required; the app itself remains static-hostable and works without the helper.
+- iOS and iPadOS helpers are out of scope for v1.
+- Helpers are distributed separately from the app; how they are published and installed is decided in planning.
+- Platform differences in Bluetooth behavior are documented rather than hidden.
