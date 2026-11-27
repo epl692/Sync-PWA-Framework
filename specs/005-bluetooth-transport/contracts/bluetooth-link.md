@@ -60,7 +60,7 @@ Encoding before encryption: first byte is the **kind**.
 |---|---|---|
 | `0xF0` | `hello` (plaintext, client to Hub) | JSON, see below |
 | `0xF1` | `hello-ack` (plaintext, Hub to client) | JSON, see below |
-| `0xE0` | encrypted message | `counter (8 B BE) | AES-256-GCM(inner)` |
+| `0xE0` | encrypted message | `counter (8 B BE) | AES-256-GCM(inner)`; AAD = `0xE0 | counter` |
 
 Inner plaintext of an `0xE0` message: first byte is the **inner kind**.
 
@@ -85,7 +85,7 @@ client                                           hub
 - `ek` is an ephemeral X25519 public key, `nc` and `nh` are 16 random bytes each (base64url).
 - `hello-ack.sig = Ed25519(hubKey, "sync-link/1" || clientEk || hubEk || nc || nh || hubFingerprintBytes)`.
 - Session keys: `HKDF-SHA-256(ECDH(ekc, ekh), salt = nc || nh, info = "sync-link/1 keys")` giving `c2h` and `h2c` AES-256 keys, 32 bytes each.
-- Nonce: 4 zero bytes then the 8-byte counter (direction fixed by which key is used). Receivers require the counter to be strictly greater than any previous one in that direction (drops replays; gaps are fine because a message can be aborted).
+- Nonce: 4 zero bytes then the 8-byte counter (direction fixed by which key is used). AAD: the kind byte `0xE0` then the 8-byte counter. Receivers require the counter to be strictly greater than any previous one in that direction (drops replays; gaps are fine because a message can be aborted).
 - The client verifies `hubKey`:
   - first contact: show `fingerprint` and name, user confirms, key is pinned (`TrustedHubRecord`);
   - known Hub: the key MUST equal the pinned key. If not, abort with `hub-identity-changed`.
