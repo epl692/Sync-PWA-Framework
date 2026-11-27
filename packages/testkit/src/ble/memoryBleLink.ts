@@ -246,6 +246,8 @@ export class MemoryBleLink {
   private readonly powerListeners = new Set<(on: boolean) => void>();
   private readonly advListeners = new Set<(a: { address: string; name: string; serviceUuid: string }) => void>();
   private nextConn = 0;
+  /** What crossed the air, for measuring (frames and bytes in each direction, before any simulated loss). */
+  readonly stats = { framesToPeripheral: 0, bytesToPeripheral: 0, framesToCentral: 0, bytesToCentral: 0 };
   private rand: () => number;
 
   constructor(private readonly base: BleAirOptions = {}) {
@@ -455,6 +457,8 @@ export class MemoryBleLink {
   }
 
   _toPeripheral(c: Conn, bytes: Uint8Array, lossy: boolean): void {
+    this.stats.framesToPeripheral++;
+    this.stats.bytesToPeripheral += bytes.length;
     const copies = this.faults(c, lossy);
     for (let i = 0; i < copies; i++) {
       c.toPeripheral = c.toPeripheral.then(() => this.delay(c)).then(() => {
@@ -465,6 +469,8 @@ export class MemoryBleLink {
 
   _toCentral(c: Conn, bytes: Uint8Array): void {
     if (!c.notifying) return; // nothing is sent to a client that has not subscribed
+    this.stats.framesToCentral++;
+    this.stats.bytesToCentral += bytes.length;
     const copies = this.faults(c, true);
     for (let i = 0; i < copies; i++) {
       c.toCentral = c.toCentral.then(() => this.delay(c)).then(() => {

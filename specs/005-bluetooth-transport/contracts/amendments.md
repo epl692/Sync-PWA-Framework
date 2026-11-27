@@ -29,6 +29,25 @@ Adds `deriveHubAccess(epochKey, spaceId, epoch)`, `exportHubCode(space, opts)`, 
 
 Adds `MemoryBleLink` (simulated GATT with MTU, write limit, loss, duplication, latency, disconnect), `bleBridgeContract()`, `hubStoreContract()`, and Hub peers for convergence tests. No existing export changes.
 
+## B-4: Blob engine gets a source filter (`packages/blobs`)
+
+`BlobsConfig.sourceFilter?: (peer: { transport: string; bulk: boolean }, ref: BlobRef) => boolean`. When set, the scheduler only asks peers
+for which it returns true (a throwing filter counts as "allowed"). Default: unset, behavior unchanged. `@sync/transport-bluetooth` supplies
+`bluetoothBlobFilter(ceilingBytes = 5 MiB)` so large blobs wait for a faster transport (research R-05). No wire change.
+
+| Question | Answer |
+|---|---|
+| Wire change | None |
+| Older code | Unaffected (option is new and optional) |
+| Tests | `packages/blobs/tests/integration/source-filter.test.ts`, `packages/transport-bluetooth/tests/blob-ceiling.test.ts` |
+
+## Additions made while implementing R-2 (all additive)
+
+- `RelayHubOptions.onDelivered`, `RelayHub.preload()`, `RelayHub.dropPacket()` in addition to `store`/`admit`.
+  (The persistence hook is write-behind `onStore` plus `preload` at start, rather than a synchronous store interface, so the relay stays synchronous.)
+- `BlobRelay` moved to `@sync/hub-core` with `RelayHub`; `@sync/relay-server` re-exports both.
+- Link control messages `resync` and `resync-ack` (additive; older peers would ignore them, but both ends of a link are always the same build family).
+
 ## No changes to
 
 - `Transport` contract (`specs/001-sync-core/contracts/transport.ts`). The Bluetooth transport uses it as is. `capabilities.blobs` is `false`; the blob module's per-transport ceiling is a configuration of the Bluetooth module (see R-05), not a contract change.
