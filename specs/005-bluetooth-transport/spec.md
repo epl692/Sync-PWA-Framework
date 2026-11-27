@@ -16,6 +16,7 @@ This spec adds a Bluetooth transport plugin implementing the Transport contract 
 
 - Q: Where must the Bluetooth transport work? → A: Browser PWAs cannot connect to each other over Bluetooth, so the transport uses a **Hub** model. A Hub is a separate app for **Android** or **desktop** (Windows, macOS, Linux). Browser clients connect to a Hub over Bluetooth and need no helper installed on the client device. Browsers that cannot use Bluetooth report the transport as unavailable.
 - Q: Is the helper on the same device as the app, or elsewhere? → A: The Hub is a shared, always-on device that many clients connect to, for example a laptop or phone left at a campsite, during an internet outage, or at an event. Clients do not each need their own helper.
+- Q: By default, does a Hub accept any client in a served Space or only owner-approved clients? → A: Open by default: any client that proves membership in a Space the Hub serves can connect with no owner approval. The Hub owner can switch the Hub to approval-required mode, and can block any client at any time.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -39,7 +40,7 @@ A group is somewhere with no internet (a campsite, an event, an outage). One per
 
 ### User Story 2 - Discover and Choose Nearby Peers Safely (Priority: P1)
 
-A user opens the Bluetooth connection screen and sees nearby Hubs. They connect only to a Hub that serves a Space they share, and are never exposed to data from Spaces they are not in. A Hub owner controls who may connect.
+A user opens the Bluetooth connection screen and sees nearby Hubs. They connect only to a Hub that serves a Space they share, and are never exposed to data from Spaces they are not in. A Hub owner can restrict who may connect.
 
 **Why this priority**: A local radio transport is reachable by strangers. Without safe discovery and trust, the feature is a data-leak risk.
 
@@ -49,7 +50,7 @@ A user opens the Bluetooth connection screen and sees nearby Hubs. They connect 
 
 1. **Given** several nearby Hubs, **When** the user opens the connection screen, **Then** they see each Hub with a human-readable name and which shared Spaces apply.
 2. **Given** a client that shares no Space with the Hub, **When** it attempts to connect, **Then** it receives no packets and no Space content, and the attempt is rejected.
-3. **Given** a connection request from an unknown client, **When** the Hub owner has not approved it (or approval is not required by the Hub's setting), **Then** nothing is exchanged until it is approved.
+3. **Given** a Hub in its default open mode, **When** a client that proves membership in a served Space connects, **Then** it syncs with no approval step; **Given** the owner has switched the Hub to approval-required mode, **When** an unknown client connects, **Then** nothing is exchanged until the owner approves it.
 4. **Given** a peer sends a packet with an invalid signature or from an author without a role in the Space, **When** it arrives over Bluetooth, **Then** it is rejected exactly as on any other transport.
 
 ---
@@ -116,6 +117,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - A device rapidly moves in and out of range: connection attempts are throttled so battery and the UI are not overwhelmed.
 - Two peers connect to each other at the same moment from both sides: only one logical connection results.
 - A client or Hub identity changes, or a stale cached peer is encountered: it is re-verified before any exchange.
+- A blocked client reconnects or a client proves membership in no served Space: the Hub rejects it without revealing which Spaces it serves or what it stores.
 - Several Hubs are in range of one client: the user picks which to use, and the client may connect to more than one at once.
 - The Hub's storage fills up: the oldest already-delivered packets are dropped first and the Hub owner is warned; no undelivered packet is silently lost.
 - Message sizes exceed what one Bluetooth transmission can carry: large packets are split and reassembled transparently, and an incomplete message is discarded on timeout.
@@ -140,13 +142,13 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - **FR-009**: A Hub MUST persist its stored packets across restarts, and MUST apply a size limit and retention policy that a Hub owner can configure. When full, it MUST drop already-delivered packets first and warn the owner.
 - **FR-010**: Hubs in range of each other MUST be able to sync with each other so that clients on different Hubs converge. Android and desktop Hubs MUST interoperate.
 - **FR-011**: A Hub MUST NOT hold Space keys or be able to read packet content. It MUST be treated as an untrusted relay (Constitution Principles IV and V), seeing only routing metadata.
-- **FR-012**: A Hub owner MUST be able to see connected clients, choose which Spaces the Hub serves, require approval for new clients, and disconnect or block any client.
+- **FR-012**: A Hub owner MUST be able to see connected clients, choose which Spaces the Hub serves, switch between open mode (default) and approval-required mode, and disconnect or block any client.
 
 **Discovery and connection**
 
 - **FR-013**: A client MUST be able to discover nearby Hubs and connect to one without internet access.
 - **FR-014**: Discovery MUST NOT disclose Space contents, object data, or membership lists to devices that have not proven membership in a shared Space.
-- **FR-015**: A client connecting to a Hub for the first time MUST require explicit confirmation on the client, and on the Hub when the Hub requires approval, before any packets are exchanged.
+- **FR-015**: In open mode (the default), a Hub MUST accept any client that proves membership in a Space the Hub serves, with no owner approval. In approval-required mode, a new client MUST be approved by the Hub owner before any packets are exchanged. Either way, the client MUST confirm on first use which Hub it is connecting to.
 - **FR-016**: Users MUST see a recognizable name for each Hub and MUST be able to disconnect from or forget a Hub at any time.
 - **FR-017**: A client MUST be able to reconnect automatically to a previously trusted Hub that comes back in range, if the user has allowed it.
 - **FR-018**: A client MUST be able to be connected to more than one Hub at the same time.
@@ -173,7 +175,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 
 ### Key Entities *(include if feature involves data)*
 
-- **Hub**: An Android or desktop app that stores and forwards encrypted packets between nearby clients and other Hubs. Attributes: display name, platform, version, Spaces served, storage limit and retention policy, approval setting, connected clients.
+- **Hub**: An Android or desktop app that stores and forwards encrypted packets between nearby clients and other Hubs. Attributes: display name, platform, version, Spaces served, storage limit and retention policy, access mode (open or approval-required), connected clients.
 - **Client**: A browser app connecting to a Hub over Bluetooth. Attributes: display name, device identity, shared Spaces, trust state (unknown, trusted, blocked).
 - **Hub Connection**: A live logical link between one client (or Hub) and one Hub, with its sync state, pending packet counts, and transfer progress.
 - **Trusted Hub Record**: A user's saved decision to trust a Hub, enabling reconnection; can be forgotten at any time.
@@ -202,6 +204,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - The target scenarios are small groups (roughly 2–8 clients per Hub) at camps, outings, events, and during outages, not large crowds. A Hub serves at least 8 clients at once.
 - Bluetooth throughput is far below Wi-Fi or internet, so text and structured data are the primary use; large blobs are best-effort.
 - Spaces, keys, and signing from spec 002 already exist, and clients share a Space with the Hub's served Spaces before connecting; the transport does not create identity or Space membership. A Hub learns which Spaces to serve from routing identifiers only, not from Space keys.
+- In open mode, a stranger who is a member of a served Space can connect and download that Space's encrypted packets; this is acceptable because members are already allowed to hold them, and non-members never connect. Owners who want tighter control use approval-required mode.
 - Users grant the Bluetooth and nearby-device permissions the platform requires.
 - Clients are within normal short-range Bluetooth distance of the Hub (a room, a tent area, or a building floor, not a campus).
 - The Hub is a local relay, not a cloud server: it needs no internet and no account.
