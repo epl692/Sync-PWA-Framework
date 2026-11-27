@@ -54,7 +54,7 @@ export interface HubProofProvider {
   /** Sign the Hub challenge for one Space/epoch with that epoch's derived access key (`hubAuthMessage` in @sync/spaces). */
   proveSpace(a: { space: string; epoch: number; hubFingerprint: Uint8Array; nc: Uint8Array; nh: Uint8Array }): Promise<Uint8Array>;
   /** Sign the session binding ("sync-hub-dev/1" || hubFingerprint || nc || nh) with the device signing key. */
-  proveDevice(a: { hubFingerprint: Uint8Array; nc: Uint8Array; nh: Uint8Array }): Promise<{ device: string; sig: Uint8Array; name: string }>;
+  proveDevice(a: { hubFingerprint: Uint8Array; nc: Uint8Array; nh: Uint8Array }): Promise<{ device: string; publicKey: Uint8Array; sig: Uint8Array; name: string }>;
   /** Access public keys, only used for the optional automatic-mode claim. */
   accessPublic(space: string, epoch: number): Promise<Uint8Array>;
 }
@@ -70,6 +70,7 @@ export interface BluetoothTransportOptions {
   autoReconnect?: boolean;              // default true for trusted Hubs
   /** Blob auto-transfer ceiling advertised to the blob module (research R-05). Default 5 MiB. */
   blobCeilingBytes?: number;
+  /** `maxMessageBytes` is the hard receive limit (default 4 MiB, the 001 limit); the preferred unframed size is 512 KiB. */
   limits?: { maxMessageBytes?: number; reassemblyTimeoutMs?: number };
   /** Injection points for tests (MemoryBleLink). Default: `navigator.bluetooth`. */
   bluetooth?: BluetoothLike;

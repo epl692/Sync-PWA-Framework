@@ -57,6 +57,7 @@ describe('S-2 hub access in a real Space', () => {
     const p = await f.editor.spaces.hubAccess.proofs.proveDevice({ hubFingerprint: fp, nc, nh });
     expect(p.device).toBeTruthy();
     expect(p.sig.byteLength).toBe(64);
+    expect(p.publicKey.byteLength).toBe(32);
     await f.g.close();
   });
 });

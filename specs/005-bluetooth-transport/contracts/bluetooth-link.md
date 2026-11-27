@@ -17,10 +17,10 @@ Advertising: service UUID in the advertisement, display name in the scan respons
 
 ```json
 { "v": [1, 1], "name": "Camp hub", "fp": "<fingerprint>", "mode": "open|approval",
-  "slots": 3, "full": false, "maxWrite": 244 }
+  "slots": 3, "full": false, "auto": false, "maxWrite": 244 }
 ```
 
-`slots` is free client slots, `maxWrite` is the largest write the Hub will accept in one frame (an upper bound for the probe). A client whose `v` range does not overlap shows "update needed" and does not connect further.
+`auto` (optional) says automatic Space mode is on, so a client may send a `claim`. `slots` is free client slots, `maxWrite` is the largest write the Hub will accept in one frame (an upper bound for the probe). A client whose `v` range does not overlap shows "update needed" and does not connect further.
 
 ## Frames
 
@@ -85,7 +85,7 @@ client                                           hub
 - `ek` is an ephemeral X25519 public key, `nc` and `nh` are 16 random bytes each (base64url).
 - `hello-ack.sig = Ed25519(hubKey, "sync-link/1" || clientEk || hubEk || nc || nh || hubFingerprintBytes)`.
 - Session keys: `HKDF-SHA-256(ECDH(ekc, ekh), salt = nc || nh, info = "sync-link/1 keys")` giving `c2h` and `h2c` AES-256 keys, 32 bytes each.
-- Nonce: 4 zero bytes then the 8-byte counter (direction fixed by which key is used). AAD: the kind byte `0xE0` then the 8-byte counter. Receivers require the counter to be strictly greater than any previous one in that direction (drops replays; gaps are fine because a message can be aborted).
+- Nonce: a stream byte (0 for stream 0, 1 for stream 1), 3 zero bytes, then the 8-byte counter (direction fixed by which key is used). Each stream has its own counter and replay window, because messages on different streams complete in a different order from the one they were sealed in. AAD: the kind byte `0xE0` then the 8-byte counter. Receivers require the counter to be strictly greater than any previous one in that direction and stream (drops replays; gaps are fine because a message can be aborted).
 - The client verifies `hubKey`:
   - first contact: show `fingerprint` and name, user confirms, key is pinned (`TrustedHubRecord`);
   - known Hub: the key MUST equal the pinned key. If not, abort with `hub-identity-changed`.
@@ -97,7 +97,7 @@ All inside `0xE0` with inner kind `0x00`.
 
 | `t` | Direction | Fields |
 |---|---|---|
-| `auth` | client to Hub | `device` (device ID, spec 002), `devSig`, `name`, `spaces: [{space, epoch, sig}]`, optional `claim: [{space, epoch, accessPublicKey}]` (automatic mode only) |
+| `auth` | client to Hub | `device` (device ID, spec 002), `devicePub` (its Ed25519 public key; `device` must be the self-certifying ID of this key), `devSig`, `name`, `spaces: [{space, epoch, sig}]`, optional `claim: [{space, epoch, accessPublicKey}]` (automatic mode only) |
 | `auth-ok` | Hub to client | `state: "trusted"`, `accepted: [space]`, `rejected: [space]` |
 | `pending` | Hub to client | owner approval needed. The Hub sends `auth-ok` later, or `reject` |
 | `reject` | Hub to client | `code`: `not-served` (covers unknown Space and bad proof alike), `blocked`, `denied`, `busy` |

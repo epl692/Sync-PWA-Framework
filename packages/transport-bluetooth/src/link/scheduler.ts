@@ -43,6 +43,10 @@ export class ProbeCollector {
     const f = decodeFrame(frameBytes);
     if (f?.type === FrameType.PROBE) this.sizes.add(frameBytes.length);
   }
+  /** Record a probe by its frame length (when the framer already decoded it). */
+  onProbeLength(n: number): void {
+    this.sizes.add(n);
+  }
   received(): number[] {
     return [...this.sizes].sort((a, b) => a - b);
   }
@@ -111,6 +115,13 @@ export class LinkFramer {
     if (this.dead) return;
     this.out[stream].queue.push(message);
     await this.pump();
+  }
+
+  /** Queue a message without waiting for the window: the caller does not block behind a full window. */
+  enqueue(stream: Stream, message: Uint8Array): void {
+    if (this.dead) return;
+    this.out[stream].queue.push(message);
+    void this.pump();
   }
 
   /** Resolves once the pump has nothing left it is able to send. */

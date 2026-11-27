@@ -12,7 +12,7 @@ export interface HubProofs {
   /** Sign the Hub challenge for one Space and epoch with that epoch's derived access key. */
   proveSpace(a: { space: string; epoch: number; hubFingerprint: Uint8Array; nc: Uint8Array; nh: Uint8Array }): Promise<Uint8Array>;
   /** Sign the session binding with the device signing key. */
-  proveDevice(a: { hubFingerprint: Uint8Array; nc: Uint8Array; nh: Uint8Array }): Promise<{ device: string; sig: Uint8Array; name: string }>;
+  proveDevice(a: { hubFingerprint: Uint8Array; nc: Uint8Array; nh: Uint8Array }): Promise<{ device: string; publicKey: Uint8Array; sig: Uint8Array; name: string }>;
   /** Access public key, used only for the optional automatic-mode claim. */
   accessPublic(space: string, epoch: number): Promise<Uint8Array>;
 }
@@ -62,7 +62,7 @@ export function createHubAccess(d: { keystore: Keystore; now?: () => number; spa
     async proveDevice(a) {
       const dev = d.keystore.requireDevice();
       const sig = await signBytes(dev.signPriv, concat(utf8.encode(HUB_DEVICE_LABEL), a.hubFingerprint, a.nc, a.nh));
-      return { device: dev.deviceId, sig, name: dev.displayName ?? 'device' };
+      return { device: dev.deviceId, publicKey: dev.signPub, sig, name: dev.displayName ?? 'device' };
     },
     async accessPublic(space, epoch) {
       const k = await keyFor(space, epoch);

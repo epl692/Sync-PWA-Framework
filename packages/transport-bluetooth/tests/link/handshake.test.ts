@@ -155,6 +155,19 @@ describe('session', () => {
     expect(await hub.open(wrongKind)).toBeNull();
   });
 
+  it('each stream has its own counter and replay window, so a late stream-0 message never blocks stream 1', async () => {
+    const { client, hub } = await pair();
+    const m = encodeControl({ t: 'ping' });
+    const lane = await client.seal(m, undefined, 1); // sealed first, completes last
+    const ctrl1 = await client.seal(m, undefined, 0);
+    const ctrl2 = await client.seal(m, undefined, 0);
+    expect(await hub.open(ctrl1, 0)).toEqual(m);
+    expect(await hub.open(ctrl2, 0)).toEqual(m);
+    expect(await hub.open(lane, 1)).toEqual(m); // counter 1 on stream 1 is fresh even though stream 0 reached 2
+    expect(await hub.open(lane, 1)).toBeNull(); // replay
+    expect(await hub.open(ctrl1, 1)).toBeNull(); // a stream-0 message is not valid on stream 1 (different nonce)
+  });
+
   it('the two directions use different keys (a message cannot be reflected back)', async () => {
     const { client } = await pair();
     const m = encodeControl({ t: 'ping' });

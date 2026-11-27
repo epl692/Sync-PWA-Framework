@@ -7,3 +7,5 @@ export * from './settings';
 export { loadOrCreateHubIdentity, type HubIdentity } from './identity';
 export * from './access/codes';
 export * from './access/verify';
+export { LinkServer, type LinkServerOptions, type PeerHandle, type Timers } from './link/server';
+export { createHub, HubError, type Hub, type HubOptions } from './hub';

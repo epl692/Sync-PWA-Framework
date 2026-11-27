@@ -61,7 +61,7 @@ UUIDs are in [contracts/bluetooth-link.md](./contracts/bluetooth-link.md).
 
 ## R-05 Message sizes and blob policy
 
-**Decision.** `capabilities.maxMessageBytes = 512 KiB` (covers the 001 envelope limit of 256 KiB and the 004 blob chunk of 256 KiB plus lane overhead). Realistic GATT throughput is 10 to 100 KB/s, so the transport advertises `blobs: false` and the Bluetooth module sets a default **blob auto-transfer ceiling of 5 MiB** per blob. Larger blobs show "waits for a faster transport" (spec US5, scenario 3) and transfer automatically as soon as one is connected. The ceiling is configurable per app.
+**Decision.** `capabilities.maxMessageBytes = 512 KiB` (covers the 001 envelope limit of 256 KiB and the 004 blob chunk of 256 KiB plus lane overhead), which is the size the core batches to. Messages up to the 001 hard limit of 4 MiB are still carried, because the link frames them; only larger ones are rejected. Realistic GATT throughput is 10 to 100 KB/s, so the transport advertises `blobs: false` and the Bluetooth module sets a default **blob auto-transfer ceiling of 5 MiB** per blob. Larger blobs show "waits for a faster transport" (spec US5, scenario 3) and transfer automatically as soon as one is connected. The ceiling is configurable per app.
 
 **Why.** At 20 KB/s a 5 MiB blob takes about 4 minutes, which is the most a person at a campsite will tolerate in the background. Packets are small, so object sync stays fast: a 1,000-object Space of about 1 KiB packets is about 1 MiB, roughly 10 to 50 seconds (SC-001 allows 5 minutes).
 

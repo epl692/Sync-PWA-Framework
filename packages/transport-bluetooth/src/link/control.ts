@@ -13,6 +13,8 @@ export type ControlMessage =
   | {
       t: 'auth';
       device: string;
+      /** base64url Ed25519 public key of the device; `device` must equal the self-certifying ID of this key. */
+      devicePub: string;
       devSig: string;
       name: string;
       spaces: AuthSpace[];
