@@ -26,7 +26,7 @@ Technical approach (details in [research.md](./research.md)):
 
 **Primary Dependencies**:
 - `packages/transport-bluetooth` (`@sync/transport-bluetooth`): **none at runtime** beyond `@sync/core`; uses Web Bluetooth and Web Crypto (X25519, Ed25519, HKDF, AES-GCM, all available in Chromium). Dev: `@types/web-bluetooth`.
-- `packages/hub-core` (`@sync/hub-core`): `@sync/core`, `@sync/blobs` (workspace). **No third-party runtime dependency** in the library.
+- `packages/hub-core` (`@sync/hub-core`): `@sync/core`, `@sync/blobs`, and the pure link codec and session crypto from `@sync/transport-bluetooth/link` (workspace; no Web Bluetooth code). **No third-party runtime dependency** in the library, and it never imports `@sync/spaces` (the Hub holds no content keys).
 - `packages/hub-ui` (`@sync/hub-ui`): native Web Components, no framework.
 - `hubs/desktop`: Electron, `dbus-next` (Linux BlueZ), sidecar executables. `hubs/android`: Capacitor 6+, Android Gradle build. These are applications, not libraries, so their dependencies do not affect the core (Constitution Technical Constraints: core keeps runtime dependencies minimal).
 - Dev/test: existing `vitest`, `fast-check`, `fake-indexeddb`, `@playwright/test`.
