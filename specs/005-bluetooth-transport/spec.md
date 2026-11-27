@@ -8,54 +8,55 @@
 
 **Input**: User description: "Build a transport plugin that uses Bluetooth to sync and communicate locally between clients to support offline usage."
 
-This spec adds a Bluetooth transport plugin implementing the Transport contract from spec 001. It lets nearby devices exchange Data Packets (and blobs, per spec 004) with no internet, no server, and no shared Wi-Fi. It builds on the Transport contract (001), Space membership and signing (002), module registration (003), and blob transfer (004). It changes none of them.
+This spec adds a Bluetooth transport plugin implementing the Transport contract from spec 001. It lets nearby devices exchange Data Packets (and blobs, per spec 004) with no internet, no server, and no shared Wi-Fi. Browser apps (tablets, laptops, phones) connect over Bluetooth to a nearby **Hub**, an Android or desktop app that someone leaves running in the area and that stores and forwards encrypted packets between everyone connected to it. It builds on the Transport contract (001), Space membership and signing (002), module registration (003), and blob transfer (004). It changes none of them.
 
 ## Clarifications
 
 ### Session 2026-11-27
 
-- Q: Where must the Bluetooth transport work? → A: The app stays a plain browser PWA, and a separate **companion helper** app does the Bluetooth radio work for it. v1 helpers: **Android** and **desktop**. Browser-only devices with no helper report the transport as unavailable.
+- Q: Where must the Bluetooth transport work? → A: Browser PWAs cannot connect to each other over Bluetooth, so the transport uses a **Hub** model. A Hub is a separate app for **Android** or **desktop** (Windows, macOS, Linux). Browser clients connect to a Hub over Bluetooth and need no helper installed on the client device. Browsers that cannot use Bluetooth report the transport as unavailable.
+- Q: Is the helper on the same device as the app, or elsewhere? → A: The Hub is a shared, always-on device that many clients connect to, for example a laptop or phone left at a campsite, during an internet outage, or at an event. Clients do not each need their own helper.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Sync Two Nearby Devices With No Network (Priority: P1)
+### User Story 1 - Sync Nearby Devices Through a Hub With No Network (Priority: P1)
 
-A user with an app built on the Framework is in a place with no internet (a field, a basement, a flight). They open the app on their phone, and a colleague opens it on theirs. Each user chooses to connect over Bluetooth, the devices find each other, and changes made on either device appear on the other.
+A group is somewhere with no internet (a campsite, an event, an outage). One person leaves a laptop or phone running the Hub. Others open the app on their tablets, laptops, or phones, connect to the Hub over Bluetooth, and changes made on any device appear on the others.
 
-**Why this priority**: This is the whole point of the feature: working collaboration when there is no network at all.
+**Why this priority**: This is the whole point of the feature: working collaboration when there is no network at all, without every device needing special software.
 
-**Independent Test**: Put two devices in airplane mode with Bluetooth on, create objects on each, connect them, and verify both devices converge to the same state.
+**Independent Test**: Put a Hub and two client devices in airplane mode with Bluetooth on, create objects on each client, connect them to the Hub, and verify both clients converge to the same state.
 
 **Acceptance Scenarios**:
 
-1. **Given** two devices in the same Space with no internet, **When** the users connect them over Bluetooth, **Then** all packets one device has and the other lacks are exchanged until both hold the same state.
-2. **Given** two connected devices, **When** a user edits an object, **Then** the change appears on the other device within a few seconds with no user action.
-3. **Given** two devices that have never met, **When** they connect, **Then** neither user needs to enter an address, code, or account information beyond an on-screen confirmation.
-4. **Given** an app with no helper installed, **When** the user opens the Bluetooth screen, **Then** they are told a helper is needed and how to get it, and the app works normally on other transports.
+1. **Given** two clients in the same Space and a running Hub with no internet, **When** both connect to the Hub over Bluetooth, **Then** all packets each has and the other lacks are exchanged through the Hub until both hold the same state.
+2. **Given** connected clients, **When** a user edits an object, **Then** the change appears on the other clients within a few seconds with no user action.
+3. **Given** a client that has never met this Hub, **When** it connects, **Then** the user needs no address, code, or account beyond an on-screen confirmation.
+4. **Given** no Hub in range, or a browser without Bluetooth support, **When** the user opens the Bluetooth screen, **Then** they are told no Hub was found (and how to run one), and the app works normally on other transports.
 5. **Given** a connection is established, **When** the app is also connected to another transport, **Then** both run simultaneously and packets are deduplicated by ID.
 
 ---
 
 ### User Story 2 - Discover and Choose Nearby Peers Safely (Priority: P1)
 
-A user opens the Bluetooth connection screen and sees nearby devices running the same app. They connect only to devices that belong to a Space they share, and are never exposed to data from Spaces they are not in.
+A user opens the Bluetooth connection screen and sees nearby Hubs. They connect only to a Hub that serves a Space they share, and are never exposed to data from Spaces they are not in. A Hub owner controls who may connect.
 
 **Why this priority**: A local radio transport is reachable by strangers. Without safe discovery and trust, the feature is a data-leak risk.
 
-**Independent Test**: Place three devices nearby, two sharing a Space and one outside it. Verify the outsider cannot read any packets or learn Space contents, and the user can tell the devices apart.
+**Independent Test**: Place a Hub and three clients nearby, two sharing a Space with the Hub and one outside it. Verify the outsider cannot read any packets or learn Space contents, and the user can tell the devices apart.
 
 **Acceptance Scenarios**:
 
-1. **Given** several nearby devices running the app, **When** the user opens the connection screen, **Then** they see a list of discoverable peers with a human-readable name and which shared Spaces apply.
-2. **Given** a nearby device that shares no Space with the user, **When** it attempts to connect, **Then** it receives no packets and no Space content, and the attempt is rejected.
-3. **Given** a connection request from an unknown device, **When** the user has not approved it, **Then** nothing is exchanged until the user confirms.
+1. **Given** several nearby Hubs, **When** the user opens the connection screen, **Then** they see each Hub with a human-readable name and which shared Spaces apply.
+2. **Given** a client that shares no Space with the Hub, **When** it attempts to connect, **Then** it receives no packets and no Space content, and the attempt is rejected.
+3. **Given** a connection request from an unknown client, **When** the Hub owner has not approved it (or approval is not required by the Hub's setting), **Then** nothing is exchanged until it is approved.
 4. **Given** a peer sends a packet with an invalid signature or from an author without a role in the Space, **When** it arrives over Bluetooth, **Then** it is rejected exactly as on any other transport.
 
 ---
 
 ### User Story 3 - Resume and Survive Dropouts (Priority: P2)
 
-Two devices are syncing and one user walks out of range or the screen locks. When they come back together, sync resumes by exchanging only what is missing, without duplicating or corrupting data.
+A client is syncing with a Hub and its user walks out of range or the screen locks. When the client is back in range, sync resumes by exchanging only what is missing, without duplicating or corrupting data.
 
 **Why this priority**: Bluetooth links are short-range and unstable; graceful recovery is what makes the transport usable in practice.
 
@@ -63,25 +64,28 @@ Two devices are syncing and one user walks out of range or the screen locks. Whe
 
 **Acceptance Scenarios**:
 
-1. **Given** a sync interrupted halfway, **When** the devices reconnect, **Then** only the missing packets are exchanged.
-2. **Given** a peer that previously connected and is now back in range, **When** reconnection is enabled for it, **Then** the devices reconnect without re-pairing.
-3. **Given** the connection drops while a packet is half-sent, **When** the sync resumes, **Then** the partial packet is discarded and re-requested without affecting other packets.
+1. **Given** a sync interrupted halfway, **When** the client reconnects to the Hub, **Then** only the missing packets are exchanged.
+2. **Given** a Hub that a client previously trusted and is now back in range, **When** reconnection is enabled, **Then** the client reconnects without re-pairing.
+3. **Given** a client was offline while others edited, **When** it reconnects, **Then** it receives everything the Hub stored for it in the meantime.
+4. **Given** the connection drops while a packet is half-sent, **When** the sync resumes, **Then** the partial packet is discarded and re-requested without affecting other packets.
 
 ---
 
-### User Story 4 - Relay Through Intermediate Devices (Priority: P2)
+### User Story 4 - Hub Stores and Forwards for Everyone (Priority: P2)
 
-Three people are in a row: A can reach B, B can reach C, but A cannot reach C. A edits an object; B receives it and C receives it through B.
+Alice edits on her tablet and leaves the campsite area. Later Bob connects his laptop to the Hub and receives Alice's changes, even though Alice and Bob were never connected at the same time. Where several Hubs exist (for example, one at camp and one in a vehicle), they can also sync with each other.
 
-**Why this priority**: Real local groups rarely have full connectivity. Multi-hop relay makes a small cluster act as one group, consistent with the Framework's relay rules.
+**Why this priority**: A hub that only forwards live traffic would force everyone to be present at once. Store-and-forward is what makes a hub useful for outings and outages.
 
-**Independent Test**: Connect A–B and B–C only. Write on A, and verify C converges without a direct A–C link and without relay loops.
+**Independent Test**: Client A connects, writes, and disconnects. Client B then connects and verifies it receives A's changes from the Hub. Then connect two Hubs and verify clients on each converge.
 
 **Acceptance Scenarios**:
 
-1. **Given** A–B and B–C connected with relay enabled, **When** A writes, **Then** C eventually receives the packet.
-2. **Given** a cluster of devices, **When** packets are relayed, **Then** no packet is applied twice or looped indefinitely.
-3. **Given** a device connected to both Bluetooth and an internet transport, **When** packets arrive on one, **Then** they can be relayed to the other, subject to the per-app and per-Space relay settings.
+1. **Given** client A wrote and disconnected, **When** client B connects to the same Hub, **Then** B receives A's packets.
+2. **Given** a Hub with several clients, **When** packets are forwarded, **Then** no packet is applied twice or looped indefinitely.
+3. **Given** two Hubs within range of each other, **When** they connect, **Then** they exchange the packets each is missing and their clients converge.
+4. **Given** a Hub that is also connected to an internet transport, **When** packets arrive on one, **Then** they can be relayed to the other, subject to the per-app and per-Space relay settings.
+5. **Given** a Hub that never holds Space keys, **When** it stores and forwards packets, **Then** it cannot read their content.
 
 ---
 
@@ -91,27 +95,29 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 
 **Why this priority**: Valuable, but text and structured objects are the core need; the link's speed limits how much it can carry.
 
-**Independent Test**: Attach a blob to an object on device A, connect to device B over Bluetooth, and verify the blob arrives intact with progress shown, and resumes after an interruption.
+**Independent Test**: Attach a blob to an object on client A, then connect client B to the Hub over Bluetooth, and verify the blob arrives intact with progress shown, and resumes after an interruption.
 
 **Acceptance Scenarios**:
 
-1. **Given** a blob attached to a synced object, **When** a peer connects, **Then** the blob transfers using the blob rules from spec 004 and is verified on arrival.
+1. **Given** a blob attached to a synced object, **When** a client connects to the Hub, **Then** the blob transfers using the blob rules from spec 004 and is verified on arrival.
 2. **Given** a blob transfer in progress, **When** the user views the app, **Then** progress is visible and normal packet sync is not starved by the transfer.
-3. **Given** a blob too large to transfer practically over Bluetooth, **When** a peer connects, **Then** the user is told it will wait for a faster transport rather than failing silently.
+3. **Given** a blob too large to transfer practically over Bluetooth, **When** a client connects, **Then** the user is told it will wait for a faster transport rather than failing silently.
 
 ---
 
 ### Edge Cases
 
 - Bluetooth is turned off, permission is denied, or the device has no Bluetooth: the transport reports itself unsupported or unavailable and the app continues on other transports or fully offline.
-- The helper is stopped, crashes, or is uninstalled: the transport reports "unavailable", queued packets stay safe in the app's outbox, and sync resumes when the helper returns.
-- The app and helper are on different versions: they negotiate a compatible version or report a clear "update needed" message.
-- Many devices are nearby: the number of simultaneous connections is limited, and the user is told when a limit prevents another connection.
+- The Hub is stopped, runs out of battery, or crashes: clients report the transport as "unavailable", their own changes stay safe in the local outbox, and sync resumes when a Hub returns. Packets stored on the Hub survive a restart.
+- A client and Hub are on different versions: they negotiate a compatible version or show a clear "update needed" message.
+- More clients try to connect than the Hub can serve: extra clients are told the Hub is full and can retry, and clients already connected are unaffected.
 - A peer sends corrupted, truncated, or over-limit data: it is rejected without affecting other packets or other peers.
 - The app is in the background or the device is asleep: sync is paused or continues according to platform limits, and resumes on return with no data loss.
 - A device rapidly moves in and out of range: connection attempts are throttled so battery and the UI are not overwhelmed.
 - Two peers connect to each other at the same moment from both sides: only one logical connection results.
-- A peer's device identity changes or a stale cached peer is encountered: it is re-verified before any exchange.
+- A client or Hub identity changes, or a stale cached peer is encountered: it is re-verified before any exchange.
+- Several Hubs are in range of one client: the user picks which to use, and the client may connect to more than one at once.
+- The Hub's storage fills up: the oldest already-delivered packets are dropped first and the Hub owner is warned; no undelivered packet is silently lost.
 - Message sizes exceed what one Bluetooth transmission can carry: large packets are split and reassembled transparently, and an incomplete message is discarded on timeout.
 
 ## Requirements *(mandatory)*
@@ -123,81 +129,83 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - **FR-001**: The Bluetooth transport MUST implement the single Transport contract from spec 001 (lifecycle, support check, send/receive packets, sync-state exchange, blob hooks) and pass the shared Transport contract test suite with no changes to core code.
 - **FR-002**: The transport MUST be a registrable module (spec 003), and apps MUST be able to enable or disable it per app and per Space.
 - **FR-003**: The transport MUST run alongside other transports at the same time, with duplicate packets discarded by ID.
-- **FR-004**: When Bluetooth is unsupported, disabled, or permission is denied, the transport MUST report "unsupported" or "unavailable" with a reason, and MUST NOT affect the rest of the app.
+- **FR-004**: When Bluetooth is unsupported by the browser or device, disabled, or permission is denied, the transport MUST report "unsupported" or "unavailable" with a reason, and MUST NOT affect the rest of the app.
+
+**Hub**
+
+- **FR-005**: v1 MUST ship a Hub for Android and a Hub for desktop (Windows, macOS, Linux). A Hub is a standalone app that runs on a phone or computer and serves nearby clients over Bluetooth.
+- **FR-006**: Browser clients MUST connect to a Hub over Bluetooth with no helper or extra software on the client device.
+- **FR-007**: A Hub MUST store the encrypted packets and blobs it receives and forward them to every connected client in the relevant Space, including clients that connect later (store-and-forward).
+- **FR-008**: A Hub MUST serve several clients and several Spaces at once, keeping each Space's data separate, and MUST keep running unattended (with the screen off or the app in the background, within platform limits).
+- **FR-009**: A Hub MUST persist its stored packets across restarts, and MUST apply a size limit and retention policy that a Hub owner can configure. When full, it MUST drop already-delivered packets first and warn the owner.
+- **FR-010**: Hubs in range of each other MUST be able to sync with each other so that clients on different Hubs converge. Android and desktop Hubs MUST interoperate.
+- **FR-011**: A Hub MUST NOT hold Space keys or be able to read packet content. It MUST be treated as an untrusted relay (Constitution Principles IV and V), seeing only routing metadata.
+- **FR-012**: A Hub owner MUST be able to see connected clients, choose which Spaces the Hub serves, require approval for new clients, and disconnect or block any client.
 
 **Discovery and connection**
 
-- **FR-005**: The transport MUST let a user discover nearby devices running the same app and connect to them without internet access.
-- **FR-006**: Discovery MUST NOT disclose Space contents, object data, or membership lists to devices that have not proven membership in a shared Space.
-- **FR-007**: A connection from a device the user has not previously trusted MUST require explicit user confirmation before any packets are exchanged.
-- **FR-008**: The user MUST be able to see a recognizable name for each peer and disconnect or forget any peer at any time.
-- **FR-009**: Previously trusted peers MUST be able to reconnect automatically when in range, if the user has allowed it, without repeating confirmation.
+- **FR-013**: A client MUST be able to discover nearby Hubs and connect to one without internet access.
+- **FR-014**: Discovery MUST NOT disclose Space contents, object data, or membership lists to devices that have not proven membership in a shared Space.
+- **FR-015**: A client connecting to a Hub for the first time MUST require explicit confirmation on the client, and on the Hub when the Hub requires approval, before any packets are exchanged.
+- **FR-016**: Users MUST see a recognizable name for each Hub and MUST be able to disconnect from or forget a Hub at any time.
+- **FR-017**: A client MUST be able to reconnect automatically to a previously trusted Hub that comes back in range, if the user has allowed it.
+- **FR-018**: A client MUST be able to be connected to more than one Hub at the same time.
 
 **Sync behavior**
 
-- **FR-010**: On connect, peers MUST exchange sync state and send only the packets the other lacks, then stream new packets as they are created.
-- **FR-011**: After an interrupted connection, sync MUST resume by exchanging only missing packets; partial packets MUST be discarded and re-requested.
-- **FR-012**: Packets and messages larger than a single Bluetooth transmission MUST be split and reassembled transparently, with timeouts for incomplete messages.
-- **FR-013**: Configurable size limits from spec 001 MUST apply to data received over Bluetooth, and over-limit input MUST be rejected.
-- **FR-014**: The transport MUST support relaying packets to other transports and other Bluetooth peers per the Framework's relay rules, without loops.
-- **FR-015**: Blobs MUST transfer using the blob rules from spec 004 (chunked, verified, resumable), at a priority that does not block ordinary packet sync, and the user MUST see progress.
+- **FR-019**: On connect, client and Hub MUST exchange sync state and send only the packets the other lacks, then stream new packets as they are created.
+- **FR-020**: After an interrupted connection, sync MUST resume by exchanging only missing packets; partial packets MUST be discarded and re-requested.
+- **FR-021**: Packets and messages larger than a single Bluetooth transmission MUST be split and reassembled transparently, with timeouts for incomplete messages.
+- **FR-022**: Configurable size limits from spec 001 MUST apply to data received over Bluetooth, and over-limit input MUST be rejected.
+- **FR-023**: The transport MUST support relaying packets between Bluetooth and other transports per the Framework's relay rules, without loops.
+- **FR-024**: Blobs MUST transfer using the blob rules from spec 004 (chunked, verified, resumable), at a priority that does not block ordinary packet sync, and the user MUST see progress.
 
 **Security**
 
-- **FR-016**: Packets received over Bluetooth MUST go through the same signature, role, and decryption checks as any other transport; the transport MUST be treated as untrusted and MUST NOT grant authority.
-- **FR-017**: The wireless link MUST NOT expose plaintext object content beyond what the Framework already allows to untrusted relays (routing metadata only).
-- **FR-018**: A peer that repeatedly sends invalid data MUST be disconnected and temporarily blocked.
-- **FR-019**: The transport MUST limit concurrent connections and connection-attempt rates to protect battery and prevent nearby-device flooding.
+- **FR-025**: Packets received over Bluetooth MUST go through the same signature, role, and decryption checks as on any other transport; the transport MUST NOT grant authority to any peer or Hub.
+- **FR-026**: A client or Hub that repeatedly sends invalid data MUST be disconnected and temporarily blocked.
+- **FR-027**: A Hub MUST limit concurrent clients and connection-attempt rates, tell clients that cannot be served that the Hub is full, and not let a nearby device flood it.
 
 **Status and feedback**
 
-- **FR-020**: The app MUST be able to show connection state per peer (searching, connecting, syncing, idle, disconnected, error) and the number of packets pending in each direction.
-- **FR-021**: Platform requirements the transport relies on (permissions, device support) MUST be documented, and failure to meet them MUST produce clear, user-friendly messages.
-
-**Runtime scope**
-
-- **FR-022**: The Bluetooth transport MUST let a browser-based app use Bluetooth through a companion helper running on the same device or on a device the user controls. v1 MUST ship helpers for Android and for desktop (Windows, macOS, Linux).
-- **FR-023**: The app MUST detect whether a helper is present and paired with it; with no helper, the transport MUST report "unavailable" with a reason that tells the user how to get a helper.
-- **FR-024**: The link between the app and its helper MUST be authenticated so that other apps, pages, or devices cannot use the helper to read or inject packets. The helper MUST be treated as untrusted for content (packets stay encrypted and signed end to end) and MUST NOT hold Space keys.
-- **FR-025**: The helper MUST keep carrying Bluetooth sync when the app is closed or in the background, within platform limits, and hand packets to the app when it next opens.
-- **FR-026**: One helper MUST be able to serve more than one app or Space on its device, keeping each app's data separated.
-- **FR-027**: Android and desktop helpers MUST interoperate: any helper-equipped device can sync with any other, regardless of platform.
+- **FR-028**: The app MUST be able to show connection state per Hub (searching, connecting, syncing, idle, disconnected, full, error) and the number of packets pending in each direction.
+- **FR-029**: Platform requirements (permissions, browser and device support) MUST be documented, and failure to meet them MUST produce clear, user-friendly messages. This includes telling the user when their browser cannot use Bluetooth at all.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Bluetooth Peer**: A nearby device discovered or connected over Bluetooth. Attributes: display name, device identity, shared Spaces, trust state (unknown, trusted, blocked), connection state, last-seen time.
-- **Peer Connection**: A live logical link to one peer, with its sync state, pending packet counts, and transfer progress.
-- **Trusted Peer Record**: A user's saved decision to trust a peer, enabling reconnection; can be forgotten at any time.
+- **Hub**: An Android or desktop app that stores and forwards encrypted packets between nearby clients and other Hubs. Attributes: display name, platform, version, Spaces served, storage limit and retention policy, approval setting, connected clients.
+- **Client**: A browser app connecting to a Hub over Bluetooth. Attributes: display name, device identity, shared Spaces, trust state (unknown, trusted, blocked).
+- **Hub Connection**: A live logical link between one client (or Hub) and one Hub, with its sync state, pending packet counts, and transfer progress.
+- **Trusted Hub Record**: A user's saved decision to trust a Hub, enabling reconnection; can be forgotten at any time.
+- **Stored Packet Set**: The encrypted packets and blobs a Hub holds per Space for later delivery, with delivery state per client.
 - **Fragmented Message**: A packet or blob chunk split for transmission, with enough information to reassemble it or discard it on timeout.
-- **Companion Helper**: The Android or desktop program that performs Bluetooth discovery and data exchange on behalf of a browser app. Attributes: platform, version, pairing state with the app, apps served.
-- **App–Helper Pairing**: The authenticated, user-approved link between one app and one helper; can be revoked at any time.
-- **Transport Status**: The reportable state of the whole transport (available, unsupported, unavailable, permission needed), plus the reason.
+- **Transport Status**: The reportable state of the transport (available, unsupported, unavailable, permission needed, Hub full), plus the reason.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: Two devices with no internet connection can discover each other, connect, and reach identical state for a 1,000-object Space in under 5 minutes.
-- **SC-002**: After connection, a single edit on one device appears on the other within 3 seconds in 95% of cases.
+- **SC-001**: A client with no internet connection can discover a Hub, connect, and reach identical state for a 1,000-object Space in under 5 minutes.
+- **SC-002**: With two clients connected to one Hub, a single edit on one appears on the other within 3 seconds in 95% of cases.
 - **SC-003**: After an interrupted sync, reconnecting transfers only missing data: 0 previously delivered packets are re-sent, and the final state matches an uninterrupted sync.
-- **SC-004**: A device with no Space in common receives 0 packets and learns 0 object contents in all discovery and connection attempts.
-- **SC-005**: A user can connect to a nearby colleague on first use in under 1 minute, with no more than 2 confirmation steps.
-- **SC-006**: A relayed packet crosses a three-device chain (A–B–C) and is applied exactly once on each device, with no loops.
+- **SC-004**: A device with no Space in common receives 0 packets and learns 0 object contents in all discovery and connection attempts, and a Hub holds 0 Space keys in all tests.
+- **SC-005**: A user can connect to a nearby Hub on first use in under 1 minute, with no more than 2 confirmation steps.
+- **SC-006**: A client that was never connected at the same time as another client receives that client's changes through the Hub, and every packet is applied exactly once with no loops.
 - **SC-007**: The transport passes 100% of the Transport contract test suite, and no core code changes are required.
-- **SC-008**: Where Bluetooth is unavailable, 100% of app functions continue to work with no error dialogs beyond a single status message.
-- **SC-009**: Keeping a trusted connection idle for one hour uses no more than a small, documented share of battery compared to the app with the transport off.
-- **SC-010**: A user can install a helper and pair it with the app in under 5 minutes, following on-screen guidance only.
-- **SC-011**: An Android helper device and a desktop helper device sync with each other successfully in 100% of interoperability tests.
+- **SC-008**: Where Bluetooth or a Hub is unavailable, 100% of app functions continue to work with no error dialogs beyond a single status message.
+- **SC-009**: A Hub left running unattended for 8 hours with a typical group (8 clients connecting and disconnecting) loses 0 undelivered packets, and its battery or resource use is documented.
+- **SC-010**: A person can install and start a Hub on Android or desktop in under 5 minutes, following on-screen guidance only.
+- **SC-011**: Clients on an Android Hub and clients on a desktop Hub converge when the two Hubs connect, in 100% of interoperability tests.
 
 ## Assumptions
 
-- Users want local sync for small groups (roughly 2–8 nearby devices), not large crowds.
+- The target scenarios are small groups (roughly 2–8 clients per Hub) at camps, outings, events, and during outages, not large crowds. A Hub serves at least 8 clients at once.
 - Bluetooth throughput is far below Wi-Fi or internet, so text and structured data are the primary use; large blobs are best-effort.
-- Spaces, keys, and signing from spec 002 already exist, and devices share a Space before connecting; the transport does not create identity or Space membership.
+- Spaces, keys, and signing from spec 002 already exist, and clients share a Space with the Hub's served Spaces before connecting; the transport does not create identity or Space membership. A Hub learns which Spaces to serve from routing identifiers only, not from Space keys.
 - Users grant the Bluetooth and nearby-device permissions the platform requires.
-- Devices are within normal short-range Bluetooth distance (a room or building, not across a campus).
-- The transport has no server component and does not rely on a cloud service for discovery or pairing.
-- Browser-only PWAs cannot reach each other over Bluetooth, so a companion helper is required; the app itself remains static-hostable and works without the helper.
-- iOS and iPadOS helpers are out of scope for v1.
-- Helpers are distributed separately from the app; how they are published and installed is decided in planning.
+- Clients are within normal short-range Bluetooth distance of the Hub (a room, a tent area, or a building floor, not a campus).
+- The Hub is a local relay, not a cloud server: it needs no internet and no account.
+- Client browsers need Bluetooth support from the browser. Browsers or devices without it (for example iOS browsers) report the transport as unavailable and use other transports. iOS clients and iOS Hubs are out of scope for v1.
+- A person who runs a Hub and also wants to use the app on that same device does so through a browser client like anyone else.
+- Hub apps are distributed separately from the PWA; how they are published and installed is decided in planning.
 - Platform differences in Bluetooth behavior are documented rather than hidden.

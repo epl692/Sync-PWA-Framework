@@ -31,6 +31,6 @@
 
 ## Notes
 
-- Runtime scope resolved 2026-11-27: option B, companion helper for Android and desktop.
+- Runtime scope resolved 2026-11-27: Hub model (Android and desktop Hubs; browser clients connect over Bluetooth).
 - SC-009 uses "small, documented share"; tighten once the plan sets a budget.
 - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
