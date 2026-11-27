@@ -9,7 +9,7 @@ import { claimAutoSpace } from './access/autoSpaces';
 import { ClientRegistry } from './clients';
 import type { BleBridge } from './bridge';
 import { loadOrCreateHubIdentity, type HubIdentity } from './identity';
-import { RelayHub } from './relay/relayHub';
+import { RelayHub, type RelayHubOptions } from './relay/relayHub';
 import { defaultSettings, mergeSettings } from './settings';
 import type { HubStore } from './store/types';
 import type { ClientInfo, DeviceId, HubControl, HubEvent, HubSettings, ServedSpaceInfo, ServedSpaceRecord, SpaceId } from './types';
@@ -23,6 +23,8 @@ export interface HubOptions {
   now?: () => number;
   timers?: Timers;
   maxMessageBytes?: number;
+  /** Tuning for the relay (batch sizes, limits). */
+  relay?: Pick<RelayHubOptions, 'batchPackets' | 'batchBytes' | 'maxEnvelopeBytes'>;
 }
 
 export interface Hub extends HubControl {
@@ -69,6 +71,7 @@ export async function createHub(o: HubOptions): Promise<Hub> {
   const relay = new RelayHub(
     (peerId, bytes) => void link.send(peerId, bytes).catch(() => undefined),
     {
+      ...(o.relay ?? {}),
       deviceName: settings.displayName,
       admit: (peerId, space) => peerSpaces.get(peerId)?.has(space) === true,
       onStore: (space, id, raw) => {

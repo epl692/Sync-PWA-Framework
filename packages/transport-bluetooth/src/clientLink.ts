@@ -331,8 +331,24 @@ export class ClientLink {
     }
   }
 
+  private lastActive = 0;
+
+  /** `syncing` while there is traffic or a backlog, `idle` after 2 quiet seconds (spec FR-028). */
+  private refreshActivity(): void {
+    if (this.closed || (this.info.state !== 'syncing' && this.info.state !== 'idle')) return;
+    const [b0, b1] = this.channel.framer.backlog();
+    const pendingOut = b0 + b1;
+    const quiet = this.now() - Math.max(this.lastActive, this.lastRx) >= 2_000 && pendingOut === 0;
+    const state: HubConnectionState = quiet ? 'idle' : 'syncing';
+    if (state !== this.info.state || pendingOut !== this.info.pendingOut) {
+      this.info = { ...this.info, state, pendingOut };
+      this.o.onState?.(this.info);
+    }
+  }
+
   private tick(): void {
     this.channel.check(this.now());
+    this.refreshActivity();
     const idle = this.now() - this.lastRx;
     if (idle >= DEAD_AFTER_MS) this.finish('keepalive');
     else if (idle >= PING_AFTER_MS) void this.channel.sendControl({ t: 'ping' }).catch(() => undefined);
@@ -342,6 +358,11 @@ export class ClientLink {
   async send(bytes: Uint8Array): Promise<void> {
     if (this.closed || this.info.state === 'disconnected') throw new Error('the Hub is not connected');
     if (this.info.state !== 'syncing' && this.info.state !== 'idle') throw new Error('the Hub link is not ready');
+    this.lastActive = this.now();
+    if (this.info.state === 'idle') {
+      this.info = { ...this.info, state: 'syncing' };
+      this.o.onState?.(this.info);
+    }
     await this.channel.sendCore(bytes);
   }
 
@@ -357,7 +378,7 @@ export class ClientLink {
     this.timers.clearInterval(this.keepalive);
     this.resyncer?.dispose();
     for (const w of this.ctrlWaiters.splice(0)) void w;
-    this.setState(reason === 'busy' ? 'full' : reason === 'disconnected' || polite || reason === 'bye' || reason === 'keepalive' ? 'disconnected' : 'error', reason);
+    this.setState(reason === 'busy' ? 'full' : reason === 'disconnected' || polite || reason === 'bye' || reason === 'keepalive' || reason === 'user' ? 'disconnected' : 'error', reason);
     const release = () => {
       this.o.gatt.close();
       this.resolveClosed();

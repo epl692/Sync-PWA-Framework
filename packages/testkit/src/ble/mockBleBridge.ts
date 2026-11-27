@@ -69,6 +69,11 @@ export class MockBleBridge implements BleBridge {
     this.handle.setAdvertising({ serviceUuid: a.serviceUuid, infoUuid: a.infoUuid, txUuid: a.txUuid, rxUuid: a.rxUuid, name: a.name });
   }
 
+  /** Walk out of (or back into) range: connections drop and the Hub cannot be found until it is back. */
+  setInRange(inRange: boolean): void {
+    this.handle.setInRange(inRange);
+  }
+
   async support(): Promise<BleSupport> {
     return (
       this.o.support ?? {

@@ -36,6 +36,8 @@ export interface BluetoothTransportOptions {
   blobCeilingBytes?: number;
   /** `maxMessageBytes` is the hard limit on a received message (default 4 MiB, the 001 limit). */
   limits?: { maxMessageBytes?: number };
+  /** Automatic reconnection to pinned Hubs after a dropout (needs `getDevices()`; otherwise the app shows a one-tap button). */
+  reconnect?: { minMs?: number; maxMs?: number; maxAttempts?: number };
   /** Injection points for tests. Default: the browser's Bluetooth. */
   bluetooth?: BluetoothLike;
   now?: () => number;
@@ -50,6 +52,11 @@ export interface BluetoothTransport extends Transport {
   /** Show the browser's device chooser filtered to Hubs and connect. MUST be called from a user gesture. */
   chooseHub(): Promise<HubConnectionInfo>;
   disconnectHub(fingerprint: string): Promise<void>;
+  /**
+   * Reconnect to a pinned Hub without the chooser, where the browser allows it. Rejects with `needs-gesture` where it does not
+   * (then call `chooseHub()` from a user gesture).
+   */
+  reconnect(fingerprint: string): Promise<HubConnectionInfo>;
   /** Forget the pin. The next contact asks the user to confirm again. */
   forgetHub(fingerprint: string): Promise<void>;
   trustedHubs(): Promise<TrustedHub[]>;
@@ -76,6 +83,14 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
   const releasing = new Map<string, Promise<void>>();
   /** Links still being set up (securing, waiting for owner approval): shown to the user like connected ones. */
   const connecting = new Set<ClientLink>();
+  /** Hubs the user disconnected or forgot, and Hubs we are reconnecting to. */
+  const noReconnect = new Set<string>();
+  const retrying = new Map<string, { timer: unknown; attempt: number }>();
+  const rc = { minMs: opts.reconnect?.minMs ?? 1000, maxMs: opts.reconnect?.maxMs ?? 30_000, maxAttempts: opts.reconnect?.maxAttempts ?? 12 };
+  const sleepTimers = opts.timers;
+  const setT = (fn: () => void, ms: number) => (sleepTimers ? sleepTimers.setTimeout(fn, ms) : setTimeout(fn, ms));
+  const clearT = (h: unknown) => (sleepTimers ? sleepTimers.clearTimeout(h) : clearTimeout(h as never));
+  const TRANSIENT = new Set(['disconnected', 'keepalive', 'write-failed', 'resync-failed', 'hub-error', 'bye', 'error', 'timeout']);
   let state: TransportState = 'idle';
   let status: BluetoothTransportStatus = { kind: 'needs-hub', message: 'Find a Hub to sync with.' };
 
@@ -134,6 +149,7 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
         }
         setStatus(links.size ? { kind: 'ready' } : { kind: 'needs-hub', message: 'Find a Hub to sync with.' });
         notifyConns();
+        if (entry && TRANSIENT.has(reason) && !noReconnect.has(entry[0])) scheduleReconnect(entry[0]);
       },
     });
     let info: HubConnectionInfo;
@@ -154,6 +170,7 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
       throw e;
     }
     peerId = `hub:${info.fingerprint}`;
+    noReconnect.delete(info.fingerprint);
     const previous = links.get(info.fingerprint);
     if (previous) previous.link.close('replaced');
     links.set(info.fingerprint, { link, peerId });
@@ -162,6 +179,48 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
     emit('peerConnected', peer);
     notifyConns();
     return info;
+  }
+
+  async function pinnedDevice(fingerprint: string) {
+    const pin = await trust.get(fingerprint);
+    if (!pin?.browserDeviceId || !bt?.getDevices) return undefined;
+    return (await bt.getDevices()).find((d) => d.id === pin.browserDeviceId);
+  }
+
+  async function reconnectNow(fingerprint: string): Promise<HubConnectionInfo> {
+    const device = await pinnedDevice(fingerprint);
+    if (!device) throw new GattError('no-hub', 'needs-gesture');
+    return connectDevice(device);
+  }
+
+  /** Back off with jitter, honor a full Hub's retry hint, and stop for good once the user disconnects or forgets the Hub. */
+  function scheduleReconnect(fingerprint: string, hintMs?: number): void {
+    if (noReconnect.has(fingerprint) || opts.autoReconnect === false) return;
+    const prev = retrying.get(fingerprint);
+    if (prev) clearT(prev.timer);
+    const attempt = (prev?.attempt ?? 0) + 1;
+    if (attempt > rc.maxAttempts) {
+      retrying.delete(fingerprint);
+      setStatus({ kind: 'needs-hub', message: 'The Hub could not be reached. Press the button to try again.' });
+      return;
+    }
+    const base = Math.min(rc.maxMs, rc.minMs * 2 ** (attempt - 1));
+    const delay = Math.max(hintMs ?? 0, Math.round(base * (0.8 + Math.random() * 0.4)));
+    const timer = setT(() => {
+      if (noReconnect.has(fingerprint) || links.has(fingerprint)) return void retrying.delete(fingerprint);
+      reconnectNow(fingerprint).then(
+        () => void retrying.delete(fingerprint),
+        (e) => {
+          if ((e as { message?: string }).message === 'needs-gesture') {
+            retrying.delete(fingerprint);
+            setStatus({ kind: 'needs-hub', message: 'Press "Find a Hub" to reconnect.' });
+          } else if (!noReconnect.has(fingerprint)) {
+            scheduleReconnect(fingerprint, (e as { retryMs?: number }).retryMs);
+          }
+        },
+      );
+    }, delay);
+    retrying.set(fingerprint, { timer, attempt });
   }
 
   const t: BluetoothTransport = {
@@ -191,7 +250,10 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
     },
 
     async stop() {
-      for (const { link } of [...links.values()]) link.close('stopped');
+      for (const fp of links.keys()) noReconnect.add(fp);
+    for (const r of retrying.values()) clearT(r.timer);
+    retrying.clear();
+    for (const { link } of [...links.values()]) link.close('stopped');
     for (const link of [...connecting]) link.close('stopped');
       links.clear();
       if (state !== 'unsupported') {
@@ -214,9 +276,24 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
     },
 
     async disconnectHub(fingerprint) {
-      links.get(fingerprint)?.link.close('disconnected');
+      noReconnect.add(fingerprint);
+      const r = retrying.get(fingerprint);
+      if (r) clearT(r.timer);
+      retrying.delete(fingerprint);
+      links.get(fingerprint)?.link.close('user');
+    },
+    reconnect(fingerprint) {
+      noReconnect.delete(fingerprint);
+      return reconnectNow(fingerprint).catch((e) => {
+        if ((e as { message?: string }).message === 'needs-gesture') throw Object.assign(new GattError('no-hub', 'Press "Find a Hub" to reconnect.'), { code: 'needs-gesture' });
+        throw e;
+      });
     },
     async forgetHub(fingerprint) {
+      noReconnect.add(fingerprint);
+      const r = retrying.get(fingerprint);
+      if (r) clearT(r.timer);
+      retrying.delete(fingerprint);
       links.get(fingerprint)?.link.close('forgotten');
       await trust.forget(fingerprint);
     },

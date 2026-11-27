@@ -178,16 +178,16 @@ description: "Task list for Bluetooth Local Transport (005-bluetooth-transport)"
 ### Tests for User Story 3 (write first, confirm they FAIL)
 
 - [X] T073 [P] [US3] `packages/transport-bluetooth/tests/property/loss.property.test.ts`: random frame loss and duplication never deliver a corrupted message; a partial message is discarded and later re-requested by the sync layer without affecting other messages (spec US3 scenario 3)
-- [ ] T074 [P] [US3] `packages/hub-core/tests/integration/resume.test.ts`: interrupt a 1,000-packet sync at a random point, reconnect, 0 previously delivered packets are re-sent (SC-003) and the final state equals an uninterrupted sync
-- [ ] T075 [P] [US3] `packages/transport-bluetooth/tests/reconnect.test.ts`: a trusted Hub back in range reconnects without the chooser through `getDevices()`/`watchAdvertisements()`; where unavailable `reconnect()` rejects with `needs-gesture` and the panel offers a one-tap button; `autoReconnect: false` never reconnects on its own
-- [ ] T076 [P] [US3] `packages/hub-core/tests/integration/late-client.test.ts`: a client that was offline while others edited receives everything the Hub stored for it on reconnect (spec US3 scenario 3)
+- [X] T074 [P] [US3] `packages/hub-core/tests/integration/resume.test.ts`: interrupt a 1,000-packet sync at a random point, reconnect, 0 previously delivered packets are re-sent (SC-003) and the final state equals an uninterrupted sync
+- [X] T075 [P] [US3] `packages/transport-bluetooth/tests/reconnect.test.ts`: a trusted Hub back in range reconnects without the chooser through `getDevices()`/`watchAdvertisements()`; where unavailable `reconnect()` rejects with `needs-gesture` and the panel offers a one-tap button; `autoReconnect: false` never reconnects on its own
+- [X] T076 [P] [US3] `packages/hub-core/tests/integration/late-client.test.ts`: a client that was offline while others edited receives everything the Hub stored for it on reconnect (spec US3 scenario 3)
 
 ### Implementation for User Story 3
 
 - [X] T077 [US3] Implement the reconnect policy in `packages/transport-bluetooth/src/clientLink.ts`: exponential backoff with jitter, honoring `busy.retryMs`, halve `frameBytes` on write error (floor 20) and retry the frame, 15 s keepalive with 3 missed closing the link, never give up the connection for a size error alone (depends on T073)
-- [ ] T078 [US3] Implement `getDevices()`/`watchAdvertisements()` reconnection and the `needs-gesture` fallback in `packages/transport-bluetooth/src/webBluetooth.ts` and `reconnect(fingerprint)` in `packages/transport-bluetooth/src/index.ts`; the panel shows a one-tap reconnect where needed (depends on T075, T011)
-- [ ] T079 [US3] In `packages/hub-core/src/link/server.ts`: drop session keys immediately on disconnect, close the older connection when the same device connects twice (one logical connection per device), and make the Hub emit exactly one `client-disconnected` per connection (depends on T074)
-- [ ] T080 [US3] Expose `pendingOut`/`pendingIn` per Hub connection from the sync summaries in `packages/transport-bluetooth/src/index.ts` and surface them in the panel; state transitions `syncing ↔ idle` driven by matching summaries (FR-028)
+- [X] T078 [US3] Implement `getDevices()`/`watchAdvertisements()` reconnection and the `needs-gesture` fallback in `packages/transport-bluetooth/src/webBluetooth.ts` and `reconnect(fingerprint)` in `packages/transport-bluetooth/src/index.ts`; the panel shows a one-tap reconnect where needed (depends on T075, T011)
+- [X] T079 [US3] In `packages/hub-core/src/link/server.ts`: drop session keys immediately on disconnect, close the older connection when the same device connects twice (one logical connection per device), and make the Hub emit exactly one `client-disconnected` per connection (depends on T074)
+- [X] T080 [US3] Expose `pendingOut`/`pendingIn` per Hub connection from the sync summaries in `packages/transport-bluetooth/src/index.ts` and surface them in the panel; state transitions `syncing ↔ idle` driven by matching summaries (FR-028)
 
 **Checkpoint**: Dropouts and reconnects are boring.
 
