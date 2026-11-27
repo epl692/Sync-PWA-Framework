@@ -12,6 +12,7 @@
   "dependencies": {
     "@sync/blobs": "*",
     "@sync/core": "*",
+    "@sync/hub-core": "*",
     "ws": "^8.18.0"
   },
   "scripts": {

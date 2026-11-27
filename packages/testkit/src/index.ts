@@ -11,3 +11,4 @@ export * from './spaces';
 export * from './modules';
 export * from './blobs';
 export * from './ble';
+export * from './hub';

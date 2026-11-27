@@ -1,6 +1,6 @@
 /**
  * BleBridge: the native Bluetooth boundary of the Hub (specs/005-bluetooth-transport/contracts/hub-ble-bridge.md).
- * The Hub core never touches a radio; every implementation passes `bleBridgeContract()` from @sync/testkit.
+ * The Hub core never touches a radio; every implementation passes the shared `bleBridgeContract()` suite.
  */
 
 export type BleConnId = string;
