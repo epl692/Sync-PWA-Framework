@@ -11,7 +11,7 @@
     "esModuleInterop": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "types": ["node"],
+    "types": ["node", "web-bluetooth"],
     "baseUrl": ".",
     "paths": {
       "@sync/core": ["packages/core/src/index.ts"],
@@ -25,7 +25,11 @@
       "@sync/modules/migrate": ["packages/modules/src/schema/migrate.ts"],
       "@sync/app-build": ["packages/app-build/src/index.ts"],
       "@sync/blobs": ["packages/blobs/src/index.ts"],
-      "@sync/blobs/ref": ["packages/blobs/src/ref.ts"]
+      "@sync/blobs/ref": ["packages/blobs/src/ref.ts"],
+      "@sync/transport-bluetooth": ["packages/transport-bluetooth/src/index.ts"],
+      "@sync/transport-bluetooth/link": ["packages/transport-bluetooth/src/link/index.ts"],
+      "@sync/hub-core": ["packages/hub-core/src/index.ts"],
+      "@sync/hub-ui": ["packages/hub-ui/src/index.ts"]
     }
   }
 }

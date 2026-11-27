@@ -47,14 +47,14 @@ export interface HubConnectionInfo {
   detail?: string;
 }
 
-/** Provided by the Spaces module (spec 002 amendment S-2). The transport never sees keys, only signatures. */
+/** Provided by the Spaces module (`spaces.hubAccess.proofs`, amendment S-2). The transport never sees keys, only signatures. */
 export interface HubProofProvider {
-  /** Spaces this device can prove membership for, with their latest epoch. */
-  spaces(): Array<{ space: string; epoch: number }>;
-  /** Sign the Hub challenge for one Space/epoch with that epoch's derived access key. */
-  proveSpace(args: { space: string; epoch: number; challenge: Uint8Array }): Promise<Uint8Array>;
-  /** Sign the session binding with the device signing key. */
-  proveDevice(args: { challenge: Uint8Array }): Promise<{ device: string; sig: Uint8Array; name: string }>;
+  /** Spaces this device can prove membership for, with the highest epoch it holds. */
+  spaces(): Promise<Array<{ space: string; epoch: number }>>;
+  /** Sign the Hub challenge for one Space/epoch with that epoch's derived access key (`hubAuthMessage` in @sync/spaces). */
+  proveSpace(a: { space: string; epoch: number; hubFingerprint: Uint8Array; nc: Uint8Array; nh: Uint8Array }): Promise<Uint8Array>;
+  /** Sign the session binding ("sync-hub-dev/1" || hubFingerprint || nc || nh) with the device signing key. */
+  proveDevice(a: { hubFingerprint: Uint8Array; nc: Uint8Array; nh: Uint8Array }): Promise<{ device: string; sig: Uint8Array; name: string }>;
   /** Access public keys, only used for the optional automatic-mode claim. */
   accessPublic(space: string, epoch: number): Promise<Uint8Array>;
 }

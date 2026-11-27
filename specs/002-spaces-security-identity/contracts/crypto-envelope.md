@@ -65,3 +65,13 @@ Rationale: a peer that cannot verify something must keep and forward it but neve
 ## Known-answer vectors
 
 `packages/spaces/tests/vectors/` holds fixed keys, nonces and expected bytes for the codec, a grant and a signature. Another implementation passes when it reproduces them.
+
+## Derived labels registry (additive)
+
+Keys derived from an epoch key by HKDF each use their own `info` label, so no derived key can equal another:
+
+| Label | Spec | Purpose |
+|---|---|---|
+| `sync-grant/1` | 002 | Key-grant wrap key (above) |
+| `sync-blob/1` | 004 | Blob encryption and MAC keys |
+| `sync-hub-access/1` | 005 | Hub access (membership proof) Ed25519 seed: `HKDF-SHA-256(epochKey, salt = 0x00*32, info = label || spaceId(16 B) || epoch(4 B BE), 32)`. One-way; neither half decrypts anything. Contract: `specs/005-bluetooth-transport/contracts/hub-access.md`; vectors in `packages/spaces/tests/unit/hub-access.test.ts` |

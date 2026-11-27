@@ -1,7 +1,7 @@
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', 'coverage/**', 'playwright-report/**', 'test-results/**', 'specs/**'] },
+  { ignores: ['**/dist/**', '**/node_modules/**', 'coverage/**', 'playwright-report/**', 'test-results/**', 'specs/**', 'hubs/**/android/**', 'hubs/**/sidecar-*/**', 'hubs/**/node_modules/**'] },
   ...tseslint.configs.recommended,
   {
     // Module code reaches data only through ModuleContext (spec 003 R-10): it may import types from @sync/modules and nothing else from @sync/*.
@@ -22,6 +22,24 @@ export default tseslint.config(
       '@typescript-eslint/no-restricted-imports': ['error', { patterns: [
         { regex: '^@sync/spaces', allowTypeImports: true, message: 'Only crypto/keys.ts may import @sync/spaces values; type imports are fine.' },
       ] }],
+    },
+  },
+  {
+    // The Hub holds no content keys (spec 005 FR-011, SC-004): it never imports @sync/spaces, not even types.
+    files: ['packages/hub-core/src/**'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': ['error', { patterns: [
+        { group: ['@sync/spaces', '@sync/spaces/*'], message: 'The Hub holds no content keys and must not import @sync/spaces.' },
+      ] }],
+    },
+  },
+  {
+    // Only webBluetooth.ts touches the browser API (spec 005 T006), so tests can inject the simulator.
+    files: ['packages/transport-bluetooth/src/**'],
+    ignores: ['packages/transport-bluetooth/src/webBluetooth.ts'],
+    rules: {
+      'no-restricted-properties': ['error', { object: 'navigator', property: 'bluetooth', message: 'Use the BluetoothLike seam in webBluetooth.ts.' }],
+      'no-restricted-globals': ['error', { name: 'navigator', message: 'Use the BluetoothLike seam in webBluetooth.ts.' }],
     },
   },
   {

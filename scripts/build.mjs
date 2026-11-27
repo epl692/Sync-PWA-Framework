@@ -11,7 +11,7 @@ for (const name of readdirSync('packages')) {
     outfile: `packages/${name}/dist/index.js`,
     bundle: true,
     format: 'esm',
-    platform: name === 'relay-server' || name === 'app-build' ? 'node' : 'browser',
+    platform: name === 'relay-server' || name === 'app-build' || name === 'hub-core' ? 'node' : 'browser',
     target: 'es2022',
     sourcemap: true,
     external,

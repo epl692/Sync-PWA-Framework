@@ -18,6 +18,15 @@ function unsupported(reason: string): Spaces {
       forRead: async () => fail(),
       onKeysChanged: () => () => undefined,
     },
+    hubAccess: {
+      proofs: {
+        spaces: async () => [],
+        proveSpace: async () => fail(),
+        proveDevice: async () => fail(),
+        accessPublic: async () => fail(),
+      },
+      exportCode: async () => fail(),
+    },
     session: () => undefined,
     signUp: async () => fail(),
     create: async () => fail(),

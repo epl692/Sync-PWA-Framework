@@ -1,0 +1,22 @@
+{
+  "name": "@sync/hub-core",
+  "version": "0.0.0",
+  "license": "MIT",
+  "description": "Hub core: a persistent, access-controlled store-and-forward relay served over Bluetooth",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@sync/blobs": "*",
+    "@sync/core": "*",
+    "@sync/transport-bluetooth": "*"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:property": "vitest run tests/property",
+    "hub:dev": "tsx dev.mjs"
+  }
+}

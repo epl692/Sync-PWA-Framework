@@ -2,6 +2,7 @@
 
 import type { SyncCore, SyncableObject, JSONValue } from '@sync/core';
 import type { BlobKeys } from './blobKeys';
+import type { HubAccess } from './hubAccess';
 import type {
   IdentityProvider,
   InviteArtifact,
@@ -63,6 +64,8 @@ export interface SpacesOptions {
 export interface Spaces {
   /** Spec 004 S-1: per-scope keys for blob encryption, derived so the blob engine never sees an epoch key. */
   readonly blobKeys: BlobKeys;
+  /** Spec 005 S-2: serve and link codes for Hubs, and the membership proofs the Bluetooth transport presents. */
+  readonly hubAccess: HubAccess;
   /** 'unsupported' when Web Crypto lacks Ed25519 or X25519: nothing is created and nothing falls back to plaintext. */
   readonly state: 'ready' | 'unsupported';
   session(): UserSession | undefined;

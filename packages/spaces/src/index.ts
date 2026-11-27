@@ -14,3 +14,6 @@ export * from './service/api';
 export { createBlobKeys, type BlobKeys, type BlobReadKeys, type BlobWriteKeys } from './service/blobKeys';
 export * from './service/events';
 export { installSpaces, openSecureCore, assertSecureCore, type SecureCoreOptions } from './service/install';
+export * from './hubAccess';
+export * from './hubCodes';
+export { createHubAccess, HUB_DEVICE_LABEL, type HubAccess, type HubProofs } from './service/hubAccess';
