@@ -18,3 +18,4 @@ export { Retention, RETENTION_INTERVAL_MS, NEAR_LIMIT_FRACTION } from './retenti
 export type { EnforceResult } from './store/types';
 export { HubToHub } from './hubToHub';
 export { BlobRelay, type BlobRelayOptions } from './relay/blobRelay';
+export { createSidecarBridge, SidecarError, SUPPORTED_SIDECAR_VERSIONS, MAX_LINE_BYTES, type SidecarProcess } from './bridge/sidecar';
