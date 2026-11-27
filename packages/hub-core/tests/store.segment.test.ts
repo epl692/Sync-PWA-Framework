@@ -142,7 +142,10 @@ describe('segment store specifics', () => {
       const b = Uint8Array.from({ length: 1 + (i % 50) }, (_, j) => (i + j) & 255);
       want.set(`x:${i}`, b);
       await s.addPacket(`S${i % 3}`, `x:${i}`, b, T0 + i * 3_600_000);
-      if (i % 40 === 39) (s = createSegmentStore(fs), await s.open());
+      if (i % 40 === 39) {
+        s = createSegmentStore(fs);
+        await s.open();
+      }
     }
     for (const sp of ['S0', 'S1', 'S2']) for await (const x of s.listIds(sp)) expect((await s.getPackets(sp, [x.id]))[0]!.bytes).toEqual(want.get(x.id));
   });
