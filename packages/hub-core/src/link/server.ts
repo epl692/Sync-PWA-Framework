@@ -12,6 +12,7 @@ import {
   LinkError,
   Kind,
   ProbeCollector,
+  Resync,
   StrikeWindow,
   acceptHello,
   busyAck,
@@ -57,6 +58,8 @@ export interface LinkServerOptions {
   /** A client authenticated and may sync. */
   onPeerReady(peer: PeerHandle): void;
   onPeerGone(peer: PeerHandle): void;
+  /** A message was lost on the link (noticed here or reported by the client): restart the sync handshake with this client. */
+  onPeerResync?(peer: PeerHandle): void;
   /** Approval, blocking and strikes (spec US2). Default: every proven member is trusted. */
   gate?: ClientGate;
   /** Automatic Space mode: register a claimed Space if allowed. Returns true if the Space is now served. */
@@ -68,7 +71,7 @@ export interface LinkServerOptions {
 const MAX_FRAME = 244;
 const AUTH_DEADLINE_MS = 20_000;
 const PROBE_WAIT_MS = 300;
-const KEEPALIVE_TICK_MS = 5_000;
+const KEEPALIVE_TICK_MS = 1_000;
 const PING_AFTER_MS = 15_000;
 const DEAD_AFTER_MS = 45_000;
 const BUSY_RETRY_MS = 5_000;
@@ -93,6 +96,7 @@ interface Conn {
   probeSent: boolean;
   authTimer?: unknown;
   lastRx: number;
+  resyncer?: Resync;
   strikes: StrikeWindow;
 }
 
@@ -226,6 +230,7 @@ export class LinkServer {
         control: (m) => this.onControl(conn, m),
         core: (b) => this.onCore(conn, b),
         strike: (reason) => this.strike(conn, reason),
+        lost: () => conn.resyncer?.detected(),
         probe: (n) => this.onProbe(conn, n),
       },
     });
@@ -250,6 +255,7 @@ export class LinkServer {
   private drop(c: Conn): void {
     if (!this.conns.delete(c.id)) return;
     c.state = 'closing';
+    c.resyncer?.dispose();
     this.timers.clearTimeout(c.authTimer);
     this.timers.clearTimeout(c.probeTimer);
     const wasSlot = c.slot;
@@ -279,6 +285,7 @@ export class LinkServer {
   private tick(): void {
     const t = this.now();
     for (const c of [...this.conns.values()]) {
+      if (c.state === 'ready') c.channel.check(t);
       if (c.state !== 'ready') continue;
       const idle = t - c.lastRx;
       if (idle >= DEAD_AFTER_MS) void this.close(c, 'keepalive');
@@ -334,6 +341,10 @@ export class LinkServer {
         break;
       case 'bye':
         await this.close(c, 'bye');
+        break;
+      case 'resync':
+      case 'resync-ack':
+        c.resyncer?.onMessage(msg);
         break;
       case 'error':
         if (msg.fatal === true) await this.close(c, 'peer-error');
@@ -413,6 +424,13 @@ export class LinkServer {
     if (older && older !== c) await this.close(older, 'replaced');
     const peer: PeerHandle = { id: peerId, conn: c.id, device, name, spaces: accepted };
     c.peer = peer;
+    c.resyncer = new Resync({
+      send: (m) => void c.channel.sendControl(m).catch(() => undefined),
+      bounce: () => this.o.onPeerResync?.(peer),
+      failed: () => void this.close(c, 'resync-failed'),
+      timers: this.timers,
+      now: this.now,
+    });
     c.state = 'ready';
     this.timers.clearTimeout(c.authTimer);
     this.byPeer.set(peerId, c);

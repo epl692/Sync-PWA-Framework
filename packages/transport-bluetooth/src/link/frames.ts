@@ -67,6 +67,9 @@ export function splitMessage(message: Uint8Array, frameBytes: number, stream: St
 
 export type ReassembleError = 'frame-gap' | 'start-in-message' | 'no-start' | 'oversize';
 
+/** Errors that mean a message was lost (as opposed to hostile or merely noisy input): the layer above should resynchronise. */
+export const MESSAGE_LOST: ReadonlySet<ReassembleError> = new Set(['frame-gap', 'start-in-message', 'oversize']);
+
 export interface PushResult {
   message?: Uint8Array;
   error?: ReassembleError;
@@ -105,8 +108,10 @@ export class Reassembler {
     const s = this.st[f.stream];
     let error: ReassembleError | undefined;
 
+    // a frame we already have (a duplicate from the radio) is dropped; it cannot corrupt anything
+    if (s.expect !== undefined && f.seq === ((s.expect - 1) & 0xff)) return {};
     if (s.expect !== undefined && f.seq !== s.expect) {
-      if (s.inMessage) error = 'frame-gap';
+      error = 'frame-gap'; // data went missing: a message in progress, or whole messages between this one and the last
       this.abort(s);
       s.expect = undefined;
       s.skipping = true;
@@ -122,6 +127,7 @@ export class Reassembler {
       s.size = 0;
       s.startedAt = now;
     } else if (!s.inMessage) {
+      s.expect = (f.seq + 1) & 0xff; // keep counting through frames we are skipping
       if (s.skipping) return error ? { error } : {};
       s.skipping = true;
       return { error: error ?? 'no-start' };

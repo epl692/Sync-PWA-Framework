@@ -7,6 +7,7 @@ import {
   LINK_VERSIONS,
   LinkChannel,
   LinkError,
+  Resync,
   b64uEncode,
   chooseFrameBytes,
   fingerprintGroups,
@@ -102,6 +103,8 @@ export interface ClientLinkOptions {
   onCore(bytes: Uint8Array): void;
   onState?(info: HubConnectionInfo): void;
   onIdentityChanged?(info: { fingerprint: string; name: string }): void;
+  /** A message was lost on the link (here or reported by the Hub): restart the sync handshake with this Hub. */
+  onResync?(): void;
   onClosed(reason: string): void;
 }
 
@@ -111,7 +114,7 @@ const PENDING_MS = 10 * 60_000;
 const PROBE_RESULT_MS = 2_000;
 const PING_AFTER_MS = 15_000;
 const DEAD_AFTER_MS = 45_000;
-const TICK_MS = 5_000;
+const TICK_MS = 1_000;
 
 type Control = { t: string } & Record<string, unknown>;
 
@@ -161,6 +164,7 @@ export class ClientLink {
           this.o.onCore(b);
         },
         strike: () => undefined, // a Hub that sends garbage is simply not used; the handshake or auth will time out
+        lost: () => this.resyncer?.detected(),
       },
     });
     g.onFrame((f) => {
@@ -175,6 +179,7 @@ export class ClientLink {
       this.info = { ...this.info, fingerprint: info.fp, name: info.name };
       await this.secure(info);
       await this.authenticate(info);
+      this.startResync();
       this.keepalive = this.timers.setInterval(() => this.tick(), TICK_MS);
       void this.probe();
       return this.info;
@@ -278,6 +283,10 @@ export class ClientLink {
       case 'bye':
         this.finish('bye');
         break;
+      case 'resync':
+      case 'resync-ack':
+        this.resyncer?.onMessage(m);
+        break;
       case 'error':
         if (m.fatal === true) this.finish('hub-error');
         break;
@@ -292,6 +301,18 @@ export class ClientLink {
       default:
         break; // unknown control types are ignored (forward compatibility)
     }
+  }
+
+  private resyncer: Resync | undefined;
+
+  private startResync(): void {
+    this.resyncer = new Resync({
+      send: (m) => void this.channel.sendControl(m).catch(() => undefined),
+      bounce: () => this.o.onResync?.(),
+      failed: () => this.finish('resync-failed'),
+      timers: this.timers,
+      now: this.now,
+    });
   }
 
   /** After auth: find the largest frame the browser's stack will write. Failures just leave the safe 20-byte frame. */
@@ -311,6 +332,7 @@ export class ClientLink {
   }
 
   private tick(): void {
+    this.channel.check(this.now());
     const idle = this.now() - this.lastRx;
     if (idle >= DEAD_AFTER_MS) this.finish('keepalive');
     else if (idle >= PING_AFTER_MS) void this.channel.sendControl({ t: 'ping' }).catch(() => undefined);
@@ -333,6 +355,7 @@ export class ClientLink {
     if (this.closed) return;
     this.closed = true;
     this.timers.clearInterval(this.keepalive);
+    this.resyncer?.dispose();
     for (const w of this.ctrlWaiters.splice(0)) void w;
     this.setState(reason === 'busy' ? 'full' : reason === 'disconnected' || polite || reason === 'bye' || reason === 'keepalive' ? 'disconnected' : 'error', reason);
     const release = () => {

@@ -81,12 +81,24 @@ describe('splitMessage and Reassembler', () => {
     expect(got).toEqual(new Uint8Array(40).fill(2));
   });
 
-  it('a duplicated frame aborts the message rather than corrupting it', () => {
+  it('a duplicated frame is dropped and the message still arrives intact', () => {
     const r = rea();
     const a = splitMessage(new Uint8Array(60).fill(9), 20, 0, 0);
     const seen = [a[0]!, a[1]!, a[1]!, a[2]!, ...a.slice(3)].map((f) => r.push(f, 0));
-    expect(seen.some((x) => x.message)).toBe(false);
-    expect(seen.some((x) => x.error)).toBe(true);
+    expect(seen.filter((x) => x.error)).toEqual([]);
+    expect(seen.find((x) => x.message)!.message).toEqual(new Uint8Array(60).fill(9));
+  });
+
+  it('a whole message lost between two others is reported as a gap', () => {
+    const r = rea();
+    const a = splitMessage(Uint8Array.of(1), 20, 0, 0);
+    const lost = splitMessage(Uint8Array.of(2), 20, 0, 1);
+    const c = splitMessage(Uint8Array.of(3), 20, 0, 2);
+    expect(r.push(a[0]!, 0).message).toEqual(Uint8Array.of(1));
+    void lost; // never delivered
+    const res = r.push(c[0]!, 0);
+    expect(res.error).toBe('frame-gap');
+    expect(res.message).toEqual(Uint8Array.of(3)); // the next message is still delivered
   });
 
   it('START inside a message aborts the partial and starts the new one', () => {

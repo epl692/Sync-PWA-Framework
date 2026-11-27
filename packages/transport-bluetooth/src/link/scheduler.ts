@@ -85,6 +85,8 @@ interface Out {
   offset: number;
   nextSeq: number;
   ackedNext: number;
+  /** When the oldest unacknowledged frame was sent (or when an ACK last made progress). */
+  unackedSince: number;
 }
 
 /** Both directions of one link: queues outgoing messages into frames, reassembles incoming ones, and acks. */
@@ -92,8 +94,8 @@ export class LinkFramer {
   frameBytes: number;
   private readonly window: number;
   private readonly out: [Out, Out] = [
-    { queue: [], offset: 0, nextSeq: 0, ackedNext: 0 },
-    { queue: [], offset: 0, nextSeq: 0, ackedNext: 0 },
+    { queue: [], offset: 0, nextSeq: 0, ackedNext: 0, unackedSince: 0 },
+    { queue: [], offset: 0, nextSeq: 0, ackedNext: 0, unackedSince: 0 },
   ];
   private readonly rea: Reassembler;
   private readonly recvSinceAck: [number, number] = [0, 0];
@@ -127,6 +129,17 @@ export class LinkFramer {
   /** Resolves once the pump has nothing left it is able to send. */
   async idle(): Promise<void> {
     while (this.pumping) await this.pumping;
+  }
+
+  /** True if frames have been waiting for an ACK for at least `ms`: the radio dropped something (even the last frame of a burst). */
+  stalled(now: number, ms: number): boolean {
+    return ([0, 1] as const).some((s) => this.inflight(s) > 0 && now - this.out[s].unackedSince >= ms);
+  }
+
+  /** After a loss was handled: stop waiting for frames that will never be acknowledged, so the window frees up. */
+  forgetUnacked(): void {
+    for (const s of [0, 1] as const) this.out[s].ackedNext = this.out[s].nextSeq;
+    void this.pump();
   }
 
   /** Messages queued or partly sent, per stream (a measure of backlog). */
@@ -202,6 +215,7 @@ export class LinkFramer {
       return true;
     }
     this.failures = 0;
+    if (this.inflight(s) === 0) st.unackedSince = this.o.now();
     st.nextSeq = (st.nextSeq + 1) & 0xff;
     if (end) {
       st.queue.shift();
@@ -252,5 +266,6 @@ export class LinkFramer {
     const n = ((advance % 256) + 256) % 256;
     if (n > this.inflight(stream)) return; // stale or bogus
     st.ackedNext = (highest + 1) & 0xff;
+    st.unackedSince = this.o.now(); // progress
   }
 }

@@ -38,7 +38,7 @@ bytes 2..: payload (DATA), or for ACK: 1 byte = highest in-order seq received on
 ```
 
 - A message that fits one frame has both `START` and `END`.
-- **Sequence.** Each stream and direction starts at 0 on connect and increments per DATA frame. A received DATA frame whose `seq` is not `last + 1` aborts the message in progress on that stream (partial bytes discarded, `link.error: frame-gap` reported); the receiver then waits for the next `START` and resyncs its expected `seq` to it.
+- **Sequence.** Each stream and direction starts at 0 on connect and increments per DATA frame. A DATA frame that repeats the previous `seq` is a duplicate and is dropped. Any other frame whose `seq` is not `last + 1` means data went missing: the message in progress (if any) is discarded, `frame-gap` is reported, and the receiver waits for the next `START` and resynchronises its expected `seq` to it. A reported loss makes the receiving side send `resync` (below), because the sync layer above does not re-request what it believes it has already been sent.
 - **Window.** At most 32 unacknowledged DATA frames per stream and direction. The receiver sends `ACK` every 16 frames and at `END`. A sender with a full window pauses.
 - **Fairness.** After 4 consecutive stream-1 frames the sender MUST offer stream 0 a turn if it has frames queued.
 - **Reassembly.** A partial message older than 30 s is dropped. Reassembled size over `maxMessageBytes + 24` aborts the message and counts one strike.

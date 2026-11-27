@@ -112,6 +112,10 @@ export async function createHub(o: HubOptions): Promise<Hub> {
       relay.onDisconnect(peer.id);
       emit({ type: 'client-disconnected', device: peer.device });
     },
+    onPeerResync: (peer) => {
+      relay.onDisconnect(peer.id);
+      relay.onConnect(peer.id);
+    },
     onCore: (peer, bytes) => relay.onMessage(peer.id, bytes),
   });
 

@@ -8,7 +8,10 @@ import { Kind } from './handshake';
 import { decodeInner, encodeControl, encodeCore, type ControlMessage } from './control';
 import { LinkFramer } from './scheduler';
 import type { LinkSession } from './session';
-import type { Stream } from './frames';
+import { MESSAGE_LOST, type Stream } from './frames';
+
+/** Frames unacknowledged for this long are taken as lost. */
+export const ACK_TIMEOUT_MS = 3_000;
 
 export interface ChannelHandlers {
   /** A plaintext handshake message (kind 0xF0 or 0xF1), only accepted before a session exists. */
@@ -17,6 +20,8 @@ export interface ChannelHandlers {
   core(bytes: Uint8Array, stream: Stream): void | Promise<void>;
   /** Something that should count against the peer: a bad frame, a message that fails to authenticate, an unknown kind. */
   strike(reason: string): void;
+  /** A message was lost on this link (a frame went missing): the layer above should resynchronise. */
+  lost?(reason: string): void;
   /** A PROBE frame arrived (its length). */
   probe?(frameBytes: number): void;
 }
@@ -84,6 +89,17 @@ export class LinkChannel {
     return run;
   }
 
+  /**
+   * Periodic check (call every second or two): frames waiting too long for an ACK, or a message stuck half-received, mean the radio
+   * dropped something that no later frame will reveal. Reported through `lost`.
+   */
+  check(now: number): void {
+    const stalled = this.framer.stalled(now, ACK_TIMEOUT_MS);
+    const partial = this.framer.expire(now);
+    if (stalled) this.framer.forgetUnacked();
+    if (stalled || partial.length) this.o.handlers.lost?.(stalled ? 'ack-timeout' : 'reassembly-timeout');
+  }
+
   /** Resolves once everything received so far has been handled. */
   async settled(): Promise<void> {
     await this.rx;
@@ -94,7 +110,10 @@ export class LinkChannel {
     const h = this.o.handlers;
     const r = await this.framer.receive(bytes);
     if (r.bad) h.strike('bad-frame');
-    for (const e of r.errors) h.strike(e);
+    for (const e of r.errors) {
+      if (MESSAGE_LOST.has(e)) h.lost?.(e);
+      if (e === 'oversize') h.strike(e); // too big is hostile; a missing frame is just a noisy radio
+    }
     if (r.probe !== undefined) h.probe?.(r.probe);
     for (const m of r.messages) {
       const kind = m.bytes[0];

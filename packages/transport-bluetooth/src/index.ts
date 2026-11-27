@@ -117,6 +117,11 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
       onIdentityChanged: (i) => {
         for (const h of [...identityChange]) h(i);
       },
+      onResync: () => {
+        if (!peerId) return;
+        emit('peerDisconnected', peerId, 'resync');
+        emit('peerConnected', { id: peerId, label: link.info.name });
+      },
       onClosed: (reason) => {
         releasing.set(gatt.id, link.released);
         void link.released.then(() => {

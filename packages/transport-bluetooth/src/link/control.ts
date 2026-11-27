@@ -26,6 +26,9 @@ export type ControlMessage =
   | { t: 'probe-result'; received: number[]; notify: number }
   | { t: 'ping' }
   | { t: 'pong' }
+  /** A message was lost: both sides restart the sync handshake (hello and summaries) so nothing stays missing. */
+  | { t: 'resync'; id: number }
+  | { t: 'resync-ack'; id: number }
   | { t: 'bye'; reason?: string }
   | { t: 'error'; code: string; fatal?: boolean; message?: string };
 

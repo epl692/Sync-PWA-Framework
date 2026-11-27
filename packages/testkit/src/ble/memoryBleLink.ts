@@ -318,6 +318,14 @@ export class MemoryBleLink {
     return api;
   }
 
+  /** Change loss and duplication for every client from now on (for example, a noisy stretch that then clears up). */
+  setFaults(f: { lossRate?: number; duplicateRate?: number }): void {
+    for (const a of this.adapters) {
+      if (f.lossRate !== undefined) a.o.lossRate = f.lossRate;
+      if (f.duplicateRate !== undefined) a.o.duplicateRate = f.duplicateRate;
+    }
+  }
+
   setPower(on: boolean): void {
     if (this.power === on) return;
     this.power = on;
