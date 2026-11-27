@@ -14,7 +14,9 @@
     "@sync/spaces": "*",
     "@sync/relay-server": "*",
     "@sync/modules": "*",
-    "@sync/blobs": "*"
+    "@sync/blobs": "*",
+    "@sync/hub-core": "*",
+    "@sync/transport-bluetooth": "*"
   },
   "scripts": {
     "test": "vitest run",
