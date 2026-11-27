@@ -18,6 +18,7 @@ This spec adds a Bluetooth transport plugin implementing the Transport contract 
 - Q: Is the helper on the same device as the app, or elsewhere? → A: The Hub is a shared, always-on device that many clients connect to, for example a laptop or phone left at a campsite, during an internet outage, or at an event. Clients do not each need their own helper.
 - Q: By default, does a Hub accept any client in a served Space or only owner-approved clients? → A: Open by default: any client that proves membership in a Space the Hub serves can connect with no owner approval. The Hub owner can switch the Hub to approval-required mode, and can block any client at any time.
 - Q: How does a Hub owner choose which Spaces the Hub serves? → A: Both. The owner adds Spaces explicitly by exporting a "serve this Space" code (QR or pasted, carrying no keys) from their browser app. The owner can also turn on automatic mode, in which the Hub stores packets for any Space a connecting client brings, up to its storage limit; automatic mode is off by default.
+- Q: How long does a Hub keep a stored packet by default? → A: 14 days, with the oldest already-delivered packets dropped first if storage fills sooner. The owner can change the period.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -121,6 +122,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - A blocked client reconnects or a client proves membership in no served Space: the Hub rejects it without revealing which Spaces it serves or what it stores.
 - Several Hubs are in range of one client: the user picks which to use, and the client may connect to more than one at once.
 - A client brings a Space the Hub is not set to serve while automatic mode is off: the Hub rejects it with a message that says the owner must add that Space, without revealing what the Hub stores.
+- A client returns after the retention period has passed: it may be missing packets the Hub dropped, and the user is told those changes need to come from another device or Hub.
 - The Hub's storage fills up: the oldest already-delivered packets are dropped first and the Hub owner is warned; no undelivered packet is silently lost.
 - Message sizes exceed what one Bluetooth transmission can carry: large packets are split and reassembled transparently, and an incomplete message is discarded on timeout.
 
@@ -141,7 +143,7 @@ Users nearby also want to share photos or files attached to objects. Blobs trans
 - **FR-006**: Browser clients MUST connect to a Hub over Bluetooth with no helper or extra software on the client device.
 - **FR-007**: A Hub MUST store the encrypted packets and blobs it receives and forward them to every connected client in the relevant Space, including clients that connect later (store-and-forward).
 - **FR-008**: A Hub MUST serve several clients and several Spaces at once, keeping each Space's data separate, and MUST keep running unattended (with the screen off or the app in the background, within platform limits).
-- **FR-009**: A Hub MUST persist its stored packets across restarts, and MUST apply a size limit and retention policy that a Hub owner can configure. When full, it MUST drop already-delivered packets first and warn the owner.
+- **FR-009**: A Hub MUST persist its stored packets across restarts. By default it MUST keep each packet for 14 days, and the owner MUST be able to change the retention period and the storage limit. When storage fills before a packet expires, the Hub MUST drop the oldest already-delivered packets first and warn the owner.
 - **FR-010**: Hubs in range of each other MUST be able to sync with each other so that clients on different Hubs converge. Android and desktop Hubs MUST interoperate.
 - **FR-011**: A Hub MUST NOT hold Space keys or be able to read packet content. It MUST be treated as an untrusted relay (Constitution Principles IV and V), seeing only routing metadata.
 - **FR-012**: A Hub owner MUST be able to see connected clients, choose which Spaces the Hub serves, switch between open mode (default) and approval-required mode, switch automatic Space mode on or off, and disconnect or block any client.
