@@ -53,7 +53,10 @@ const subtle = () => globalThis.crypto.subtle;
 const concat = (...p: Uint8Array[]) => {
   const out = new Uint8Array(p.reduce((n, x) => n + x.length, 0));
   let o = 0;
-  for (const x of p) (out.set(x, o), (o += x.length));
+  for (const x of p) {
+    out.set(x, o);
+    o += x.length;
+  }
   return out;
 };
 const PKCS8 = Uint8Array.from([0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20]);

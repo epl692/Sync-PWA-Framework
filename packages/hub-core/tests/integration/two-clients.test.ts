@@ -2,7 +2,7 @@
 import { describe, expect, it, afterEach } from 'vitest';
 import { MemoryBleLink, MockBleBridge, createSpaceAccess, createTestCore, memberProofs, waitFor, type SpaceAccess } from '@sync/testkit';
 import { createBluetoothTransport, createMemoryTrustStore } from '@sync/transport-bluetooth';
-import { createHub, createMemoryStore, type Hub } from '../../src';
+import { createHub, createMemoryStore } from '../../src';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {

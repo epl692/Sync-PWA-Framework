@@ -119,6 +119,9 @@ export class ClientLink {
   info: HubConnectionInfo = { fingerprint: '', name: '', state: 'connecting', acceptedSpaces: [], frameBytes: 20, pendingOut: 0, pendingIn: 0 };
   private channel!: LinkChannel;
   private closed = false;
+  private resolveClosed!: () => void;
+  /** Resolves once the radio link is really released. A new connection to the same device must wait for it. */
+  readonly released: Promise<void> = new Promise((r) => (this.resolveClosed = r));
   private lastRx = 0;
   private keepalive: unknown;
   private plainWaiter: ((m: Uint8Array) => void) | undefined;
@@ -332,9 +335,13 @@ export class ClientLink {
     this.timers.clearInterval(this.keepalive);
     for (const w of this.ctrlWaiters.splice(0)) void w;
     this.setState(reason === 'busy' ? 'full' : reason === 'disconnected' || polite || reason === 'bye' || reason === 'keepalive' ? 'disconnected' : 'error', reason);
-    // give a polite `bye` a moment to leave before dropping the radio link
-    if (polite) this.timers.setTimeout(() => this.o.gatt.close(), 50);
-    else this.o.gatt.close();
+    const release = () => {
+      this.o.gatt.close();
+      this.resolveClosed();
+    };
+    // let a polite `bye` leave before dropping the radio link
+    if (polite) void this.channel.settled().then(() => this.channel.framer.idle()).then(release, release);
+    else release();
     this.o.onClosed(reason);
   }
 }

@@ -72,6 +72,8 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
   const statusChange = new Set<(s: BluetoothTransportStatus) => void>();
   const identityChange = new Set<(i: { fingerprint: string; name: string }) => void>();
   const links = new Map<string, { link: ClientLink; peerId: string }>();
+  /** Radio links that are closing: a new connection to the same device waits, or it would be torn down by the old close. */
+  const releasing = new Map<string, Promise<void>>();
   let state: TransportState = 'idle';
   let status: BluetoothTransportStatus = { kind: 'needs-hub', message: 'Find a Hub to sync with.' };
 
@@ -96,6 +98,7 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
   };
 
   async function connectDevice(device: Parameters<typeof openGattLink>[0]): Promise<HubConnectionInfo> {
+    await releasing.get(device.id);
     const gatt = await openGattLink(device);
     let peerId = '';
     const link: ClientLink = new ClientLink({
@@ -113,6 +116,10 @@ export function createBluetoothTransport(opts: BluetoothTransportOptions): Bluet
         for (const h of [...identityChange]) h(i);
       },
       onClosed: (reason) => {
+        releasing.set(gatt.id, link.released);
+        void link.released.then(() => {
+          if (releasing.get(gatt.id) === link.released) releasing.delete(gatt.id);
+        });
         const entry = [...links.entries()].find(([, v]) => v.link === link);
         if (entry) {
           links.delete(entry[0]);
